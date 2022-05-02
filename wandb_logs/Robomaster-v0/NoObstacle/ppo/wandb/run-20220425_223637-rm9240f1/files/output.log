@@ -1,0 +1,5 @@
+ID     Step     MaxR |    avgR     stdR | avgS stdS |    objC     etc.
+Act FileNotFound when load_model: output/2022-04-25_22-36-36
+Critic FileNotFound when load_model: output/2022-04-25_22-36-36
+pygame 2.0.1 (SDL 2.0.14, Python 3.6.2)
+Hello from the pygame community. https://www.pygame.org/contribute.html

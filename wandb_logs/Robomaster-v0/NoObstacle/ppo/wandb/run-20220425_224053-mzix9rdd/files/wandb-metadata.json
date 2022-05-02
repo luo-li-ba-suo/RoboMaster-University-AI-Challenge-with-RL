@@ -1,0 +1,18 @@
+{
+    "os": "Linux-5.4.0-104-generic-x86_64-with-debian-buster-sid",
+    "python": "3.6.2",
+    "heartbeatAt": "2022-04-25T14:40:54.953036",
+    "startedAt": "2022-04-25T14:40:53.002345",
+    "docker": null,
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "gpu_count": 1,
+    "cpu_count": 8,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/eRL_demo_SingleFilePPO.py",
+    "codePath": "eRL_demo_SingleFilePPO.py",
+    "host": "dq-Ubuntu",
+    "username": "dq",
+    "executable": "/home/dq/anaconda2/envs/dq/bin/python"
+}

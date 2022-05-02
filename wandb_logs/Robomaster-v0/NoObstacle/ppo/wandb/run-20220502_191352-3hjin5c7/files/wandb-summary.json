@@ -1,0 +1,1 @@
+{"Epoch": 0, "O_MaxR": 0.0, "O_avgR": 0.09375, "O_avgR_eval": 0.0, "O_stdR_eval": 0.0, "O_avgS_eval": 127.0, "O_stdS_eval": 0.0, "O_objC": 0.03693033382296562, "O_objA": 0.03279859572649002, "O_logprob": -3.9872701168060303, "hit": 0.0, "hit_by_enemy": 0.0, "K.O.": 0.0, "_runtime": 80, "_timestamp": 1651490112, "_step": 4096, "_wandb": {"runtime": 80}}

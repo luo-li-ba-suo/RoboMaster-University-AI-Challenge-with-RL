@@ -1,0 +1,27 @@
+2022-04-25 22:40:53,517 INFO    MainThread:5156 [internal.py:wandb_internal():89] W&B internal server running at pid: 5156, started at: 2022-04-25 22:40:53.517046
+2022-04-25 22:40:53,518 DEBUG   HandlerThread:5156 [handler.py:handle_request():126] handle_request: check_version
+2022-04-25 22:40:53,518 INFO    WriterThread:5156 [datastore.py:open_for_write():77] open: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_224053-mzix9rdd/run-mzix9rdd.wandb
+2022-04-25 22:40:53,520 DEBUG   SenderThread:5156 [sender.py:send():185] send: header
+2022-04-25 22:40:53,520 DEBUG   SenderThread:5156 [sender.py:send_request():199] send_request: check_version
+2022-04-25 22:40:53,689 DEBUG   SenderThread:5156 [sender.py:send():185] send: run
+2022-04-25 22:40:53,705 DEBUG   SenderThread:5156 [git.py:repo():33] git repository is invalid
+2022-04-25 22:40:54,072 INFO    SenderThread:5156 [dir_watcher.py:__init__():169] watching files in: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_224053-mzix9rdd/files
+2022-04-25 22:40:54,072 INFO    SenderThread:5156 [sender.py:_start_run_threads():749] run started: mzix9rdd with start time 1650897653
+2022-04-25 22:40:54,076 DEBUG   SenderThread:5156 [sender.py:send():185] send: summary
+2022-04-25 22:40:54,077 INFO    SenderThread:5156 [sender.py:_save_file():879] saving file wandb-summary.json with policy end
+2022-04-25 22:40:54,078 DEBUG   HandlerThread:5156 [handler.py:handle_request():126] handle_request: run_start
+2022-04-25 22:40:54,952 DEBUG   HandlerThread:5156 [meta.py:__init__():40] meta init
+2022-04-25 22:40:54,952 DEBUG   HandlerThread:5156 [meta.py:__init__():54] meta init done
+2022-04-25 22:40:54,953 DEBUG   HandlerThread:5156 [meta.py:probe():211] probe
+2022-04-25 22:40:54,959 DEBUG   HandlerThread:5156 [git.py:repo():33] git repository is invalid
+2022-04-25 22:40:54,959 DEBUG   HandlerThread:5156 [meta.py:_save_pip():58] save pip
+2022-04-25 22:40:54,959 DEBUG   HandlerThread:5156 [meta.py:_save_pip():72] save pip done
+2022-04-25 22:40:54,959 DEBUG   HandlerThread:5156 [meta.py:_save_conda():79] save conda
+2022-04-25 22:40:55,074 INFO    Thread-8  :5156 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_224053-mzix9rdd/files/wandb-summary.json
+2022-04-25 22:40:55,075 INFO    Thread-8  :5156 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_224053-mzix9rdd/files/requirements.txt
+2022-04-25 22:40:55,075 INFO    Thread-8  :5156 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_224053-mzix9rdd/files/conda-environment.yaml
+2022-04-25 22:40:57,039 WARNING MainThread:5156 [internal.py:wandb_internal():145] Internal process interrupt: 1
+2022-04-25 22:40:57,083 DEBUG   HandlerThread:5156 [meta.py:_save_conda():87] save conda done
+2022-04-25 22:40:57,083 DEBUG   HandlerThread:5156 [meta.py:probe():249] probe done
+2022-04-25 22:40:57,085 DEBUG   SenderThread:5156 [sender.py:send():185] send: files
+2022-04-25 22:40:57,085 INFO    SenderThread:5156 [sender.py:_save_file():879] saving file wandb-metadata.json with policy now

@@ -1,0 +1,26 @@
+2022-04-27 16:25:48,784 INFO    MainThread:17589 [wandb_setup.py:_flush():69] setting env: {}
+2022-04-27 16:25:48,784 INFO    MainThread:17589 [wandb_setup.py:_flush():69] setting login settings: {}
+2022-04-27 16:25:48,785 INFO    MainThread:17589 [wandb_init.py:_log_setup():357] Logging user logs to /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220427_162548-1v8n0wzm/logs/debug.log
+2022-04-27 16:25:48,785 INFO    MainThread:17589 [wandb_init.py:_log_setup():358] Logging internal logs to /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220427_162548-1v8n0wzm/logs/debug-internal.log
+2022-04-27 16:25:48,786 INFO    MainThread:17589 [wandb_init.py:init():390] calling init triggers
+2022-04-27 16:25:48,787 INFO    MainThread:17589 [wandb_init.py:init():397] wandb.init called with sweep_config: {}
+config: {'agent': <__main__.AgentDiscretePPO object at 0x7f360b4ab6a0>, 'cwd': '2022-04-27_16-25-48', 'if_train': True, 'env': <PreprocessEnv<RMUA_Multi_agent_Env<Robomaster-v0>>>, 'env_eval': None, 'gpu_id': 'O', 'rollout_num': 2, 'num_threads': 8, 'learning_rate': 0.0001, 'soft_update_tau': 0.00390625, 'train_actor_step': 0, 'gamma': 0.98, 'reward_scale': 0.5, 'net_dim': 128, 'batch_size': 256, 'repeat_times': 16, 'target_step': 4096, 'max_memo': 4096, 'if_per_or_gae': True, 'eval_gap': 64, 'eval_times1': 20, 'eval_times2': 30, 'random_seed': 1, 'break_step': 100000000, 'if_remove': False, 'if_allow_break': False, 'ratio_clip': 0.2, 'lambda_entropy': 0.02, 'lambda_gae_adv': 0.98, 'repeat_times_policy': 5}
+2022-04-27 16:25:48,787 INFO    MainThread:17589 [wandb_init.py:init():435] starting backend
+2022-04-27 16:25:48,787 INFO    MainThread:17589 [backend.py:_multiprocessing_setup():72] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2022-04-27 16:25:48,810 INFO    MainThread:17589 [backend.py:ensure_launched():135] starting backend process...
+2022-04-27 16:25:48,817 INFO    MainThread:17589 [backend.py:ensure_launched():140] started backend process with pid: 17623
+2022-04-27 16:25:48,818 INFO    MainThread:17589 [wandb_init.py:init():440] backend started and connected
+2022-04-27 16:25:48,827 INFO    MainThread:17589 [wandb_init.py:init():499] updated telemetry
+2022-04-27 16:25:48,827 INFO    MainThread:17589 [wandb_init.py:init():522] communicating current version
+2022-04-27 16:25:49,442 INFO    MainThread:17589 [wandb_init.py:init():527] got version response upgrade_message: "wandb version 0.12.15 is available!  To upgrade, please run:\n $ pip install wandb --upgrade"
+
+2022-04-27 16:25:49,443 INFO    MainThread:17589 [wandb_init.py:init():535] communicating run to backend with 30 second timeout
+2022-04-27 16:25:49,803 INFO    MainThread:17589 [wandb_init.py:init():562] starting run threads in backend
+2022-04-27 16:25:54,806 INFO    MainThread:17589 [wandb_run.py:_console_start():1651] atexit reg
+2022-04-27 16:25:54,807 INFO    MainThread:17589 [wandb_run.py:_redirect():1525] redirect: SettingsConsole.REDIRECT
+2022-04-27 16:25:54,807 INFO    MainThread:17589 [wandb_run.py:_redirect():1530] Redirecting console.
+2022-04-27 16:25:54,808 INFO    MainThread:17589 [wandb_run.py:_redirect():1586] Redirects installed.
+2022-04-27 16:25:54,809 INFO    MainThread:17589 [wandb_init.py:init():587] run started, returning control to user process
+2022-04-27 16:25:54,809 INFO    MainThread:17589 [wandb_run.py:_config_callback():878] config_cb None None {}
+2022-05-02 16:59:36,294 INFO    Dummy-11  :17589 [wandb_run.py:_atexit_cleanup():1621] got exitcode: 255
+2022-05-02 16:59:36,295 INFO    Dummy-11  :17589 [wandb_run.py:_restore():1593] restore

@@ -1,0 +1,152 @@
+2022-04-25 22:29:26,480 INFO    MainThread:3744 [internal.py:wandb_internal():89] W&B internal server running at pid: 3744, started at: 2022-04-25 22:29:26.480184
+2022-04-25 22:29:26,483 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: check_version
+2022-04-25 22:29:26,483 INFO    WriterThread:3744 [datastore.py:open_for_write():77] open: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/run-m8jwflgl.wandb
+2022-04-25 22:29:26,487 DEBUG   SenderThread:3744 [sender.py:send():185] send: header
+2022-04-25 22:29:26,487 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: check_version
+2022-04-25 22:29:27,660 DEBUG   SenderThread:3744 [sender.py:send():185] send: run
+2022-04-25 22:29:27,682 DEBUG   SenderThread:3744 [git.py:repo():33] git repository is invalid
+2022-04-25 22:29:28,063 INFO    SenderThread:3744 [dir_watcher.py:__init__():169] watching files in: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files
+2022-04-25 22:29:28,063 INFO    SenderThread:3744 [sender.py:_start_run_threads():749] run started: m8jwflgl with start time 1650896965
+2022-04-25 22:29:28,092 DEBUG   SenderThread:3744 [sender.py:send():185] send: summary
+2022-04-25 22:29:28,093 INFO    SenderThread:3744 [sender.py:_save_file():879] saving file wandb-summary.json with policy end
+2022-04-25 22:29:28,097 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: run_start
+2022-04-25 22:29:29,072 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-summary.json
+2022-04-25 22:29:30,072 DEBUG   HandlerThread:3744 [meta.py:__init__():40] meta init
+2022-04-25 22:29:30,072 DEBUG   HandlerThread:3744 [meta.py:__init__():54] meta init done
+2022-04-25 22:29:30,072 DEBUG   HandlerThread:3744 [meta.py:probe():211] probe
+2022-04-25 22:29:30,079 DEBUG   HandlerThread:3744 [git.py:repo():33] git repository is invalid
+2022-04-25 22:29:30,079 DEBUG   HandlerThread:3744 [meta.py:_save_pip():58] save pip
+2022-04-25 22:29:30,081 DEBUG   HandlerThread:3744 [meta.py:_save_pip():72] save pip done
+2022-04-25 22:29:30,081 DEBUG   HandlerThread:3744 [meta.py:_save_conda():79] save conda
+2022-04-25 22:29:31,065 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/conda-environment.yaml
+2022-04-25 22:29:31,066 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/requirements.txt
+2022-04-25 22:29:34,067 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/output.log
+2022-04-25 22:29:38,069 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/output.log
+2022-04-25 22:29:38,252 DEBUG   HandlerThread:3744 [meta.py:_save_conda():87] save conda done
+2022-04-25 22:29:38,252 DEBUG   HandlerThread:3744 [meta.py:probe():249] probe done
+2022-04-25 22:29:38,257 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: stop_status
+2022-04-25 22:29:38,257 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: stop_status
+2022-04-25 22:29:38,554 DEBUG   SenderThread:3744 [sender.py:send():185] send: config
+2022-04-25 22:29:38,554 DEBUG   SenderThread:3744 [sender.py:send():185] send: files
+2022-04-25 22:29:38,554 INFO    SenderThread:3744 [sender.py:_save_file():879] saving file wandb-metadata.json with policy now
+2022-04-25 22:29:39,073 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/conda-environment.yaml
+2022-04-25 22:29:39,074 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_created():217] file/dir created: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-metadata.json
+2022-04-25 22:29:39,644 INFO    Thread-16 :3744 [upload_job.py:push():137] Uploaded file /tmp/tmpx6a8hzqhwandb/2noegybq-wandb-metadata.json
+2022-04-25 22:29:53,558 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: stop_status
+2022-04-25 22:29:53,559 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: stop_status
+2022-04-25 22:29:58,101 INFO    Thread-13 :3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/config.yaml
+2022-04-25 22:29:58,516 DEBUG   SenderThread:3744 [sender.py:send():185] send: stats
+2022-04-25 22:30:08,904 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: stop_status
+2022-04-25 22:30:08,905 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: stop_status
+2022-04-25 22:30:24,317 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: stop_status
+2022-04-25 22:30:24,318 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: stop_status
+2022-04-25 22:30:26,871 WARNING MainThread:3744 [internal.py:wandb_internal():145] Internal process interrupt: 1
+2022-04-25 22:30:28,901 DEBUG   SenderThread:3744 [sender.py:send():185] send: stats
+2022-04-25 22:30:29,236 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:29,238 DEBUG   SenderThread:3744 [sender.py:send():185] send: telemetry
+2022-04-25 22:30:29,239 DEBUG   SenderThread:3744 [sender.py:send():185] send: exit
+2022-04-25 22:30:29,239 INFO    SenderThread:3744 [sender.py:send_exit():294] handling exit code: 0
+2022-04-25 22:30:29,240 INFO    SenderThread:3744 [sender.py:send_exit():296] handling runtime: 61
+2022-04-25 22:30:29,242 INFO    SenderThread:3744 [sender.py:_save_file():879] saving file wandb-summary.json with policy end
+2022-04-25 22:30:29,243 INFO    SenderThread:3744 [sender.py:send_exit():306] send defer
+2022-04-25 22:30:29,244 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:29,247 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,248 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 0
+2022-04-25 22:30:29,249 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,250 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 0
+2022-04-25 22:30:29,250 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 1
+2022-04-25 22:30:29,252 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,253 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 1
+2022-04-25 22:30:29,341 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,341 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 1
+2022-04-25 22:30:29,341 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 2
+2022-04-25 22:30:29,342 DEBUG   SenderThread:3744 [sender.py:send():185] send: stats
+2022-04-25 22:30:29,343 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,343 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 2
+2022-04-25 22:30:29,344 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,344 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 2
+2022-04-25 22:30:29,344 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 3
+2022-04-25 22:30:29,345 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,345 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 3
+2022-04-25 22:30:29,346 DEBUG   SenderThread:3744 [sender.py:send():185] send: summary
+2022-04-25 22:30:29,346 INFO    SenderThread:3744 [sender.py:_save_file():879] saving file wandb-summary.json with policy end
+2022-04-25 22:30:29,347 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,347 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 3
+2022-04-25 22:30:29,347 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 4
+2022-04-25 22:30:29,348 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,348 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 4
+2022-04-25 22:30:29,348 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,348 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 4
+2022-04-25 22:30:29,357 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:29,803 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 5
+2022-04-25 22:30:29,804 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:29,804 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:29,804 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 5
+2022-04-25 22:30:29,805 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:29,805 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 5
+2022-04-25 22:30:29,805 INFO    SenderThread:3744 [dir_watcher.py:finish():283] shutting down directory watcher
+2022-04-25 22:30:29,907 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,115 INFO    SenderThread:3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/config.yaml
+2022-04-25 22:30:30,117 INFO    SenderThread:3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/output.log
+2022-04-25 22:30:30,118 INFO    SenderThread:3744 [dir_watcher.py:_on_file_modified():230] file/dir modified: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-summary.json
+2022-04-25 22:30:30,121 INFO    SenderThread:3744 [dir_watcher.py:finish():313] scan: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files
+2022-04-25 22:30:30,122 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-metadata.json wandb-metadata.json
+2022-04-25 22:30:30,123 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/output.log output.log
+2022-04-25 22:30:30,125 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/conda-environment.yaml conda-environment.yaml
+2022-04-25 22:30:30,127 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-summary.json wandb-summary.json
+2022-04-25 22:30:30,129 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/requirements.txt requirements.txt
+2022-04-25 22:30:30,171 INFO    SenderThread:3744 [dir_watcher.py:finish():327] scan save: /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/config.yaml config.yaml
+2022-04-25 22:30:30,171 INFO    SenderThread:3744 [sender.py:transition_state():319] send defer: 6
+2022-04-25 22:30:30,171 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,190 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:30,190 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 6
+2022-04-25 22:30:30,197 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:30,197 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 6
+2022-04-25 22:30:30,197 INFO    SenderThread:3744 [file_pusher.py:finish():177] shutting down file pusher
+2022-04-25 22:30:30,293 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,293 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,398 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,399 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,511 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,515 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,616 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,617 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,718 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,719 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,822 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,823 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,929 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:30,929 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:30,966 INFO    Thread-18 :3744 [upload_job.py:push():137] Uploaded file /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/conda-environment.yaml
+2022-04-25 22:30:31,037 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,039 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,043 INFO    Thread-20 :3744 [upload_job.py:push():137] Uploaded file /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/requirements.txt
+2022-04-25 22:30:31,157 INFO    Thread-21 :3744 [upload_job.py:push():137] Uploaded file /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/config.yaml
+2022-04-25 22:30:31,160 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,162 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,268 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,269 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,375 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,376 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,481 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,483 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,586 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,587 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,694 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,695 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,800 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,801 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,823 INFO    Thread-19 :3744 [upload_job.py:push():137] Uploaded file /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/wandb-summary.json
+2022-04-25 22:30:31,904 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:31,905 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:31,924 INFO    Thread-17 :3744 [upload_job.py:push():137] Uploaded file /home/dq/PycharmProjects/ReinforcementLearning/Projects/RMUA/RMUA 2021_V5.100/wandb_logs/Robomaster-v0/NoObstacle/ppo/wandb/run-20220425_222925-m8jwflgl/files/output.log
+2022-04-25 22:30:32,011 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:32,011 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:32,113 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
+2022-04-25 22:30:32,113 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: poll_exit
+2022-04-25 22:30:32,127 INFO    Thread-12 :3744 [sender.py:transition_state():319] send defer: 7
+2022-04-25 22:30:32,129 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: defer
+2022-04-25 22:30:32,129 INFO    HandlerThread:3744 [handler.py:handle_request_defer():143] handle defer: 7
+2022-04-25 22:30:32,129 DEBUG   SenderThread:3744 [sender.py:send_request():199] send_request: defer
+2022-04-25 22:30:32,130 INFO    SenderThread:3744 [sender.py:send_request_defer():315] handle sender defer: 7
+2022-04-25 22:30:32,217 DEBUG   HandlerThread:3744 [handler.py:handle_request():126] handle_request: poll_exit
