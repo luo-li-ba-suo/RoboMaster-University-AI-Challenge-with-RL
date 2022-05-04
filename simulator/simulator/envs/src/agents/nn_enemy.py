@@ -1,3 +1,12 @@
+"""
+nn_agent
+
+
+Author: DQ, HITSZ
+Date: March 4th, 2022
+
+nn_agent代表用神经网络控制的智能体，不训练
+"""
 import copy
 
 import numpy as np
@@ -45,6 +54,7 @@ def sign(action):
 class My_Agent(object):
     def __init__(self, _id, options):
         self.id = _id
+        self.name = 'nn_enemy'
         self.robot_blue_num = options.robot_b_num
         self.robot_red_num = options.robot_r_num
         self.num_robots = options.robot_b_num if _id else options.robot_r_num
@@ -58,17 +68,6 @@ class My_Agent(object):
                             'Discrete': {'shoot': 2}}
         elif self.action_type == 'MultiDiscrete' or 'Discrete':
             self.actions = {'x': 3, 'y': 3, 'rotate': 3, 'shoot': 2}
-
-        # self.state = {'x': [0, 808],
-        #               'y': [0, 448],
-        #               'angle': [-180, 180],
-        #               'yaw': [-90, 90],
-        #               'hp': [0, 2000],
-        #               'heat': [0, 400],
-        #               'freeze_time[0]': [0, 2000],
-        #               'freeze_time[1]': [0, 2000],
-        #               'bullet': [0, 500]
-        #               }
         self.state = {'x': [0, 808],
                       'y': [0, 448],
                       'angle': [-180, 180],
@@ -84,6 +83,8 @@ class My_Agent(object):
             self.orders.set[i].y = action[1]
             self.orders.set[i].rotate = action[2]
             self.orders.set[i].shoot_target_enemy += 1
-            if ((game_state.camera_vision[i] > 0)[game_state.robot_r_num:]).any():
-                self.orders.set[i].shoot = action[3]
+            # if ((game_state.camera_vision[i] > 0)[game_state.robot_r_num:]).any():
+            self.orders.set[i].shoot = action[3]
+            # elif action[3]:
+            #     print('want to shoot but see no enemy')
         return self.orders

@@ -36,6 +36,7 @@ class Orders_set(object):
 class My_Agent(object):
     def __init__(self, _id, options):
         self.id = _id
+        self.name = 'random_agent'
         self.robot_blue_num = options.robot_b_num
         self.robot_red_num = options.robot_r_num
         self.num_robots = options.robot_b_num if _id else options.robot_r_num
