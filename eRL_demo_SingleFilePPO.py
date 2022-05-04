@@ -1004,9 +1004,9 @@ def demo_discrete_action():
         args.eval_times1 = 20
         args.eval_times2 = 30
 
-        args.if_train = True
+        args.if_train = False
         # args.cwd = '2022-04-27_16-25-48-zero-sum-self-play'
-        args.enemy_cwd = '2022-05-03_16-31-27-PVE'
+        # args.enemy_cwd = '2022-05-03_16-31-27-PVE'
     '''train and evaluate'''
     train_and_evaluate(args)
 

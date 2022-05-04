@@ -3,8 +3,8 @@ class Parameters:
     cooling_freq = 10
 
     # 环境配置
-    robot_r_num = 1
-    robot_b_num = 1
+    robot_r_num = 2
+    robot_b_num = 2
     red_agents_name = 'Critical Hit'
     blue_agents_name = 'HITCSC'
     render = False
@@ -58,7 +58,7 @@ class Parameters:
     # 有关交互界面
     do_plot = [True, False, False, False]
     节能模式 = False
-    训练模式 = True
+
     高帧率模式 = True
     show_robot_points = False
     show_center_barrier_vertices = False
@@ -69,10 +69,11 @@ class Parameters:
     show_figure = True
 
     # 有关测试：
+    训练模式 = False
     single_input = False
-    time_delay_frame = 0
+    time_delay_frame = 0.05
 
     # 有關訓練
     red_agents_path = 'src.agents.rl_trainer'
-    blue_agents_path = 'src.agents.nn_enemy'
+    blue_agents_path = 'src.agents.random_enemy'
 

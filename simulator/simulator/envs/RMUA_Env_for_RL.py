@@ -73,7 +73,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                     self.obs_high.append(agent.state[state_][1])
                     self.obs_set_scale[robot_index].append(agent.state[state_][1])
                 robot_index += 1
-        # state besides agent(最后有下划线表示不直接饮用）
+        # state besides agent(最后有下划线表示不直接应用）
         if self.simulator.state.buff_mode:
             self.public_obs_set = {'time': [0, 180],
                                    'buff1_': [0, 5],
@@ -84,12 +84,14 @@ class RMUA_Multi_agent_Env(gym.Env):
                                    'buff6_': [0, 5]
                                    }
         else:
-            self.public_obs_set = {'time': [0, 180],
-                                   'dist_': [0, 924],
-                                   'x_dist_': [0, 808],
-                                   'y_dist_': [0, 448],
-                                   'relative_angle_': [-180, 180]
-                                   }
+            self.public_obs_set = {'time': [0, 180]}
+        for n in range(1, self.simulator.state.robot_num):
+            self.public_obs_set.update({'dist_' + str(n) + '_': [0, 924],
+                                        'x_dist_' + str(n) + '_': [0, 808],
+                                        'y_dist_' + str(n) + '_': [0, 448],
+                                        'relative_angle_' + str(n) + '_': [-180, 180]
+                                        })
+
         for state_ in self.public_obs_set:
             self.obs_low.append(self.public_obs_set[state_][0])
             self.obs_high.append(self.public_obs_set[state_][1])
@@ -313,7 +315,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[robot_index][i])
             robot.robot_info_text[state] = observation[i]
         # 友方信息
-        if robot.friend:
+        if robot.friend is not None:
             for i, state in enumerate(self.obs_set[robot.friend]):
                 observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[robot.friend][i])
         # 敵方信息
@@ -324,7 +326,7 @@ class RMUA_Multi_agent_Env(gym.Env):
         observation += self.public_observation
         # 相對距离
         # 友方
-        if robot.friend:
+        if robot.friend is not None:
             observation.append(self.simulator.state.dist_matrix[robot_index][robot.friend] / 853568)
             observation.append(self.simulator.state.x_dist_matrix[robot_index][robot.friend] / 808)
             observation.append(self.simulator.state.y_dist_matrix[robot_index][robot.friend] / 448)
