@@ -16,7 +16,7 @@ sys.path.append('./simulator/')
 #     parser.add_argument('--red_agents_path', type=str, help='red_agents_path',
 #                         default='src.agents.human_agent')
 #     # parser.add_argument('--red_agents_path', type=str, help='red_agents_path',
-#     #                     default='./src/agents/rl_agent.py')
+#     #                     default='./src/agents/rl_trainer.py')
 #     parser.add_argument('--blue_agents_path', type=str, help='blue_agents_path',
 #                         default='src.agents.human_agent')
 #     parser.add_argument('--red_agents_name', type=str, help='red_agents_name', default='Critical Hit')

@@ -42,10 +42,22 @@ class Referee(object):
     def __init__(self, state, map, options):
         self.map = map
         self.state = state
+        self.buff_mode = options.buff_mode
         self.HP_reduction = {'behind': 60, 'front': 20, 'left': 40, 'right': 40, 'not_bullet': 10}
         self.collision_reduce_hp = options.collision_reduce_hp
+        self.frame_num_one_second = options.frame_num_one_second
         self.cooling_freq = options.cooling_freq
         self.overheating_protection = options.overheating_protection
+
+    def tick(self, act_feedback):
+        # 20hz 检测装甲板是否要扣血
+        if self.state.if_alarm20hz_goes_off():
+            self.check_armor(act_feedback)
+        # 10HZ 冷却枪管
+        self.cooling_barrel()
+        # 无延迟检测buff
+        if self.buff_mode:
+            self.buff_check()
 
     def check_armor(self, act_feedback):
         # act_feedback.robot_collision_to_source()
@@ -222,8 +234,7 @@ class Referee(object):
                 self.state.robots[n].hp_loss.add(hp_loss)
                 self.state.robots[n].hp_loss_from_heat.add(hp_loss)
                 self.state.robots[n].heat = 360
-            if not self.state.frame % (200 // self.cooling_freq):
-
+            if not self.state.frame % (self.frame_num_one_second // self.cooling_freq):
                 if 360 > self.state.robots[n].heat > 240:  # 超过240热量扣血
                     hp_loss = (self.state.robots[n].heat - 240) * 4
                     self.state.robots[n].hp_loss.add(hp_loss)

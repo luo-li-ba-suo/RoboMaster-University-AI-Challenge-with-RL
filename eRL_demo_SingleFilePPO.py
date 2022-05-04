@@ -103,6 +103,16 @@ class ActorDiscretePPO(nn.Module):
                 action.append(action_)
         return action, a_prob
 
+    def get_max_action(self, state):
+        result = self.forward(state)
+        if self.Multi_Discrete:
+            n = 0
+            action = []
+            for action_dim_ in self.action_dim:
+                action.append(result[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
+                n += action_dim_
+        return action
+
     def get_logprob_entropy(self, state, action):
         result = self.forward(state)
         if self.Multi_Discrete:
@@ -174,11 +184,12 @@ class AgentPPO:
         self.lambda_gae_adv = 0.98  # could be 0.95~0.99, GAE (Generalized Advantage Estimation. ICLR.2016.)
         self.get_reward_sum = None
 
-        self.state = None
+        self.states = None
         self.device = None
         self.criterion = None
-        self.act = self.act_optimizer = None
+        self.act = self.enemy_act = self.act_optimizer = None
         self.cri = self.cri_optimizer = self.cri_target = None
+        self.trainer_id = 0
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -204,7 +215,7 @@ class AgentPPO:
     def explore_env(self, env, target_step, reward_scale, gamma):
         trajectory_list = list()
 
-        state = self.state
+        state = self.states
         for _ in range(target_step):
             env.render()
             action, noise = self.select_action(state)
@@ -214,7 +225,7 @@ class AgentPPO:
             trajectory_list.append((state, other))
 
             state = env.reset() if done else next_state
-        self.state = state
+        self.states = state
         return trajectory_list
 
     def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
@@ -263,8 +274,8 @@ class AgentPPO:
             bs = 2 ** 10  # set a smaller 'BatchSize' when out of GPU memory.
             value = torch.cat([self.cri_target(state[i:i + bs]) for i in range(0, state.size(0), bs)], dim=0)
             logprob = self.act.get_old_logprob(action, a_noise)
-            # self.state[0]表示第一個智能體的狀態
-            pre_state = torch.as_tensor((self.state[0],), dtype=torch.float32, device=self.device)
+            # self.states[0]表示第一個智能體的狀態
+            pre_state = torch.as_tensor((self.states[self.trainer_id],), dtype=torch.float32, device=self.device)
             pre_r_sum = self.cri(pre_state).detach()
             r_sum, advantage = self.get_reward_sum(self, buf_len, reward, mask, value, pre_r_sum)
         return state, action, r_sum, logprob, advantage
@@ -335,18 +346,37 @@ class AgentPPO:
         else:
             print("Critic FileNotFound when load_model: {}".format(cwd))
 
+    def load_enemy_model(self, cwd):
+        """load model files for enemy
+
+        :str cwd: current working directory, we save model file here
+        :bool if_save: save model or load model
+        """
+        act_save_path = '{}/actor.pth'.format(cwd)
+
+        def load_torch_file(network, save_path):
+            network_dict = torch.load(save_path, map_location=lambda storage, loc: storage)
+            network.load_state_dict(network_dict)
+
+        assert (self.enemy_act is not None) and os.path.exists(act_save_path), "Act FileNotFound when load model for enemy"
+        load_torch_file(self.enemy_act, act_save_path)
+        print("Loaded act:", cwd, " for enemy")
+
 
 class AgentDiscretePPO(AgentPPO):
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False, trainer_id = 0):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+        self.enemy_act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device) \
+            if if_build_enemy_act else None
         self.cri = CriticAdv(net_dim, state_dim).to(self.device)
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
 
         self.criterion = torch.nn.SmoothL1Loss()
         self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
         self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
+        self.trainer_id = trainer_id
 
     def explore_env(self, env, target_step, reward_scale, gamma):
         trajectory_list = list()
@@ -355,16 +385,20 @@ class AgentDiscretePPO(AgentPPO):
         episode_reward = 0
         env.render()
         env.env.simulator.module_UI.text_training_state = "正在采样..."
-        states = self.state
+        states = self.states
         for _ in range(target_step):
             as_int = []
+            actions_for_env = [None for _ in range(env.env.simulator.state.robot_num)]
             as_prob = []
-            for i, _ in enumerate(env.env.controller_ids):
-                state = states[i]
-                a_int, a_prob = self.select_action(state)
-                as_int.append(a_int)
-                as_prob.append(a_prob)
-            next_states, reward, done, _ = env.step(as_int)
+            for i in range(env.env.simulator.state.robot_num):
+                if i in env.env.trainer_ids:
+                    a_int, a_prob = self.select_action(states[i])
+                    as_int.append(a_int)
+                    as_prob.append(a_prob)
+                    actions_for_env[i] = a_int
+                elif i in env.env.nn_enemy_ids:
+                    actions_for_env[i] = self.select_enemy_action(states[i])
+            next_states, reward, done, _ = env.step(actions_for_env)
             reward = reward[0]
             env.render()
             if self.act.Multi_Discrete:
@@ -379,9 +413,14 @@ class AgentDiscretePPO(AgentPPO):
             trajectory_list.append((states[0], other))
 
             states = env.reset() if done else next_states
-        self.state = states
+        self.states = states
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
+
+    def select_enemy_action(self, state):
+        states = torch.as_tensor((state,), dtype=torch.float32, device=self.device)
+        action = self.enemy_act.get_max_action(states)  # plan to be get_action_a_noise
+        return np.array(action)
 
 
 """replay.py"""
@@ -480,15 +519,15 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         self.reset = self.reset_type
         self.step = self.step_type
 
-    def reset_type(self) -> np.ndarray:
+    def reset_type(self) -> list:
         states = self.env.reset()
         self.reward_dict = self.env.rewards
-        return np.array(states).astype(np.float32)
+        return [np.array(state).astype(np.float32) for state in states]
 
-    def step_type(self, action) -> (np.ndarray, float, bool, dict):
-        state, reward, done, info = self.env.step(action * self.action_max)
+    def step_type(self, actions) -> (list, float, bool, dict):
+        states, reward, done, info = self.env.step(actions)
         self.reward_dict = self.env.rewards
-        return np.array(state).astype(np.float32), np.array(reward).astype(np.float32), done, info
+        return [np.array(state).astype(np.float32) for state in states], np.array(reward).astype(np.float32), done, info
 
 
 def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
@@ -567,7 +606,7 @@ class Arguments:
         self.agent = agent  # Deep Reinforcement Learning algorithm
         self.cwd = time.strftime("%Y-%m-%d_%H-%M-%S",
                                  time.localtime())  # current work directory. cwd is None means set it automatically
-
+        self.enemy_cwd = None
         self.if_train = True
         self.env = env  # the environment for training
         self.env_eval = None  # the environment for evaluating
@@ -666,6 +705,13 @@ def train_and_evaluate(args):
     '''basic arguments'''
     cwd = os.path.join('./output', args.cwd)
     cwd = os.path.normpath(cwd)
+    if args.enemy_cwd:
+        enemy_cwd = os.path.join('./output', args.enemy_cwd)
+        enemy_cwd = os.path.normpath(enemy_cwd)
+        if_build_enemy_act = True
+    else:
+        enemy_cwd = None
+        if_build_enemy_act = False
     env = args.env
     agent = args.agent
     gpu_id = args.gpu_id
@@ -681,9 +727,9 @@ def train_and_evaluate(args):
         wandb_run = wandb.init(config=args,
                                project='Robomaster',
                                entity='dujinqi',
-                               # notes='',
-                               name='ppo_PVE_1v1_gamma0.99_seed=' + str(args.random_seed),
-                               group='PVE_1v1',
+                               notes='nn enemy',
+                               name='PVP_seed=' + str(args.random_seed),
+                               group='nn enemy',
                                dir=log_dir,
                                job_type="ppo",
                                reinit=True)
@@ -724,7 +770,7 @@ def train_and_evaluate(args):
     env_eval = deepcopy(env) if env_eval is None else deepcopy(env_eval)
 
     '''init: Agent, ReplayBuffer, Evaluator'''
-    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae)
+    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act)
 
     buffer_len = target_step + max_step
     buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
@@ -735,12 +781,14 @@ def train_and_evaluate(args):
                           save_interval=save_interval)  # build Evaluator
 
     '''prepare for training'''
-    agent.state = env.reset()
+    agent.states = env.reset()
     agent.save_load_model(cwd=cwd, if_save=False)  # 读取上一次训练模型
+    if if_build_enemy_act:
+        agent.load_enemy_model(cwd=enemy_cwd)
     total_step = 0
     '''testing'''
     while not if_train:
-        evaluator.evaluate_save(agent.act, agent.cri)
+        evaluator.evaluate_save(agent.act, agent.cri, enemy_act=agent.enemy_act)
     '''start training'''
     if_train_actor = False if train_actor_step > 0 else True
     while if_train:
@@ -756,7 +804,7 @@ def train_and_evaluate(args):
         logging_tuple = list(logging_tuple)
         logging_tuple += logging_list
         with torch.no_grad():
-            if_reach_goal = evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run)
+            if_reach_goal = evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run, enemy_act=agent.enemy_act)
             if_train = not ((if_break_early and if_reach_goal)
                             or total_step >= break_step
                             or os.path.exists(f'{cwd}/stop'))
@@ -792,7 +840,7 @@ class Evaluator:
 
         self.record_controller_id = 0
 
-    def evaluate_save(self, act, cri, steps=0, log_tuple=None, logger=None) -> bool:
+    def evaluate_save(self, act, cri, steps=0, log_tuple=None, logger=None, enemy_act=None) -> bool:
         if log_tuple is None:
             log_tuple = [0, 0, 0]
         self.total_step += steps  # update total training steps
@@ -804,7 +852,7 @@ class Evaluator:
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
-                rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device)
+                rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                 reward = rewards[0]
                 reward_dict = reward_dicts[0]
                 rewards_steps_list.append((reward, step))
@@ -817,7 +865,7 @@ class Evaluator:
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device)
+                    rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                     reward = rewards[0]
                     reward_dict = reward_dicts[0]
                     rewards_steps_list.append((reward, step))
@@ -836,8 +884,8 @@ class Evaluator:
                 torch.save(act.state_dict(), os.path.dirname(os.path.realpath(__file__)) + '/' + act_save_path)
                 act_save_path = f'{self.cwd}/actor_step:' + str(self.total_step) + '_best.pth'
                 torch.save(act.state_dict(), os.path.dirname(os.path.realpath(__file__)) + '/' + act_save_path)
-
-                logger.save(act_save_path)
+                if logger:
+                    logger.save(act_save_path)
 
                 print(f"{self.agent_id:<2} {self.total_step:8.2e} {self.r_max:8.2f} |")  # save policy and print
             elif not self.epoch % self.save_interval:
@@ -888,8 +936,8 @@ class Evaluator:
         return r_avg, r_std, s_avg, s_std
 
 
-def get_episode_return_and_step(env, act, device) -> (float, int):
-    episode_return = [0.0 for _ in env.env.controller_ids]  # sum of rewards in an episode
+def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
+    episode_return = [0.0 for _ in env.env.trainer_ids]  # sum of rewards in an episode
     episode_step = 1
     max_step = env.max_step
     if_discrete = env.if_discrete
@@ -897,22 +945,27 @@ def get_episode_return_and_step(env, act, device) -> (float, int):
     state = env.reset()
 
     for episode_step in range(max_step):
-        a_tensor = []
-        for i, _ in enumerate(env.env.controller_ids):
-            s_tensor = torch.as_tensor((state[i],), device=device)
-            a_tensor.append(act(s_tensor))
+        a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
+        for i in range(env.env.simulator.state.robot_num):
+            if i in env.env.trainer_ids:
+                s_tensor = torch.as_tensor((state[i],), device=device)
+                a_tensor[i] = act(s_tensor)
+            elif i in env.env.nn_enemy_ids:
+                s_tensor = torch.as_tensor((state[i],), device=device)
+                a_tensor[i] = enemy_act(s_tensor)
         # if if_discrete:
         #     a_tensor = a_tensor.argmax(dim=1)
         #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
-        actions = []
+        actions = [None for _ in range(env.env.simulator.state.robot_num)]
         if if_multi_discrete:
-            for i, _ in enumerate(env.env.controller_ids):
-                n = 0
-                action = []
-                for action_dim_ in env.action_dim:
-                    action.append(a_tensor[i][:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
-                    n += action_dim_
-                actions.append(action)
+            for i, a_tensor_ in enumerate(a_tensor):
+                if a_tensor_ is not None:
+                    n = 0
+                    action = []
+                    for action_dim_ in env.action_dim:
+                        action.append(a_tensor_[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
+                        n += action_dim_
+                    actions[i] = action
         state, reward, done, _ = env.step(actions)
         env.render()
         episode_return += reward
@@ -928,14 +981,14 @@ def get_episode_return_and_step(env, act, device) -> (float, int):
 def demo_discrete_action():
     args = Arguments(if_on_policy=True)  # hyper-parameters of on-policy is different from off-policy
     args.agent = AgentDiscretePPO()
-
     if_train_robomaster = 1
     if if_train_robomaster:
         args.env = PreprocessEnv(env=gym.make('Robomaster-v0'))
+        args.agent.trainer_id = args.env.env.trainer_ids[0]  # 表示训练所有trainer中的第一个，其他trainer会一起共享模型
         args.agent.cri_target = False
         args.reward_scale = 2 ** -1
         args.net_dim = 128
-        args.gamma = 0.99
+        args.gamma = 0.98
         args.batch_size = 256
         args.repeat_times = 16
         args.repeat_times_policy = 5
@@ -952,8 +1005,8 @@ def demo_discrete_action():
         args.eval_times2 = 30
 
         args.if_train = True
-        # args.cwd = '2022-04-27_15-08-12'
-
+        # args.cwd = '2022-04-27_16-25-48-zero-sum-self-play'
+        args.enemy_cwd = '2022-05-03_16-31-27-PVE'
     '''train and evaluate'''
     train_and_evaluate(args)
 

@@ -36,6 +36,7 @@ class Orders_set(object):
 class My_Agent(object):
     def __init__(self, _id, options):
         self.id = _id
+        self.name = 'human_agent'
         self.robot_blue_num = options.robot_b_num
         self.robot_red_num = options.robot_r_num
         self.num_robots = options.robot_b_num if _id else options.robot_r_num
@@ -46,7 +47,7 @@ class My_Agent(object):
                                  'yaw_left': 'K_z', 'yaw_right': 'K_c', 'shoot': 'K_SPACE', 'aim': 'K_LSHIFT'},
                                 {'forward': 'K_p', 'backward': 'K_SEMICOLON', 'left': 'K_o', 'right': 'K_LEFTBRACKET',
                                  'left_rotate': 'K_l', 'right_rotate': 'K_QUOTE',
-                                 'yaw_left': 'K_PERIOD', 'yaw_right': 'K_SLASH', 'shoot': 'K_RSHIFT', 'aim': 'K_1'},
+                                 'yaw_left': 'K_PERIOD', 'yaw_right': 'K_SLASH', 'shoot': 'K_1', 'aim': 'K_RSHIFT'},
                                 {'forward': 'K_u', 'backward': 'K_j', 'left': 'K_y', 'right': 'K_i',
                                  'left_rotate': 'K_h', 'right_rotate': 'K_k',
                                  'yaw_left': 'K_n', 'yaw_right': 'K_COMMA', 'shoot': 'K_v', 'aim': 'K_1'},
@@ -89,10 +90,11 @@ class My_Agent(object):
                         self.orders.set[i].rotate += 1
                     if key == 'yaw_left':
                         self.orders.set[i].yaw -= 1
+
                     if key == 'yaw_right':
                         self.orders.set[i].yaw += 1
                     if key == 'shoot':
                         self.orders.set[i].shoot += 1
                     if key == 'aim':
-                        self.orders.set[i].shoot_target_enemy += 1
+                       self.orders.set[i].shoot_target_enemy += 1
         return self.orders

@@ -1,12 +1,14 @@
 import numpy as np
 import random
 
+
 class Record(object):
     type = 'record'
     current = 0
     one_step = 0
     one_episode = 0
-    def __init__(self, name = 'Nobody', only_add_positive=False):
+
+    def __init__(self, name='Nobody', only_add_positive=False):
         self.only_add_positive = only_add_positive
         self.name = name
 
@@ -32,14 +34,17 @@ class Record(object):
     def print_one_step(self):
         return self.one_episode
 
+
 class Armor_Record(object):
     type = 'armor_record'
-    def __init__(self, name = 'Nobody'):
+
+    def __init__(self, name='Nobody'):
         self.name = name
         self.left = Record('left')
         self.right = Record('right')
         self.front = Record('front')
         self.behind = Record('behind')
+
     def add(self, aromor_hit):
         if 'left' in aromor_hit:
             self.left.add()
@@ -74,9 +79,11 @@ class Armor_Record(object):
             parts += 'B,'
         return parts
 
+
 class Multi_Record(object):
     type = 'multi_record'
-    def __init__(self, record_group = ['front', 'left', 'behind', 'right'], num_group=1, name=""):
+
+    def __init__(self, record_group=['front', 'left', 'behind', 'right'], num_group=1, name=""):
         self.name = name
         self.records = [{} for n in range(num_group)]
         for record in self.records:
@@ -85,7 +92,6 @@ class Multi_Record(object):
 
     def add(self, record_name, add_num=1, id_group=0):
         self.records[id_group][record_name].add(add_num)
-
 
     def reset_current(self):
         for record in self.records:
@@ -107,8 +113,9 @@ class Multi_Record(object):
         for i, record in enumerate(self.records):
             for name in record:
                 if record[name].one_step:
-                    string += str(i) + '.'+ name[0:2] +','
+                    string += str(i) + '.' + name[0:2] + ','
         return parts
+
 
 class Robot(object):
     armors = np.array([[-6.5, -28], [6.5, -28],  # behind
@@ -120,16 +127,18 @@ class Robot(object):
                          [-22.5, 30], [22.5, 30],  # front
                          [-22.5, -30], [-22.5, 30],  # left
                          [22.5, -30], [22.5, 30]])  # right
+
     def __init__(self, robot_r_num, robot_num, owner=0, id=0, x=0, y=0, angle=0, bullet=50, vx=0, vy=0, yaw=0, hp=2000,
-                 no_dying=False):
+                 no_dying=False, frame_num_one_second=20.0):
+        self.frame_num_one_second = frame_num_one_second
         robot_b_num = robot_num - robot_r_num
         self.owner = owner  # 队伍，0：红方，1：蓝方
         self.id = id
         if owner == 0:
-            if robot_r_num ==1:
+            if robot_r_num == 1:
                 friend = None
-            elif robot_r_num ==2:
-                if id==0:
+            elif robot_r_num == 2:
+                if id == 0:
                     friend = 1
                 else:
                     friend = 0
@@ -158,19 +167,22 @@ class Robot(object):
         self.reward_state = [0, 0]
         # self.can_shoot = 1  # 决策频率高于出弹最高频率（10Hz）
         self.bullet = bullet  # 剩余子弹量
-        self.bullet_speed = 12.5  # 子弹初速度
+        self.bullet_speed = 25 * 100 / self.frame_num_one_second  # 子弹初速度 25m/s * 100cm/m / 20frame/s = 125cm/frame
+        # 注意枪管发热热量增量应是子弹的原始速度
         # self.yaw_angle = 0
 
         # 运动物理参数
-        self.rotate_acceleration = 10  # jiao du
-        self.rotate_speed_max = 20
-        self.yaw_acceleration = 10
-        self.yaw_rotate_speed_max = 30
-        self.speed_acceleration = 10
-        self.speed_max = 20  # 1cm/frame ~ 2m/s
-        self.drag_acceleration = 5
-        self.rotate_drag_acceleration = 5
-        self.yaw_drag_acceleration = 5
+        self.speed_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 加速度 20m/s^2 * 100cm/m / 20frame/s / 20frame/s = 5 cm/frame^2
+        self.speed_max = 2 * 100 / self.frame_num_one_second  # 最大速度 2m/s * 100cm/m / 20frame/s = 10 cm/frame
+        self.rotate_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 5 deg/frame^2
+        self.rotate_speed_max = 2 * 100 / self.frame_num_one_second  # 10 deg/frame
+        self.drag_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 5 cm/frame^2
+        self.rotate_drag_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 5 deg/frame^2
+
+        # 由自瞄系统控制：
+        self.yaw_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 5 deg/frame^2
+        self.yaw_rotate_speed_max = 4 * 100 / self.frame_num_one_second  # 20 deg/frame
+        self.yaw_drag_acceleration = 20 * 100 / self.frame_num_one_second / self.frame_num_one_second  # 5 deg/frame^2
         # 已弃用：
         # self.motion = 6  # 移动的惯性感大小x
         # self.rotate_motion = 4  # 底盘旋转的惯性感大小
@@ -189,7 +201,7 @@ class Robot(object):
         self.cannot_shoot_overheating = False
         # 以下状态为：每一次装甲板监测时更新；每一个step更新；每一个episode更新
         self.hp_loss_from_heat = Record('热量扣血')
-        self.hp_loss = Record('扣血量', only_add_positive = True)
+        self.hp_loss = Record('扣血量', only_add_positive=True)
         self.bullet_out_record = Record('子弹消耗')
         self.wheel_hit_obstacle_record = Record('轮撞障碍')  # 轮子撞obstacle
         self.wheel_hit_wall_record = Record('轮撞墙')  # 轮子撞墙
@@ -215,13 +227,13 @@ class Robot(object):
                              self.enemy_hit_record,
                              self.teammate_hit_record]
         self.non_armor_record = [self.hp_loss,
-                             self.hp_loss_from_heat,
-                             self.bullet_out_record,
-                             self.wheel_hit_wall_record,
-                             self.wheel_hit_obstacle_record,
-                             self.wheel_hit_robot_record]
+                                 self.hp_loss_from_heat,
+                                 self.bullet_out_record,
+                                 self.wheel_hit_wall_record,
+                                 self.wheel_hit_obstacle_record,
+                                 self.wheel_hit_robot_record]
         # 装甲板信息
-        self.armor = {'front':'', 'left':'', 'right':'','behind':''}
+        self.armor = {'front': '', 'left': '', 'right': '', 'behind': ''}
         # 更多render内容：
         self.robot_info_text = {}
         # 更多plot内容：
@@ -246,12 +258,12 @@ class Robot(object):
         for record in self.total_record:
             record.reset_one_step()
 
-
     def reset_episode(self):
         for record in self.total_record:
             record.reset_one_episode()
         self.buff_hp.reset_one_episode()
         self.buff_bullet.reset_one_episode()
+
     def update_hp(self):
         self.hp -= self.hp_loss.current
         if self.hp <= 0:
@@ -261,7 +273,6 @@ class Robot(object):
                 self.hp = 0
         if self.hp > 2000:
             self.hp = 2000
-
 
 
 class Bullet(object):
@@ -274,12 +285,14 @@ class Bullet(object):
         self.owner = owner
         self.journey = 0
         self.journey_max = 300
+        self.disappear_check_interval = 1
         self.step = 0
 
-    def disapear(self):
-        if not self.step%2:
-            self.journey = ((self.center[0] - self.center_original[0])**2 + (self.center[1] - self.center_original[1])**2)**0.5
+    def disappear(self):
+        if not self.step % self.disappear_check_interval:
+            self.journey = ((self.center[0] - self.center_original[0]) ** 2 + (
+                    self.center[1] - self.center_original[1]) ** 2) ** 0.5
         self.step += 1
         if self.journey > self.journey_max:
-            return False if random.random() > self.journey_max/(2*self.journey) else True
+            return True if random.random() > 1/np.exp(800/self.journey_max) else False
         return False

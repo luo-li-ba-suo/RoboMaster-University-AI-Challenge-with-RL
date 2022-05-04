@@ -22,6 +22,7 @@ class Act_feedback(object):
                            {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
                            {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
                            {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []}]  # 存放碰撞类型
+
     #     self.hit_source_robot_collision = [{'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
     #                                        {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
     #                                        {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
@@ -129,6 +130,7 @@ class Engine(object):
         self.impact_effect = options.impact_effect
         self.collision_bounce = options.collision_bounce
         self.unlimited_bullet = options.unlimited_bullet
+        self.frame_num_one_second = options.frame_num_one_second
         self.map = map
         self.referee = referee
         # 用于显示
@@ -158,23 +160,18 @@ class Engine(object):
 
         '''自瞄'''
         self.theta = np.rad2deg(np.arctan(45 / 60))
-        '''射击开关'''
-        self.shoot_enable = False
 
-    def one_frame(self, orders):
-        if not self.state.frame % 30 and self.route_plan:  # 150ms更新一次路径规划的障碍物分布
-            self.route_plan.reset_block(self.state.blocks)
+    def tick(self, orders):
+        # if not self.state.frame % 30 and self.route_plan:  # 150ms更新一次路径规划的障碍物分布
+        #     self.route_plan.reset_block(self.state.blocks)
         self.orders_to_acts(orders)
         self.freeze_step()
         self.move_robot()
-        if not self.state.frame % 10:  # 每50ms开启射击开关
-            self.shoot_enable = True
-        if self.shoot_enable:
-            self.shoot_enable = False
+        if self.state.if_alarm20hz_goes_off():  # 每50ms开启射击开关(由於比賽規則規定裝甲板檢測受攻擊的是)
             self.shoot()
         i = 0
         while len(self.state.bullets):
-            if self.move_check_bullet(i) or self.state.bullets[i].disapear():
+            if self.move_check_bullet(i) or self.state.bullets[i].disappear():
                 del self.state.bullets[i]  # 如果子弹超过射程、碰到墙壁 障碍 机器人 则消失
             else:
                 i += 1
@@ -334,7 +331,7 @@ class Engine(object):
                 if not self.impact_effect:
                     self.check_in_map(n)  # 用于取消了所有撞击效果时防止超出地图10单位
 
-    def can_target_enemy_be_seen(self,n,m):
+    def can_target_enemy_be_seen(self, n, m):
         if m in np.where((self.state.camera_vision[n] == 1))[0]:
             return True
         return False
@@ -371,9 +368,7 @@ class Engine(object):
             self.state.robots[n].yaw += self.acts[n].yaw_speed
             if self.state.robots[n].yaw > 90: self.state.robots[n].yaw = 90
             if self.state.robots[n].yaw < -90: self.state.robots[n].yaw = -90
-        
-        
-        
+
     def freeze_step(self):
         for n in range(self.robot_num):
             if self.state.robots[n].freeze_time[0] > 0:  # 禁止射击
@@ -397,7 +392,8 @@ class Engine(object):
                         Bullet(self.state.robots[n].center, self.state.robots[n].yaw + self.state.robots[n].angle,
                                self.state.robots[n].bullet_speed, n))
                     self.state.robots[n].bullet_out_record.add()
-                    self.state.robots[n].heat += self.state.robots[n].bullet_speed * 2  # 相当于 V/2
+                    self.state.robots[n].heat += self.state.robots[n].bullet_speed / \
+                                                 (100 / self.frame_num_one_second)  # 100cm/m / 20frame/s
 
     def move_check_bullet(self, n):
         '''
@@ -406,9 +402,9 @@ class Engine(object):
         '''
         previous_center = self.state.bullets[n].center.copy()
         self.state.bullets[n].center[0] += self.state.bullets[n].bullet_speed * np.cos(
-            np.deg2rad(self.state.bullets[n].angle)) * 100 * 0.005
+            np.deg2rad(self.state.bullets[n].angle))
         self.state.bullets[n].center[1] += self.state.bullets[n].bullet_speed * np.sin(
-            np.deg2rad(self.state.bullets[n].angle)) * 100 * 0.005
+            np.deg2rad(self.state.bullets[n].angle))
         return self.referee.check_bullet(self.state.bullets[n], previous_center, self.act_feedback)
 
     def check_interface(self, n):
@@ -448,7 +444,6 @@ class Engine(object):
                 if armor_hit:
                     self.act_feedback.hit_source[n][self.impact_part_id2str[j]].append('OBSTACLE')
 
-
         # robot robot assess
         for i in range(self.robot_num):
             if i == n: continue
@@ -468,7 +463,7 @@ class Engine(object):
                                      (-22.5 <= armor1[0] <= 22.5 and -30 <= armor1[1] <= 30)
                 if not hit_robot_at_armor:
                     hit_robot_at_armor = self.referee.segment(armor0, armor1, [-22.5, -30], [22.5, 30]) or \
-                                self.referee.segment(armor0, armor1, [-22.5, 30], [22.5, -30])
+                                         self.referee.segment(armor0, armor1, [-22.5, 30], [22.5, -30])
                 if hit_robot:
                     check_result = True
                     if hit_robot_at_armor:

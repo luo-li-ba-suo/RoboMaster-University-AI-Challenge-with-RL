@@ -1,8 +1,10 @@
 class Parameters:
+    # 规则规定：
+    cooling_freq = 10
+
+    # 环境配置
     robot_r_num = 1
     robot_b_num = 1
-    red_agents_path = 'src.agents.rl_agent'
-    blue_agents_path = 'src.agents.random_agent'
     red_agents_name = 'Critical Hit'
     blue_agents_name = 'HITCSC'
     render = False
@@ -14,9 +16,9 @@ class Parameters:
     episode_time = 180
     episode_step = 128
     # episode_step如果不为零，当step数量达到这个值，将提前结束episode
-    cooling_freq = 10
-    frame_num_one_time = 2
-    frame_num_one_second = 200
+
+    frame_num_one_step = 1
+    frame_num_one_second = 20.0  # >= 20; 最大需求频率为20hz（50ms）
     overheating_protection = True
 
     # 有关地图信息：
@@ -71,4 +73,6 @@ class Parameters:
     time_delay_frame = 0
 
     # 有關訓練
-    controller_ids = [0]
+    red_agents_path = 'src.agents.rl_trainer'
+    blue_agents_path = 'src.agents.nn_enemy'
+
