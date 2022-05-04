@@ -70,9 +70,9 @@ class Parameters:
     show_figure = True
 
     # 有关测试：
-    训练模式 = False
+    训练模式 = True
     single_input = False
-    time_delay_frame = 0.05
+    time_delay_frame = 0
 
     # 有關訓練
     red_agents_path = 'src.agents.rl_trainer'

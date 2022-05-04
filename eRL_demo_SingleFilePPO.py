@@ -399,7 +399,6 @@ class AgentDiscretePPO(AgentPPO):
                 elif i in env.env.nn_enemy_ids:
                     actions_for_env[i] = self.select_enemy_action(states[i])
             next_states, reward, done, _ = env.step(actions_for_env)
-            reward = reward[0]
             env.render()
             if self.act.Multi_Discrete:
                 other = (reward * reward_scale, 0.0 if done else gamma, *as_int[0], *np.concatenate(as_prob[0]))
@@ -727,11 +726,11 @@ def train_and_evaluate(args):
         wandb_run = wandb.init(config=args,
                                project='Robomaster',
                                entity='dujinqi',
-                               notes='nn enemy',
-                               name='ppo_PVP_seed=' + str(args.random_seed),
-                               group='nn enemy',
+                               notes='V5.2000',
+                               name='ppo_NVE_2v2_seed=' + str(args.random_seed),
+                               group='static enemy',
                                dir=log_dir,
-                               job_type="debug",
+                               job_type="NVE_2v2",
                                reinit=True)
         wandb_run.config.update(env.env.args)
     else:
@@ -852,8 +851,7 @@ class Evaluator:
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
-                rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
-                reward = rewards[0]
+                reward, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                 reward_dict = reward_dicts[0]
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
@@ -865,8 +863,7 @@ class Evaluator:
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    rewards, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
-                    reward = rewards[0]
+                    reward, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                     reward_dict = reward_dicts[0]
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
@@ -937,7 +934,7 @@ class Evaluator:
 
 
 def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
-    episode_return = [0.0 for _ in env.env.trainer_ids]  # sum of rewards in an episode
+    episode_return = 0.0  # sum of rewards in an episode
     episode_step = 1
     max_step = env.max_step
     if_discrete = env.if_discrete
@@ -996,7 +993,7 @@ def demo_discrete_action():
         args.learning_rate = 1e-4
         args.if_per_or_gae = True
         args.if_allow_break = False
-        args.break_step = 100000000
+        args.break_step = 20000000
         args.gpu_id = sys.argv[-1][-4]
         args.random_seed = 1
 
@@ -1004,7 +1001,7 @@ def demo_discrete_action():
         args.eval_times1 = 20
         args.eval_times2 = 30
 
-        args.if_train = False
+        args.if_train = True
         # args.cwd = '2022-04-27_16-25-48-zero-sum-self-play'
         # args.enemy_cwd = '2022-05-03_16-31-27-PVE'
     '''train and evaluate'''

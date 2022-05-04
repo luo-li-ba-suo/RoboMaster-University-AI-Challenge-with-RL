@@ -51,6 +51,8 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards_episode = [{} for _ in self.trainer_ids]
         self.rewards_record = [[] for _ in self.trainer_ids]
 
+        self.r_win_record = {'win':0.0, 'fail':0.0, 'draw':0.0}
+        self.r_win_rate = 0.0
         # env
         self.delta_dist_matrix = [[0 for _ in range(self.simulator.state.robot_num)] for _ in
                                   range(self.simulator.state.robot_num)]
@@ -190,6 +192,14 @@ class RMUA_Multi_agent_Env(gym.Env):
             if self.simulator.state.robots[n + self.simulator.parameters.robot_r_num].hp > 0:
                 red_win = False
         done = done or red_win or blue_win
+        if red_win:
+            self.r_win_record['win'] += 0.001
+        elif blue_win:
+            self.r_win_record['blue'] += 0.001
+        else:
+            self.r_win_record['draw'] += 0.001
+        self.r_win_rate = self.r_win_record['win']/\
+                          (self.r_win_record['win']+self.r_win_record['fail']+self.r_win_record['draw'])
         r = self.compute_reward()
         # 记录每个机器人每回合的奖励：
         if done and self.do_render:
@@ -250,8 +260,14 @@ class RMUA_Multi_agent_Env(gym.Env):
             '''no_move惩罚'''
             # self.rewards[n]['no_move'] = -1 if robot.vx == 0 and robot.vy == 0 else 0
             '''击杀对方奖励'''
-            for enemy_id in robot.enemy:
-                self.rewards[i]['K.O.'] = 300 if self.simulator.state.robots[enemy_id].hp == 0 else 0
+            enemy_all_defeated = True
+            for i, enemy_id in enumerate(robot.enemy):
+                if self.simulator.state.robots[enemy_id].hp > 0:
+                    enemy_all_defeated = False
+            if enemy_all_defeated:
+                self.rewards[i]['K.O.'] = 300
+            else:
+                self.rewards[i]['K.O.'] = 0
                 # '''引导：进攻模式'''
                 # '''离敌人越近负奖励越小'''
                 # dist = self.simulator.state.dist_matrix[n][enemy_id]
@@ -275,7 +291,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                 robot.robot_info_text['总分'] += reward
             else:
                 robot.robot_info_text['总分'] = reward
-        return [sum(individual_reward.values()) for individual_reward in self.rewards]
+        return sum([sum(individual_reward.values()) for individual_reward in self.rewards])
 
     def calculate_public_observation(self):
         game_state = self.simulator.state
@@ -362,7 +378,7 @@ class RMUA_Multi_agent_Env(gym.Env):
 
 if __name__ == '__main__':
     args = Parameters()
-    args.red_agents_path = 'src.agents.random_agent'
+    args.red_agents_path = 'src.agents.random_enemy'
     args.blue_agents_path = 'src.agents.human_agent'
     args.render_per_frame = 20
     args.episode_time = 180
