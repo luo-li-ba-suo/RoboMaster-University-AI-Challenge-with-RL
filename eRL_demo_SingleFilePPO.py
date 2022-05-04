@@ -728,10 +728,10 @@ def train_and_evaluate(args):
                                project='Robomaster',
                                entity='dujinqi',
                                notes='nn enemy',
-                               name='PVP_seed=' + str(args.random_seed),
+                               name='ppo_PVP_seed=' + str(args.random_seed),
                                group='nn enemy',
                                dir=log_dir,
-                               job_type="ppo",
+                               job_type="debug",
                                reinit=True)
         wandb_run.config.update(env.env.args)
     else:
