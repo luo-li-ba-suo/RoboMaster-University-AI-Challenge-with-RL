@@ -30,6 +30,7 @@ class Parameters:
                  [50, 398]]
     random_start_pos = True
     random_start_far_pos = True
+    random_start_far_dis = 350
     start_angle = [180, 90, 0, -90]
     start_bullet = [500, 0, 500, 0]
 

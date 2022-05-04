@@ -51,12 +51,13 @@ def loadAgents(args):
                                 .format(i, name_list[i], ".".join((file_list[i]).split(".")[-2:])))
     return agents, load_errs
 
+
 class Alarm20hz(object):
     def __init__(self, frame_num_one_second):
         # 由于装甲板检测受击的频率为20hz
         # 20hz的闹铃频率
         # 如果没有接收到闹铃响起将会堆积
-        self.alarm_interval_frame = frame_num_one_second//20
+        self.alarm_interval_frame = frame_num_one_second // 20
         self.delta_frame = 0
         self.last_frame = 0
         self.go_off_flag = False
@@ -186,6 +187,7 @@ class State(object):  # 总状态
         if self.time > 180:
             return True
 
+
 class Parameters(object):  # 参数集合
     def __init__(self, options):
         self.episode_time = options.episode_time
@@ -207,6 +209,7 @@ class Parameters(object):  # 参数集合
         self.frame_num_one_second = options.frame_num_one_second
         self.episode_step = options.episode_step
         self.random_start_far_pos = options.random_start_far_pos
+        self.random_start_far_dis = options.random_start_far_dis
         self.do_plot = options.do_plot
         self.collision_bounce = options.collision_bounce
 
@@ -216,6 +219,7 @@ class Parameters(object):  # 参数集合
         self.start_pos = []
         self.start_angle = []
         if self.enable_blocks:
+            # TODO:
             indexes = np.random.choice(range(0, len(positions)), 4, replace=False)
             if self.random_start_far_pos:
                 while np.linalg.norm(np.array(positions[indexes[0]]) - np.array(positions[indexes[2]])) < 500:
@@ -224,17 +228,35 @@ class Parameters(object):  # 参数集合
             for i in indexes:
                 self.start_pos.append(positions[i])
         else:
-            poses = []
-            for i in range(4):
-                poses.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
-            while np.linalg.norm(np.array(poses[0]) - np.array(poses[2])) < 500:
-                poses = []
-                for i in range(4):
-                    poses.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
-            self.start_pos = poses
+            positions_r = []
+            positions_b = []
+            for i in range(self.robot_r_num):
+                positions_r.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
+            for i in range(self.robot_b_num):
+                positions_b.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
+            while not self.if_start_positions_valid(positions_r, positions_b):  # 判断是否两个点集之间距离均远于300以及队友之间是否不重合
+                positions_r = []
+                positions_b = []
+                for i in range(self.robot_r_num):
+                    positions_r.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
+                for i in range(self.robot_b_num):
+                    positions_b.append([np.random.uniform(30, 778), np.random.uniform(30, 418)])
+            self.start_pos = positions_r + positions_b
         for i in range(4):
             self.start_angle.append(np.random.random() * 360 - 180)
 
+    def if_start_positions_valid(self, positions_r, positions_b):
+        if len(positions_r) > 1:
+            if np.linalg.norm(np.array(positions_r[0]) - np.array(positions_r[1])) < 60:
+                return False
+        if len(positions_b) > 1:
+            if np.linalg.norm(np.array(positions_b[0]) - np.array(positions_b[1])) < 60:
+                return False
+        for pos_r in positions_r:
+            for pos_b in positions_b:
+                if np.linalg.norm(np.array(pos_r) - np.array(pos_b)) < self.random_start_far_dis:
+                    return False
+        return True
 
 class Simulator(object):
     def __init__(self, options):
