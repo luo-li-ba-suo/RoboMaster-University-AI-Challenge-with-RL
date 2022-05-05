@@ -352,6 +352,11 @@ class User_Interface(object):
             for i, tag in enumerate(tags_state):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 130, 22 + i * 17))
+            tags_state = {'红方胜率': self.state.r_win_record.get_win_rate(),
+                          '平局率': self.state.r_win_record.get_draw_rate()}
+            for i, tag in enumerate(tags_state):
+                info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
+                self.screen.blit(info, (self.map.map_length + 230, 22 + i * 17))
 
     def update_robot_data(self):
         info = self.font.render(

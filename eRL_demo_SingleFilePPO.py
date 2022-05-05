@@ -358,13 +358,15 @@ class AgentPPO:
             network_dict = torch.load(save_path, map_location=lambda storage, loc: storage)
             network.load_state_dict(network_dict)
 
-        assert (self.enemy_act is not None) and os.path.exists(act_save_path), "Act FileNotFound when load model for enemy"
+        assert (self.enemy_act is not None) and os.path.exists(
+            act_save_path), "Act FileNotFound when load model for enemy"
         load_torch_file(self.enemy_act, act_save_path)
         print("Loaded act:", cwd, " for enemy")
 
 
 class AgentDiscretePPO(AgentPPO):
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False, trainer_id = 0):
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False,
+             trainer_id=0):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -726,11 +728,11 @@ def train_and_evaluate(args):
         wandb_run = wandb.init(config=args,
                                project='Robomaster',
                                entity='dujinqi',
-                               notes='V5.2000',
+                               notes='win rate displayed',
                                name='ppo_NVE_2v2_seed=' + str(args.random_seed),
                                group='static enemy',
                                dir=log_dir,
-                               job_type="NVE_2v2",
+                               job_type="debug_NVE_2v2",
                                reinit=True)
         wandb_run.config.update(env.env.args)
     else:
@@ -803,7 +805,8 @@ def train_and_evaluate(args):
         logging_tuple = list(logging_tuple)
         logging_tuple += logging_list
         with torch.no_grad():
-            if_reach_goal = evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run, enemy_act=agent.enemy_act)
+            if_reach_goal = evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run,
+                                                    enemy_act=agent.enemy_act)
             if_train = not ((if_break_early and if_reach_goal)
                             or total_step >= break_step
                             or os.path.exists(f'{cwd}/stop'))
@@ -848,10 +851,11 @@ class Evaluator:
             self.eval_time = time.time()
             rewards_steps_list = []
             rewards_dict = {}
+            infos_dict = {}
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
-                reward, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
+                reward, step, reward_dicts, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                 reward_dict = reward_dicts[0]
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
@@ -859,15 +863,22 @@ class Evaluator:
                         rewards_dict[key].append(reward_dict[key])
                     else:
                         rewards_dict[key] = [reward_dict[key]]
+                for key in info_dict:
+                    if key in infos_dict:
+                        infos_dict[key].append(info_dict[key])
+                    else:
+                        infos_dict[key] = [info_dict[key]]
             r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    reward, step, reward_dicts = get_episode_return_and_step(self.env, act, self.device, enemy_act)
+                    reward, step, reward_dicts, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                     reward_dict = reward_dicts[0]
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
                         rewards_dict[key].append(reward_dict[key])
+                    for key in info_dict:
+                        infos_dict[key].append(info_dict[key])
                 r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
             for key in rewards_dict:
                 rewards_dict[key] = np.mean(rewards_dict[key])
@@ -904,6 +915,7 @@ class Evaluator:
                            str(self.agent_id) + '_objA': log_tuple[1],
                            str(self.agent_id) + '_logprob': log_tuple[2]}
             train_infos.update(rewards_dict)
+            train_infos.update(infos_dict)
             logger.log(train_infos, step=self.total_step)
             self.epoch += 1
             if_reach_goal = bool(self.r_max > self.target_return)  # check if_reach_goal
@@ -935,6 +947,7 @@ class Evaluator:
 
 def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
     episode_return = 0.0  # sum of rewards in an episode
+    info_dict = None
     episode_step = 1
     max_step = env.max_step
     if_discrete = env.if_discrete
@@ -963,13 +976,13 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
                         action.append(a_tensor_[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
                         n += action_dim_
                     actions[i] = action
-        state, reward, done, _ = env.step(actions)
+        state, reward, done, info_dict = env.step(actions)
         env.render()
         episode_return += reward
         if done:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
-    return episode_return, episode_step, env.env.rewards_episode
+    return episode_return, episode_step, env.env.rewards_episode, info_dict
 
 
 '''DEMO'''

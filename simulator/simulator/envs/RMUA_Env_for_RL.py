@@ -51,8 +51,6 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards_episode = [{} for _ in self.trainer_ids]
         self.rewards_record = [[] for _ in self.trainer_ids]
 
-        self.r_win_record = {'win':0.0, 'fail':0.0, 'draw':0.0}
-        self.r_win_rate = 0.0
         # env
         self.delta_dist_matrix = [[0 for _ in range(self.simulator.state.robot_num)] for _ in
                                   range(self.simulator.state.robot_num)]
@@ -183,23 +181,6 @@ class RMUA_Multi_agent_Env(gym.Env):
 
     def step(self, actions):
         done = self.simulator.step(self.decode_actions(actions))  # 只给其中一个传动作
-        red_win = True
-        blue_win = True
-        for n in range(self.simulator.parameters.robot_r_num):
-            if self.simulator.state.robots[n].hp > 0:
-                blue_win = False
-        for n in range(self.simulator.parameters.robot_b_num):
-            if self.simulator.state.robots[n + self.simulator.parameters.robot_r_num].hp > 0:
-                red_win = False
-        done = done or red_win or blue_win
-        if red_win:
-            self.r_win_record['win'] += 0.001
-        elif blue_win:
-            self.r_win_record['blue'] += 0.001
-        else:
-            self.r_win_record['draw'] += 0.001
-        self.r_win_rate = self.r_win_record['win']/\
-                          (self.r_win_record['win']+self.r_win_record['fail']+self.r_win_record['draw'])
         r = self.compute_reward()
         # 记录每个机器人每回合的奖励：
         if done and self.do_render:
@@ -207,8 +188,13 @@ class RMUA_Multi_agent_Env(gym.Env):
                 self.rewards_record[i].append(sum(self.rewards_episode[i].values()))
                 if len(self.rewards_record[i]) > 500:  # 如果超过500条记录就均匀减半
                     self.rewards_record[i] = self.rewards_record[i][::2]
+        if done:
+            info_dicts = {'win_rate': self.simulator.state.r_win_record.get_win_rate(),
+                          'draw_rate': self.simulator.state.r_win_record.get_draw_rate()}
+        else:
+            info_dicts = None
 
-        return self.get_observations(), r, done, None
+        return self.get_observations(), r, done, info_dicts
 
     def compute_reward(self):
         for i, n in enumerate(self.trainer_ids):
@@ -261,7 +247,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             # self.rewards[n]['no_move'] = -1 if robot.vx == 0 and robot.vy == 0 else 0
             '''击杀对方奖励'''
             enemy_all_defeated = True
-            for i, enemy_id in enumerate(robot.enemy):
+            for j, enemy_id in enumerate(robot.enemy):
                 if self.simulator.state.robots[enemy_id].hp > 0:
                     enemy_all_defeated = False
             if enemy_all_defeated:

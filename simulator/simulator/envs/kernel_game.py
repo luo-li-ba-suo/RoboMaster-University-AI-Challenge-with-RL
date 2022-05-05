@@ -76,6 +76,30 @@ class Alarm20hz(object):
             return False
 
 
+class WinRateManager(object):
+    def __init__(self):
+        self.win_num = 0
+        self.fail_num = 0
+        self.total_num = 0
+
+    def win(self):
+        self.win_num += 1
+        self.total_num += 1
+
+    def fail(self):
+        self.fail_num += 1
+        self.total_num += 1
+
+    def draw(self):
+        self.total_num += 1
+
+    def get_win_rate(self):
+        return self.win_num/self.total_num
+
+    def get_draw_rate(self):
+        return (self.total_num - self.win_num - self.fail_num)/self.total_num
+
+
 class State(object):  # 总状态
     def __init__(self, options):
         self.do_render = options.render
@@ -116,6 +140,8 @@ class State(object):  # 总状态
         self.wait_for_user_input = False
         # 20hz的闹钟
         self.alarm20hz = Alarm20hz(options.frame_num_one_second)
+
+        self.r_win_record = WinRateManager()
 
     def reset(self, time, start_pos, start_angle, start_bullet, start_hp):
         self.episode += 1
@@ -258,6 +284,7 @@ class Parameters(object):  # 参数集合
                     return False
         return True
 
+
 class Simulator(object):
     def __init__(self, options):
         self.parameters = Parameters(options)  # parameters
@@ -301,6 +328,7 @@ class Simulator(object):
         return self.state
 
     def step(self, actions):  # 执行多智能体动作
+        done = False
         if self.state.do_render:
             self.step_feedback_UI()
         # 判断游戏是否暂停或等待用户输入指令
@@ -312,7 +340,7 @@ class Simulator(object):
             self.step_reset()
             for n in range(self.parameters.frame_num_one_step):
                 if self.tick():  # 一个周期，5ms
-                    return True
+                    done = True
             self.state.step += 1
             if self.single_input:
                 self.state.wait_for_user_input = True
@@ -321,8 +349,24 @@ class Simulator(object):
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
             if self.state.step == self.parameters.episode_step:
-                return True
-        return False
+                done = True
+        red_win = True
+        blue_win = True
+        for n in range(self.parameters.robot_r_num):
+            if self.state.robots[n].hp > 0:
+                blue_win = False
+        for n in range(self.parameters.robot_b_num):
+            if self.state.robots[n + self.parameters.robot_r_num].hp > 0:
+                red_win = False
+        if red_win:
+            self.state.r_win_record.win()
+        elif blue_win:
+            self.state.r_win_record.fail()
+        else:
+            self.state.r_win_record.draw()
+        # TODO: 对局结束时，双方机器人尚有存活的话，伤害高的一方获胜
+        done = done or red_win or blue_win
+        return done
 
     #
     # def step_orders(self, orders):
