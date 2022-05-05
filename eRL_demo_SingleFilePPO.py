@@ -732,7 +732,7 @@ def train_and_evaluate(args):
                                name='ppo_NVE_2v2_seed=' + str(args.random_seed),
                                group='static enemy',
                                dir=log_dir,
-                               job_type="debug_NVE_2v2",
+                               job_type="NVE_2v2",
                                reinit=True)
         wandb_run.config.update(env.env.args)
     else:
