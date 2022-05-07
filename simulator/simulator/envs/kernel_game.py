@@ -90,10 +90,12 @@ class WinRateManager(object):
 
     def fail(self):
         self.record.append(-1)
+        self.fail_num += 1
         self.hold_total_num()
 
     def draw(self):
         self.record.append(0)
+        self.draw_num += 1
         self.hold_total_num()
 
     def get_win_rate(self):
@@ -380,7 +382,7 @@ class Simulator(object):
             self.state.r_win_record.win()
         elif blue_win:
             self.state.r_win_record.fail()
-        else:
+        elif done:
             self.state.r_win_record.draw()
         # TODO: 对局结束时，双方机器人尚有存活的话，伤害高的一方获胜
         done = done or red_win or blue_win

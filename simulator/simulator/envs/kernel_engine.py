@@ -246,7 +246,7 @@ class Engine(object):
 
             # rotate yaw
             m = orders.set[n].shoot_target_enemy
-            m = get_enemy_index(self.state, n, m)
+            m = get_alive_enemy_index(self.state, n, m)
             if self.can_target_enemy_be_seen(n, m):
                 self.acts[n].yaw_speed, enemy_aimed = self.auto_aim(n, m)
                 if enemy_aimed:
