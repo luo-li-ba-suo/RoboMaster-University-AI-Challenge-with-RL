@@ -728,7 +728,7 @@ def train_and_evaluate(args):
         wandb_run = wandb.init(config=args,
                                project='Robomaster',
                                entity='dujinqi',
-                               notes='win rate displayed',
+                               notes='target_choose_improved',
                                name='ppo_NVE_2v2_seed=' + str(args.random_seed),
                                group='static enemy',
                                dir=log_dir,
@@ -850,7 +850,6 @@ class Evaluator:
         if time.time() - self.eval_time > self.eval_gap:
             self.eval_time = time.time()
             rewards_steps_list = []
-            rewards_dict = {}
             infos_dict = {}
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
@@ -859,15 +858,15 @@ class Evaluator:
                 reward_dict = reward_dicts[0]
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
-                    if key in rewards_dict:
-                        rewards_dict[key].append(reward_dict[key])
+                    if 'r_' + key in infos_dict:
+                        infos_dict['r_' + key].append(reward_dict[key])
                     else:
-                        rewards_dict[key] = [reward_dict[key]]
+                        infos_dict['r_' + key] = [reward_dict[key]]
                 for key in info_dict:
-                    if key in infos_dict:
-                        infos_dict[key].append(info_dict[key])
+                    if 'red_' + key in infos_dict:
+                        infos_dict['red_' + key].append(info_dict[key])
                     else:
-                        infos_dict[key] = [info_dict[key]]
+                        infos_dict['red_' + key] = [info_dict[key]]
             r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
@@ -876,12 +875,12 @@ class Evaluator:
                     reward_dict = reward_dicts[0]
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
-                        rewards_dict[key].append(reward_dict[key])
+                        infos_dict['r_' + key].append(reward_dict[key])
                     for key in info_dict:
-                        infos_dict[key].append(info_dict[key])
+                        infos_dict['red_' + key].append(info_dict[key])
                 r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
-            for key in rewards_dict:
-                rewards_dict[key] = np.mean(rewards_dict[key])
+            for key in infos_dict:
+                infos_dict[key] = np.mean(infos_dict[key])
             if r_avg > self.r_max:  # save checkpoint with highest episode return
                 self.r_max = r_avg  # update max reward (episode return)
                 # logger.save_state({'env': env}, None)
@@ -914,7 +913,6 @@ class Evaluator:
                            str(self.agent_id) + '_objC': log_tuple[0],
                            str(self.agent_id) + '_objA': log_tuple[1],
                            str(self.agent_id) + '_logprob': log_tuple[2]}
-            train_infos.update(rewards_dict)
             train_infos.update(infos_dict)
             logger.log(train_infos, step=self.total_step)
             self.epoch += 1
@@ -931,7 +929,8 @@ class Evaluator:
             # if time.time() - self.print_time > self.show_gap:
             print(f" {self.agent_id:<2} {self.total_step:8.2e} {self.r_max:8.2f} |"
                   f"{r_avg:8.2f} {r_std:8.2f} |{s_avg:5.0f} {s_std:4.0f} |"
-                  f"{' '.join(f'{n:8.2f}' for n in log_tuple)}")
+                  f"{' '.join(f'{n:8.2f}' for n in log_tuple)} | "
+                  f"{infos_dict['red_win_rate']:.2f}, {infos_dict['red_draw_rate']:.2f}")
         else:
             if_reach_goal = False
 
