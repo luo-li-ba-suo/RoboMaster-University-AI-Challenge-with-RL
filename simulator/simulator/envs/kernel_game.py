@@ -78,26 +78,43 @@ class Alarm20hz(object):
 
 class WinRateManager(object):
     def __init__(self):
+        self.record = []
         self.win_num = 0
         self.fail_num = 0
-        self.total_num = 0
+        self.draw_num = 0
 
     def win(self):
+        self.record.append(1)
         self.win_num += 1
-        self.total_num += 1
+        self.hold_total_num()
 
     def fail(self):
-        self.fail_num += 1
-        self.total_num += 1
+        self.record.append(-1)
+        self.hold_total_num()
 
     def draw(self):
-        self.total_num += 1
+        self.record.append(0)
+        self.hold_total_num()
 
     def get_win_rate(self):
-        return self.win_num/self.total_num
+        if not self.record:
+            return 0
+        return self.win_num / len(self.record)
 
     def get_draw_rate(self):
-        return (self.total_num - self.win_num - self.fail_num)/self.total_num
+        if not self.record:
+            return 0
+        return self.draw_num / len(self.record)
+
+    def hold_total_num(self):
+        if len(self.record) > 100:
+            if self.record[0] == 1:
+                self.win_num -= 1
+            elif self.record[0] == -1:
+                self.fail_num -= 1
+            elif self.record[0] == 0:
+                self.draw_num -= 1
+            del self.record[0]
 
 
 class State(object):  # 总状态
@@ -162,10 +179,11 @@ class State(object):  # 总状态
                                      angle=start_angle[n],
                                      bullet=start_bullet[n], no_dying=self.no_dying, hp=start_hp[n]))
         for n in range(self.robot_b_num):
-            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n, x=start_pos[n + 2][0],
-                                     y=start_pos[n + 2][1],
-                                     angle=start_angle[n + 2],
-                                     bullet=start_bullet[n + 2], no_dying=self.no_dying, hp=start_hp[n + 2]))
+            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n, x=start_pos[n + self.robot_r_num][0],
+                                     y=start_pos[n + self.robot_r_num][1],
+                                     angle=start_angle[n + self.robot_r_num],
+                                     bullet=start_bullet[n + self.robot_r_num], no_dying=self.no_dying,
+                                     hp=start_hp[n + self.robot_r_num]))
 
         if self.buff_mode:
             self.random_buff_info()
