@@ -853,14 +853,13 @@ class Evaluator:
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
-                reward, step, reward_dicts, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
-                reward_dict = reward_dicts[0]
+                reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
-                    if 'r_' + key in infos_dict:
-                        infos_dict['r_' + key].append(reward_dict[key])
+                    if 'reward_' + key in infos_dict:
+                        infos_dict['reward_' + key].append(reward_dict[key])
                     else:
-                        infos_dict['r_' + key] = [reward_dict[key]]
+                        infos_dict['reward_' + key] = [reward_dict[key]]
                 for key in info_dict:
                     if 'red_' + key in infos_dict:
                         infos_dict['red_' + key].append(info_dict[key])
@@ -870,11 +869,10 @@ class Evaluator:
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    reward, step, reward_dicts, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
-                    reward_dict = reward_dicts[0]
+                    reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
-                        infos_dict['r_' + key].append(reward_dict[key])
+                        infos_dict['reward_' + key].append(reward_dict[key])
                     for key in info_dict:
                         infos_dict['red_' + key].append(info_dict[key])
                 r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
@@ -980,7 +978,11 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
         if done:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
-    return episode_return, episode_step, env.env.rewards_episode, info_dict
+    rewards_dict = [env.env.rewards_episode[i] for i in env.env.trainer_ids]
+    mean_reward_dict = {}
+    for key in rewards_dict[0]:
+        mean_reward_dict[key] = np.mean([r[key] for r in rewards_dict])
+    return episode_return, episode_step, mean_reward_dict, info_dict
 
 
 '''DEMO'''
