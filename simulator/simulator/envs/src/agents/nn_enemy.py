@@ -79,10 +79,11 @@ class My_Agent(object):
                       }
 
     def decode_actions(self, game_state, actions):  # 根据动作编码，解码产生动作
-        assert actions is not None, "nn_agent received None Action"
         self.orders.reset()
         action_offset = [1, 1, 1, 0] if self.enemy_num == 1 else [1, 1, 1, 0, 0]
         for i in range(self.num_robots):
+            if game_state.robots[self.robot_ids[i]].hp <= 0:
+                continue
             action = actions[i] - action_offset
             self.orders.set[i].x = action[0]
             self.orders.set[i].y = action[1]

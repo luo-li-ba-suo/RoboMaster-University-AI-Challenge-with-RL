@@ -400,18 +400,16 @@ class AgentDiscretePPO(AgentPPO):
                     actions_for_env[i] = a_int
                 elif i in env.env.nn_enemy_ids:
                     actions_for_env[i] = self.select_enemy_action(states[i])
-            next_states, reward, done, _ = env.step(actions_for_env)
+            next_states, rewards, done, _ = env.step(actions_for_env)
             env.render()
-            if self.act.Multi_Discrete:
-                other = (reward * reward_scale, 0.0 if done else gamma, *as_int[0], *np.concatenate(as_prob[0]))
-            else:
-                other = (reward * reward_scale, 0.0 if done else gamma, as_int[0], *as_prob[0])
 
-            episode_reward += reward
+            episode_reward += np.mean(rewards)
             if done:
                 episode_rewards.append(episode_reward)
                 episode_reward = 0
-            trajectory_list.append((states[0], other))
+            for i, n in enumerate(env.env.trainer_ids):
+                other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
+                trajectory_list.append((states[n], other))
 
             states = env.reset() if done else next_states
         self.states = states
@@ -526,9 +524,10 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         return [np.array(state).astype(np.float32) for state in states]
 
     def step_type(self, actions) -> (list, float, bool, dict):
-        states, reward, done, info = self.env.step(actions)
+        states, rewards, done, info = self.env.step(actions)
         self.reward_dict = self.env.rewards
-        return [np.array(state).astype(np.float32) for state in states], np.array(reward).astype(np.float32), done, info
+        return [np.array(state).astype(np.float32) for state in states], \
+               [np.array(reward).astype(np.float32) for reward in rewards], done, info
 
 
 def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
@@ -728,11 +727,11 @@ def train_and_evaluate(args):
         wandb_run = wandb.init(config=args,
                                project='Robomaster',
                                entity='dujinqi',
-                               notes='target_choose_improved',
-                               name='ppo_NVE_2v2_seed=' + str(args.random_seed),
-                               group='static enemy',
+                               notes='double_trajectories_and_delete_dead_trainer',
+                               name='ppo_NVN_2v2_double_trajectories_seed=' + str(args.random_seed),
+                               group='random enemy',
                                dir=log_dir,
-                               job_type="NVE_2v2",
+                               job_type="NVN_2v2",
                                reinit=True)
         wandb_run.config.update(env.env.args)
     else:
@@ -975,9 +974,9 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
                         action.append(a_tensor_[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
                         n += action_dim_
                     actions[i] = action
-        state, reward, done, info_dict = env.step(actions)
+        state, rewards, done, info_dict = env.step(actions)
         env.render()
-        episode_return += reward
+        episode_return += np.mean(rewards)
         if done:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
@@ -1015,7 +1014,7 @@ def demo_discrete_action():
 
         args.if_train = True
         # args.cwd = '2022-04-27_16-25-48-zero-sum-self-play'
-        # args.enemy_cwd = '2022-05-03_16-31-27-PVE'
+        # args.enemy_cwd = '2022-05-07_13-15-23-2v2-chase'
     '''train and evaluate'''
     train_and_evaluate(args)
 
