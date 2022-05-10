@@ -77,7 +77,7 @@ class My_Agent(object):
                       'y': [0, 448],
                       'hp': [0, 1000],
                       'angle': [-180, 180],
-                      'bullet': [0, 500]
+                      # 'bullet': [0, 500]
                       }
 
     def decode_actions(self, game_state, actions):  # 根据动作编码，解码产生动作

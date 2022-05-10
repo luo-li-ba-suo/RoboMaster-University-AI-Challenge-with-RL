@@ -73,7 +73,7 @@ class My_Agent(object):
                       'y': [0, 448],
                       'hp': [0, 1000],
                       'angle': [-180, 180],
-                      'bullet': [0, 500]
+                      # 'bullet': [0, 500]
                       }
         self.frame = 0
 
