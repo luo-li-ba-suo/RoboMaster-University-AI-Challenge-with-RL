@@ -189,7 +189,7 @@ class AgentPPO:
         self.criterion = None
         self.act = self.enemy_act = self.act_optimizer = None
         self.cri = self.cri_optimizer = self.cri_target = None
-        self.trainer_id = 0
+        self.last_state = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -275,7 +275,7 @@ class AgentPPO:
             value = torch.cat([self.cri_target(state[i:i + bs]) for i in range(0, state.size(0), bs)], dim=0)
             logprob = self.act.get_old_logprob(action, a_noise)
             # self.states[0]表示第一個智能體的狀態
-            pre_state = torch.as_tensor((self.states[self.trainer_id],), dtype=torch.float32, device=self.device)
+            pre_state = torch.as_tensor((self.last_state,), dtype=torch.float32, device=self.device)
             pre_r_sum = self.cri(pre_state).detach()
             r_sum, advantage = self.get_reward_sum(self, buf_len, reward, mask, value, pre_r_sum)
         return state, action, r_sum, logprob, advantage
@@ -365,8 +365,7 @@ class AgentPPO:
 
 
 class AgentDiscretePPO(AgentPPO):
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False,
-             trainer_id=0):
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -378,17 +377,17 @@ class AgentDiscretePPO(AgentPPO):
         self.criterion = torch.nn.SmoothL1Loss()
         self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
         self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
-        self.trainer_id = trainer_id
 
     def explore_env(self, env, target_step, reward_scale, gamma):
         trajectory_list = list()
+        trajectory_list_for_each_agent = [list() for _ in env.env.trainer_ids]
         logging_list = list()
         episode_rewards = list()
         episode_reward = 0
         env.render()
         env.env.simulator.module_UI.text_training_state = "正在采样..."
         states = self.states
-        for _ in range(target_step):
+        while True:
             as_int = []
             actions_for_env = [None for _ in range(env.env.simulator.state.robot_num)]
             as_prob = []
@@ -403,16 +402,23 @@ class AgentDiscretePPO(AgentPPO):
             next_states, rewards, done, _ = env.step(actions_for_env)
             env.render()
 
-            episode_reward += np.mean(rewards)
-            if done:
-                episode_rewards.append(episode_reward)
-                episode_reward = 0
             for i, n in enumerate(env.env.trainer_ids):
                 other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
-                trajectory_list.append((states[n], other))
-
-            states = env.reset() if done else next_states
+                trajectory_list_for_each_agent[i].append((states[n], other))
+            episode_reward += np.mean(rewards)
+            if done:
+                states = env.reset()
+                episode_rewards.append(episode_reward)
+                episode_reward = 0
+                for i, _ in enumerate(env.env.trainer_ids):
+                    trajectory_list += trajectory_list_for_each_agent[i]
+                trajectory_list_for_each_agent = [list() for _ in env.env.trainer_ids]
+                if len(trajectory_list) >= target_step:
+                    break
+            else:
+                states = next_states
         self.states = states
+        self.last_state = states[env.env.trainer_ids[-1]]
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
 
@@ -853,7 +859,8 @@ class Evaluator:
             self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
-                reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
+                reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
+                                                                                   enemy_act)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
                     if 'reward_' + key in infos_dict:
@@ -869,7 +876,8 @@ class Evaluator:
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device, enemy_act)
+                    reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
+                                                                                       enemy_act)
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
                         infos_dict['reward_' + key].append(reward_dict[key])
