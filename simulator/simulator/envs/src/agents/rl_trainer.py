@@ -75,6 +75,7 @@ class My_Agent(object):
         #               }
         self.state = {'x': [0, 808],
                       'y': [0, 448],
+                      'hp': [0, 1000],
                       'angle': [-180, 180],
                       'bullet': [0, 500]
                       }
