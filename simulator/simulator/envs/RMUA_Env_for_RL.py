@@ -372,7 +372,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             self.simulator.init_render(self.args)
 
     def if_trainer_dead(self, idx):
-        if_dead = self.simulator.state.robots[idx].hp = 0
+        if_dead = self.simulator.state.robots[idx].hp == 0
         assert self.simulator.state.robots[idx].hp >= 0, f"Warning: robot {idx} hp < 0!"
         return if_dead
 
