@@ -137,7 +137,7 @@ class Engine(object):
         if self.state.do_render:
             self.orders_text = ['' for _ in range(self.robot_num)]
             self.points_for_render = [[] for _ in range(self.robot_num)]
-        if self.map.barriers:
+        if self.map.barriers.any():
             b = self.map.barriers[4]
             # 以下四个截距是中心正方形的四条边的截距，用作边缘碰撞检测
             self.intercept1 = (sum(b)) / 2 + (b[1] - b[0]) / 1.414214

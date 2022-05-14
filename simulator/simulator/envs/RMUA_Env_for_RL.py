@@ -55,6 +55,8 @@ class RMUA_Multi_agent_Env(gym.Env):
         # env
         self.delta_dist_matrix = [[0 for _ in range(self.simulator.state.robot_num)] for _ in
                                   range(self.simulator.state.robot_num)]
+        self.last_time_alive_robots = [True for _ in range(self.robot_num)]
+        self.robots_being_killed = []
         # flags
         self.cal_public_obs_already = False
 
@@ -196,11 +198,18 @@ class RMUA_Multi_agent_Env(gym.Env):
                 self.rewards_record[n].append(sum(self.rewards_episode[n].values()))
                 if len(self.rewards_record[n]) > 500:  # 如果超过500条记录就均匀减半
                     self.rewards_record[n] = self.rewards_record[n][::2]
+        self.robots_being_killed = []
+        for i, robot in enumerate(self.simulator.state.robots):
+            if robot.hp <= 0 < self.last_time_alive_robots[i]:
+                self.last_time_alive_robots[i] = False
+                self.robots_being_killed.append(i)
+
         if done:
             info_dicts = {'win_rate': self.simulator.state.r_win_record.get_win_rate(),
-                          'draw_rate': self.simulator.state.r_win_record.get_draw_rate()}
+                          'draw_rate': self.simulator.state.r_win_record.get_draw_rate(),
+                          'robots_being_killed_': self.robots_being_killed}  # it's not recorded if its key ends with _
         else:
-            info_dicts = None
+            info_dicts = {'robots_being_killed_': self.robots_being_killed}
 
         return self.get_observations(), r, done, info_dicts
 

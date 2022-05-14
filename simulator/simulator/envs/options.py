@@ -22,7 +22,7 @@ class Parameters:
     overheating_protection = True
 
     # 有关地图信息：
-    enable_blocks = False
+    enable_blocks = True
 
     start_pos = [[758, 398],
                  [758, 50],
@@ -76,5 +76,5 @@ class Parameters:
 
     # 有關訓練
     red_agents_path = 'src.agents.rl_trainer'
-    blue_agents_path = 'src.agents.random_enemy'
+    blue_agents_path = 'src.agents.nn_enemy'
 

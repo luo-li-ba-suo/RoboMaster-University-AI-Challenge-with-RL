@@ -268,7 +268,8 @@ class Parameters(object):  # 参数集合
             # TODO:
             indexes = np.random.choice(range(0, len(positions)), 4, replace=False)
             if self.random_start_far_pos:
-                while np.linalg.norm(np.array(positions[indexes[0]]) - np.array(positions[indexes[2]])) < 500:
+                while not self.if_start_positions_valid([positions[indexes[0]], positions[indexes[1]]],
+                                                        [positions[indexes[2]], positions[indexes[3]]]):
                     indexes = np.random.choice(range(0, len(positions)), 4, replace=False)
 
             for i in indexes:

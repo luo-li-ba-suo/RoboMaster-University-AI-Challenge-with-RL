@@ -190,6 +190,7 @@ class AgentPPO:
         self.act = self.enemy_act = self.act_optimizer = None
         self.cri = self.cri_optimizer = self.cri_target = None
         self.last_state = None
+        self.last_alive_trainers = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -399,18 +400,22 @@ class AgentDiscretePPO(AgentPPO):
                     actions_for_env[i] = a_int
                 elif i in env.env.nn_enemy_ids:
                     actions_for_env[i] = self.select_enemy_action(states[i])
-            next_states, rewards, done, _ = env.step(actions_for_env)
+            self.last_alive_trainers = env.env.trainer_ids
+            next_states, rewards, done, info_dict = env.step(actions_for_env)
             env.render()
 
-            for i, n in enumerate(env.env.trainer_ids):
-                other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
+            for i, n in enumerate(self.last_alive_trainers):
+                if n in info_dict['robots_being_killed_']:
+                    other = (rewards[i] * reward_scale, 0.0, *as_int[i], *np.concatenate(as_prob[i]))
+                else:
+                    other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
                 trajectory_list_for_each_agent[i].append((states[n], other))
             episode_reward += np.mean(rewards)
             if done:
                 states = env.reset()
                 episode_rewards.append(episode_reward)
                 episode_reward = 0
-                for i, _ in enumerate(env.env.trainer_ids):
+                for i, _ in enumerate(self.last_alive_trainers):
                     trajectory_list += trajectory_list_for_each_agent[i]
                 trajectory_list_for_each_agent = [list() for _ in env.env.trainer_ids]
                 if len(trajectory_list) >= target_step:
@@ -418,7 +423,7 @@ class AgentDiscretePPO(AgentPPO):
             else:
                 states = next_states
         self.states = states
-        self.last_state = states[env.env.trainer_ids[-1]]
+        self.last_state = states[env.env.trainer_ids[0]]
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
 
@@ -868,10 +873,11 @@ class Evaluator:
                     else:
                         infos_dict['reward_' + key] = [reward_dict[key]]
                 for key in info_dict:
-                    if 'red_' + key in infos_dict:
-                        infos_dict['red_' + key].append(info_dict[key])
-                    else:
-                        infos_dict['red_' + key] = [info_dict[key]]
+                    if key[-1] != '_':
+                        if 'red_' + key in infos_dict:
+                            infos_dict['red_' + key].append(info_dict[key])
+                        else:
+                            infos_dict['red_' + key] = [info_dict[key]]
             r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
@@ -882,7 +888,8 @@ class Evaluator:
                     for key in reward_dict:
                         infos_dict['reward_' + key].append(reward_dict[key])
                     for key in info_dict:
-                        infos_dict['red_' + key].append(info_dict[key])
+                        if key[-1] != '_':
+                            infos_dict['red_' + key].append(info_dict[key])
                 r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
             for key in infos_dict:
                 infos_dict[key] = np.mean(infos_dict[key])
@@ -957,6 +964,7 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
     state = env.reset()
+    trainer_ids_in_the_start = env.env.trainer_ids
 
     for episode_step in range(max_step):
         a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
@@ -986,7 +994,7 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
         if done:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
-    rewards_dict = [env.env.rewards_episode[i] for i in env.env.trainer_ids]
+    rewards_dict = [env.env.rewards_episode[i] for i in trainer_ids_in_the_start]
     mean_reward_dict = {}
     for key in rewards_dict[0]:
         mean_reward_dict[key] = np.mean([r[key] for r in rewards_dict])

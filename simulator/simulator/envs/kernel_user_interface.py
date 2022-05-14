@@ -249,7 +249,7 @@ class User_Interface(object):
             self.barriers_rect.append(self.barriers_img[-1].get_rect())
             self.barriers_rect[-1].center = [self.map.barriers[i][0:2].mean(), self.map.barriers[i][2:4].mean()]
         # 旋转中间的障碍块
-        if self.map.barriers:
+        if self.map.barriers.any():
             self.barriers_img[4] = pygame.transform.rotate(self.barriers_img[4], 45)
             self.barriers_rect[4] = self.barriers_img[4].get_rect()
             self.barriers_rect[4].center = [self.map.barriers[4][0:2].mean(), self.map.barriers[4][2:4].mean()]
