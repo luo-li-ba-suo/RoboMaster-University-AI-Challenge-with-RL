@@ -121,7 +121,6 @@ class WinRateManager(object):
 
 class State(object):  # 总状态
     def __init__(self, options):
-        self.do_render = options.render
         self.frame_num_one_second = options.frame_num_one_second
         self.time = 0  # 比赛剩余时间
         self.frame = 0
