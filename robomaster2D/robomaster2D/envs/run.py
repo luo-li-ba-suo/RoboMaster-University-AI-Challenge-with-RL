@@ -2,7 +2,7 @@
 import kernel_game
 import sys
 from options import Parameters
-sys.path.append('./simulator/')
+sys.path.append('./robomaster2D/')
 
 
 # def loadParameter():

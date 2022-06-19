@@ -76,5 +76,5 @@ class Parameters:
 
     # 有關訓練
     red_agents_path = 'src.agents.rl_trainer'
-    blue_agents_path = 'src.agents.nn_enemy'
+    blue_agents_path = 'src.agents.handcrafted_enemy'
 

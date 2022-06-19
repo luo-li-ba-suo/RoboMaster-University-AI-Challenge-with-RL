@@ -1,5 +1,7 @@
 # Robomaster AI Challenge仿真环境
 
+## 多进程运行环境部分
+
 ## 可视化部分
 - 环境的参数中可配置是否渲染环境界面。
   - 若配置为render=True，则在调用环境时可通过env.render等函数来开启渲染等功能;

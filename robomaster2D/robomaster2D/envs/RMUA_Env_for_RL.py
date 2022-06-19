@@ -12,11 +12,11 @@ import sys
 import gym
 import numpy as np
 import copy
-from simulator.envs import kernel_game
-from simulator.envs.options import Parameters
+from robomaster2D.envs import kernel_game
+from robomaster2D.envs.options import Parameters
 
-sys.path.append('./simulator/simulator/envs/')
-sys.path.append('./simulator/envs/')
+sys.path.append('./robomaster2D/simulator/envs/')
+sys.path.append('./robomaster2D/envs/')
 
 
 class RMUA_Multi_agent_Env(gym.Env):

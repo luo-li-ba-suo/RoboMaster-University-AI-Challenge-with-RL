@@ -5,7 +5,7 @@ from src.buttons import Buttons
 import os
 
 try:
-    os.chdir('./simulator/simulator/envs')
+    os.chdir('./robomaster2D/robomaster2D/envs')
 except BaseException:
     pass
 

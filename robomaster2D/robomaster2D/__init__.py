@@ -5,5 +5,5 @@ from gym.envs.registration import register
 
 register(
     id='Robomaster-v0',
-    entry_point='simulator.envs:RMUA_Multi_agent_Env',
+    entry_point='robomaster2D.envs:RMUA_Multi_agent_Env',
 )

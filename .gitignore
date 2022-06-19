@@ -1,0 +1,10 @@
+.idea
+*.pyc
+*.pth
+wandb
+*.json
+*.wandb
+*.txt
+*.log
+config.yaml
+*.egg-info

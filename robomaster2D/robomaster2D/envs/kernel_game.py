@@ -6,11 +6,11 @@ Author: DQ, HITSZ
 Date: June 8th, 2021
 """
 import numpy as np
-from simulator.envs.kernel_map import Map
-from simulator.envs.kernel_engine import Engine
-from simulator.envs.kernel_objects import Robot
-from simulator.envs.kernel_referee import Referee
-from simulator.envs.src.agents.human_agent import Orders_set, My_Agent
+from robomaster2D.envs.kernel_map import Map
+from robomaster2D.envs.kernel_engine import Engine
+from robomaster2D.envs.kernel_objects import Robot
+from robomaster2D.envs.kernel_referee import Referee
+from robomaster2D.envs.src.agents.human_agent import Orders_set, My_Agent
 from itertools import combinations
 import importlib
 import traceback
@@ -25,7 +25,7 @@ def loadAgents(args):
     load_errs = [[], []]
     print(f"path is {file_list}")
     for i, agent_file_path in enumerate(file_list):
-        agent_file_path = 'simulator.envs.' + agent_file_path
+        agent_file_path = 'robomaster2D.envs.' + agent_file_path
         agent_temp = None
         print(f"path is {agent_file_path}")
 

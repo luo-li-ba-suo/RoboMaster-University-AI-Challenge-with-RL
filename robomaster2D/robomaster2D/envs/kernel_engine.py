@@ -1,5 +1,5 @@
-from simulator.envs.kernel_referee import *
-from simulator.envs.kernel_objects import Bullet
+from robomaster2D.envs.kernel_referee import *
+from robomaster2D.envs.kernel_objects import Bullet
 import ctypes
 
 
