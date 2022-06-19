@@ -1,3 +1,16 @@
+# Robomaster AI Challenge仿真环境
+
+## 可视化部分
+为了使得渲染画面更流畅，并能够自由指定渲染帧率，RMUA_Env_for_RL中的env.render函数只是用来开启渲染。
+
+环境的参数中可配置是否渲染环境界面。
+- 若配置为render=True，则在调用环境时可通过env.render来开启渲染;
+- 若配置为render=False，则调用env.render无法开启渲染
+
+
+
+
+## 历史更改记录（弃）
 ###运行说明
 命令行运行：python kernal_game.py 可键盘操控模拟环境
 

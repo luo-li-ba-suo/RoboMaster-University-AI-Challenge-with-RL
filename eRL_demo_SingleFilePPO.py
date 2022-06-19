@@ -218,7 +218,6 @@ class AgentPPO:
 
         state = self.states
         for _ in range(target_step):
-            env.render()
             action, noise = self.select_action(state)
             next_state, reward, done, _ = env.step(np.tanh(action))
 
@@ -385,7 +384,6 @@ class AgentDiscretePPO(AgentPPO):
         logging_list = list()
         episode_rewards = list()
         episode_reward = 0
-        env.render()
         env.env.simulator.module_UI.text_training_state = "正在采样..."
         states = self.states
         while True:
@@ -402,7 +400,6 @@ class AgentDiscretePPO(AgentPPO):
                     actions_for_env[i] = self.select_enemy_action(states[i])
             self.last_alive_trainers = env.env.trainer_ids
             next_states, rewards, done, info_dict = env.step(actions_for_env)
-            env.render()
 
             for i, n in enumerate(self.last_alive_trainers):
                 if n in info_dict['robots_being_killed_']:
@@ -773,6 +770,7 @@ def train_and_evaluate(args):
     del args  # In order to show these hyper-parameters clearly, I put them above.
 
     '''init: environment'''
+    env.render()
     max_step = env.max_step
     state_dim = env.state_dim
     action_dim = env.action_dim
@@ -861,7 +859,6 @@ class Evaluator:
             self.eval_time = time.time()
             rewards_steps_list = []
             infos_dict = {}
-            self.env.render()
             self.env.env.simulator.module_UI.text_training_state = "正在评估..."
             for _ in range(self.eval_times1):
                 reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
@@ -989,7 +986,6 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
                         n += action_dim_
                     actions[i] = action
         state, rewards, done, info_dict = env.step(actions)
-        env.render()
         episode_return += np.mean(rewards)
         if done:
             break

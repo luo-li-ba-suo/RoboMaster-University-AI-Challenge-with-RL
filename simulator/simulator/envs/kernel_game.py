@@ -236,6 +236,7 @@ class State(object):  # 总状态
 
 class Parameters(object):  # 参数集合
     def __init__(self, options):
+        self.render = options.render
         self.episode_time = options.episode_time
         self.robot_r_num = options.robot_r_num
         self.robot_b_num = options.robot_b_num
@@ -320,8 +321,6 @@ class Simulator(object):
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
                          self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
         self.render_frame = 0  # 渲染时清零
-        if self.state.do_render:
-            self.init_render(options)
 
         # 手动调试内容：
         self.single_input = options.single_input
@@ -365,7 +364,7 @@ class Simulator(object):
             self.state.step += 1
             if self.single_input:
                 self.state.wait_for_user_input = True
-        if self.state.do_render:
+        if self.render_inited:
             self.render()
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
@@ -444,14 +443,12 @@ class Simulator(object):
         return False
 
     def render(self):
-        # 用户界面：
-        if self.state.do_render:
-            # 检测交互事件
-            self.module_UI.update_events()
-            # 刷新画面
-            if not self.render_frame % self.state.render_per_frame:
-                self.module_UI.update_display()
-                self.render_frame = 0
+        # 检测交互事件
+        self.module_UI.update_events()
+        # 刷新画面
+        if not self.render_frame % self.state.render_per_frame:
+            self.module_UI.update_display()
+            self.render_frame = 0
         self.render_frame += 1
 
     def run_camera_lidar(self):

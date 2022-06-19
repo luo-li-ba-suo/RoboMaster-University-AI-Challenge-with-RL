@@ -374,10 +374,8 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.cal_public_obs_already = False
         return observations
 
-    def render(self, do_render=True):
-        self.simulator.state.do_render = do_render
-        self.do_render = do_render
-        if not self.simulator.render_inited and do_render:
+    def render(self, mode='human'):
+        if not self.simulator.render_inited and self.simulator.parameters.render:
             self.simulator.init_render(self.args)
 
     def if_trainer_dead(self, idx):
