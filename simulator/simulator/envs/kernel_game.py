@@ -330,6 +330,7 @@ class Simulator(object):
         from kernel_user_interface import User_Interface
         self.module_UI = User_Interface(
             self.state, self.module_engine, self.orders, self.map, options)
+        self.module_engine.init_render()
         self.render_inited = True
 
     def reset(self):
@@ -348,7 +349,7 @@ class Simulator(object):
 
     def step(self, actions):  # 执行多智能体动作
         done = False
-        if self.state.do_render:
+        if self.render_inited:
             self.step_feedback_UI()
         # 判断游戏是否暂停或等待用户输入指令
         if not self.state.pause and not self.state.wait_for_user_input:

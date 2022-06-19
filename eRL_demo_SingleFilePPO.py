@@ -384,7 +384,7 @@ class AgentDiscretePPO(AgentPPO):
         logging_list = list()
         episode_rewards = list()
         episode_reward = 0
-        env.env.simulator.module_UI.text_training_state = "正在采样..."
+        env.env.display_characters("正在采样...")
         states = self.states
         while True:
             as_int = []

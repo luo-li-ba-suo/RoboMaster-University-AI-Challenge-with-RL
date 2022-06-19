@@ -133,10 +133,7 @@ class Engine(object):
         self.frame_num_one_second = options.frame_num_one_second
         self.map = map
         self.referee = referee
-        # 用于显示
-        if self.state.do_render:
-            self.orders_text = ['' for _ in range(self.robot_num)]
-            self.points_for_render = [[] for _ in range(self.robot_num)]
+        self.render_inited = False
         if self.map.barriers.any():
             b = self.map.barriers[4]
             # 以下四个截距是中心正方形的四条边的截距，用作边缘碰撞检测
@@ -161,6 +158,11 @@ class Engine(object):
         '''自瞄'''
         self.theta = np.rad2deg(np.arctan(45 / 60))
 
+    def init_render(self):
+        self.orders_text = ['' for _ in range(self.robot_num)]
+        self.points_for_render = [[] for _ in range(self.robot_num)]
+        self.render_inited = True
+
     def tick(self, orders):
         # if not self.state.frame % 30 and self.route_plan:  # 150ms更新一次路径规划的障碍物分布
         #     self.route_plan.reset_block(self.state.blocks)
@@ -183,7 +185,7 @@ class Engine(object):
         # turn orders to acts
         self.orders_text = ['' for n in range(self.robot_num)]
         for n in range(self.robot_num):
-            if self.state.do_render:
+            if self.render_inited:
                 self.orders_text[n] += str(orders.set[n].x)
                 self.orders_text[n] += str(orders.set[n].y)
                 self.orders_text[n] += str(orders.set[n].rotate)
@@ -411,12 +413,8 @@ class Engine(object):
         # robot barriers assess
         check_result = False
         armors, outlines = get_points_armor_vertex(self.state.robots[n])
-        if self.state.do_render:
-            try:
+        if self.render_inited:
                 self.points_for_render[n] = armors + outlines
-            except AttributeError as e:
-                # print(e)
-                self.points_for_render = [[] for _ in range(self.robot_num)]
         for j in range(4):
             armor0 = armors[2 * j]
             armor1 = armors[2 * j + 1]
