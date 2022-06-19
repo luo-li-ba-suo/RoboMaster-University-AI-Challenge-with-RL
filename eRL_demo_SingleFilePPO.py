@@ -859,7 +859,7 @@ class Evaluator:
             self.eval_time = time.time()
             rewards_steps_list = []
             infos_dict = {}
-            self.env.env.simulator.module_UI.text_training_state = "正在评估..."
+            self.env.env.display_characters("正在评估...")
             for _ in range(self.eval_times1):
                 reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
                                                                                    enemy_act)
