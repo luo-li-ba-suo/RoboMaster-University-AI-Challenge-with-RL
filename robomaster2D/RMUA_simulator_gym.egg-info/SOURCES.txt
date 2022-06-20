@@ -1,7 +1,0 @@
-README.md
-setup.py
-RMUA_simulator_gym.egg-info/PKG-INFO
-RMUA_simulator_gym.egg-info/SOURCES.txt
-RMUA_simulator_gym.egg-info/dependency_links.txt
-RMUA_simulator_gym.egg-info/requires.txt
-RMUA_simulator_gym.egg-info/top_level.txt
