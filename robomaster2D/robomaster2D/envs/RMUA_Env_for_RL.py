@@ -187,9 +187,6 @@ class RMUA_Multi_agent_Env(gym.Env):
             return actions_blank
 
     def step(self, actions):
-        for i, trainer in enumerate(self.trainer_ids):
-            if self.if_trainer_dead(trainer):
-                del self.trainer_ids[i]
         done = self.simulator.step(self.decode_actions(actions))  # 只给其中一个传动作
         r = self.compute_reward()
         # 记录每个机器人每回合的奖励：
@@ -203,7 +200,9 @@ class RMUA_Multi_agent_Env(gym.Env):
             if robot.hp <= 0 < self.last_time_alive_robots[i]:
                 self.last_time_alive_robots[i] = False
                 self.robots_being_killed.append(i)
-
+        for i, trainer in enumerate(self.trainer_ids):
+            if self.if_trainer_dead(trainer):
+                del self.trainer_ids[i]
         if done:
             info_dicts = {'win_rate': self.simulator.state.r_win_record.get_win_rate(),
                           'draw_rate': self.simulator.state.r_win_record.get_draw_rate(),
@@ -395,7 +394,7 @@ if __name__ == '__main__':
     args.render_per_frame = 20
     args.episode_time = 180
     args.render = True
-    args.训练模式 = False
+    args.training_mode = False
     args.time_delay_frame = 0.1
     env = RMUA_Multi_agent_Env(args)
     env.simulator.state.pause = True

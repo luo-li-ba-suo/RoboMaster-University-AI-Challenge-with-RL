@@ -181,8 +181,8 @@ def load_cfg(args, use_rlg_config=False):
         cfg = yaml.load(f, Loader=yaml.SafeLoader)
 
     # Override number of environments if passed on the command line
-    if args.num_envs > 0:
-        cfg["env"]["numEnvs"] = args.num_envs
+    if args.env_num > 0:
+        cfg["env"]["numEnvs"] = args.env_num
 
     if args.episode_length > 0:
         cfg["env"]["episodeLength"] = args.episode_length

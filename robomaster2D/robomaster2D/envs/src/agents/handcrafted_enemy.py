@@ -16,7 +16,7 @@ class Orders(object):  # 指令
         self.freq_update_goal = 20
         self.dir_relate_to_map = dir_relate_to_map
         self.swing = swing
-        self.shoot_target_enemy = -1
+        self.shoot_target_enemy = 0
 
 class Orders_set(object):
     def __init__(self, num):

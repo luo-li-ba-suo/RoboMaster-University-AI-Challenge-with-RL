@@ -56,7 +56,7 @@ class User_Interface(object):
     def __init__(self, state, module_engine, orders, map, options):
         # 可切换参数：
         self.节能模式 = False
-        self.训练模式 = options.训练模式
+        self.训练模式 = options.training_mode
         self.高帧率模式 = True
         self.show_robot_points = False
         self.show_center_barrier_vertices = False

@@ -58,9 +58,9 @@ class Parameters:
 
     # 有关交互界面
     do_plot = [True, False, False, False]
-    节能模式 = False
+    energySaving_mode = False
 
-    高帧率模式 = True
+    highFrameRate_mode = True
     show_robot_points = False
     show_center_barrier_vertices = False
     show_goals_position = False
@@ -70,7 +70,7 @@ class Parameters:
     show_figure = True
 
     # 有关测试：
-    训练模式 = True
+    training_mode = False
     single_input = False
     time_delay_frame = 0
 

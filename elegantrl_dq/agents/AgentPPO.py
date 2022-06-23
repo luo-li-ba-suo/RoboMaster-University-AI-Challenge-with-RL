@@ -1,5 +1,8 @@
 import os
 from copy import deepcopy
+
+import torch
+
 from elegantrl_dq.agents.net import *
 
 """agent.py"""
@@ -13,13 +16,11 @@ class AgentPPO:
         self.lambda_gae_adv = 0.98  # could be 0.95~0.99, GAE (Generalized Advantage Estimation. ICLR.2016.)
         self.get_reward_sum = None
 
-        self.states = None
+        self.state = None
         self.device = None
         self.criterion = None
         self.act = self.enemy_act = self.act_optimizer = None
         self.cri = self.cri_optimizer = self.cri_target = None
-        self.last_state = None
-        self.last_alive_trainers = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +46,7 @@ class AgentPPO:
     def explore_env(self, env, target_step, reward_scale, gamma):
         trajectory_list = list()
 
-        state = self.states
+        state = self.state
         for _ in range(target_step):
             action, noise = self.select_action(state)
             next_state, reward, done, _ = env.step(np.tanh(action))
@@ -54,7 +55,7 @@ class AgentPPO:
             trajectory_list.append((state, other))
 
             state = env.reset() if done else next_state
-        self.states = state
+        self.state = state
         return trajectory_list
 
     def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
@@ -103,8 +104,8 @@ class AgentPPO:
             bs = 2 ** 10  # set a smaller 'BatchSize' when out of GPU memory.
             value = torch.cat([self.cri_target(state[i:i + bs]) for i in range(0, state.size(0), bs)], dim=0)
             logprob = self.act.get_old_logprob(action, a_noise)
-            # self.states[0]表示第一個智能體的狀態
-            pre_state = torch.as_tensor((self.last_state,), dtype=torch.float32, device=self.device)
+
+            pre_state = torch.as_tensor((self.state,), dtype=torch.float32, device=self.device)
             pre_r_sum = self.cri(pre_state).detach()
             r_sum, advantage = self.get_reward_sum(self, buf_len, reward, mask, value, pre_r_sum)
         return state, action, r_sum, logprob, advantage
@@ -194,7 +195,13 @@ class AgentPPO:
 
 
 class AgentDiscretePPO(AgentPPO):
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False):
+    def __init__(self):
+        super().__init__()
+        self.last_state = None
+        self.last_alive_trainers = None
+
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False,
+             env=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -206,6 +213,9 @@ class AgentDiscretePPO(AgentPPO):
         self.criterion = torch.nn.SmoothL1Loss()
         self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
         self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
+        if env is None:
+            raise NotImplementedError
+        self.state = env.reset()
 
     def explore_env(self, env, target_step, reward_scale, gamma):
         trajectory_list = list()
@@ -214,7 +224,7 @@ class AgentDiscretePPO(AgentPPO):
         episode_rewards = list()
         episode_reward = 0
         env.env.display_characters("正在采样...")
-        states = self.states
+        states = self.state
         while True:
             as_int = []
             actions_for_env = [None for _ in range(env.env.simulator.state.robot_num)]
@@ -248,7 +258,7 @@ class AgentDiscretePPO(AgentPPO):
                     break
             else:
                 states = next_states
-        self.states = states
+        self.state = states
         self.last_state = states[env.env.trainer_ids[0]]
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
@@ -257,3 +267,185 @@ class AgentDiscretePPO(AgentPPO):
         states = torch.as_tensor((state,), dtype=torch.float32, device=self.device)
         action = self.enemy_act.get_max_action(states)  # plan to be get_action_a_noise
         return np.array(action)
+
+    def prepare_buffer(self, buffer):
+        buf_len = buffer.now_len
+
+        with torch.no_grad():  # compute reverse reward
+            reward, mask, action, a_noise, state = buffer.sample_all()
+
+            bs = 2 ** 10  # set a smaller 'BatchSize' when out of GPU memory.
+            value = torch.cat([self.cri_target(state[i:i + bs]) for i in range(0, state.size(0), bs)], dim=0)
+            logprob = self.act.get_old_logprob(action, a_noise)
+            # self.states[0]表示第一個智能體的狀態
+            pre_state = torch.as_tensor((self.last_state,), dtype=torch.float32, device=self.device)
+            pre_r_sum = self.cri(pre_state).detach()
+            r_sum, advantage = self.get_reward_sum(self, buf_len, reward, mask, value, pre_r_sum)
+        return state, action, r_sum, logprob, advantage
+
+
+class MultiEnvDiscretePPO(AgentPPO):
+    def __init__(self):
+        super().__init__()
+        self.models = None
+        self.env_num = None
+        self.total_trainers_envs = None
+        self.last_states = None
+
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False,
+             env=None, if_build_enemy_act=False):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
+        self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+        self.enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device) \
+            if if_build_enemy_act else None
+        self.cri = CriticAdv(net_dim, state_dim).to(self.device)
+        self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
+        self.act.share_memory()
+        if self.enemy_act:
+            self.enemy_act.share_memory()
+        self.cri.share_memory()
+        # self.models用于传入新进程里的evaluation
+        self.models = {'act': self.act,
+                       'enemy_act': self.enemy_act,
+                       'cri': self.cri,
+                       'net_dim':net_dim,
+                       'state_dim':state_dim,
+                       'action_dim':action_dim,
+                       'if_build_enemy_act': if_build_enemy_act}
+
+        self.criterion = torch.nn.SmoothL1Loss()
+        self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
+        self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
+
+        if env is None:
+            raise NotImplementedError
+        self.env_num = env.env_num
+        self.state = env.reset()
+        self.total_trainers_envs = env.get_trainer_ids()
+        # 给last_state填充初始状态，这样可以避免循环结束时缺乏某些死亡智能体的最终状态;尽管他们的最后状态价值为0
+        self.last_states = [{trainer_id: self.state[env_num][trainer_id]
+                             for trainer_id in last_trainers}
+                            for env_num, last_trainers in enumerate(self.total_trainers_envs)]
+
+    def explore_env(self, env, target_step, reward_scale, gamma):
+        trajectory_list = [{trainer_id: [] for trainer_id in trainers} for trainers in self.total_trainers_envs]
+        logging_list = list()
+        episode_rewards = list()
+        episode_reward = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
+        env.display_characters("正在采样...")
+        # states.size: [env_num, trainer_num, state_size]
+        states_envs = self.state
+        step = 0
+        while step < target_step:
+            actions_for_env = [[None for _ in range(len(self.state[env_id]))]
+                               for env_id in range(env.env_num)]
+            last_trainers_envs = np.array(env.get_trainer_ids())
+            last_testers_envs = np.array(env.get_tester_ids())
+            # states_concatenate.size: [trainer_num*env_num, state_size]
+            states_concatenate = []
+            for env_id in range(env.env_num):
+                for trainer_id in last_trainers_envs[env_id]:
+                    states_concatenate.append(states_envs[env_id][trainer_id])
+            states_concatenate = np.array(states_concatenate)
+            stochastic_num = sum([len(l) for l in last_trainers_envs])
+            deterministic_num = sum([len(l) for l in last_testers_envs])
+            trainer_actions, actions_prob, tester_actions = self.select_action(states_concatenate,
+                                                                               stochastic_num,
+                                                                               deterministic_num)
+            trainer_i = tester_i = 0
+            for env_id in range(env.env_num):
+                for trainer_id in last_trainers_envs[env_id]:
+                    actions_for_env[env_id][trainer_id] = trainer_actions[trainer_i]
+                    trainer_i += 1
+                for tester_id in last_testers_envs[env_id]:
+                    actions_for_env[env_id][tester_id] = tester_actions[tester_i]
+                    tester_i += 1
+            states_envs, rewards, done, info_dict = env.step(actions_for_env)
+            trainer_i = 0
+            for env_id in range(env.env_num):
+                for i, n in enumerate(last_trainers_envs[env_id]):
+                    episode_reward[env_id][n] += np.mean(rewards[env_id][i])
+                    action_prob = [probs[trainer_i] for probs in actions_prob]
+                    if n in info_dict[env_id]['robots_being_killed_'] or done[env_id]:
+                        # if n in info_dict[env_id]['robots_being_killed_']:
+                        #     # 这一步实际上没用，因为最后一个状态的价值为0;
+                        #     self.last_states[env_id][n] = states[env_id][n]
+                        other = (rewards[env_id][i] * reward_scale, 0.0,
+                                 *trainer_actions[trainer_i], *np.concatenate(action_prob))
+                        episode_rewards.append(episode_reward[env_id][n])
+                        episode_reward[env_id][n] = 0
+                    else:
+                        other = (rewards[env_id][i] * reward_scale, gamma,
+                                 *trainer_actions[trainer_i], *np.concatenate(action_prob))
+                    trajectory_list[env_id][n].append((states_concatenate[trainer_i], other))
+                    trainer_i += 1
+                    step += 1
+        self.state = states_envs
+        for env_id in range(env.env_num):
+            # 在last_trainers_envs中可能缺失了中途死亡的智能体
+            for n in last_trainers_envs[env_id]:
+                self.last_states[env_id][n] = states_envs[env_id][n]
+        # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
+        logging_list.append(np.mean(episode_rewards))
+        return trajectory_list, logging_list
+
+    def select_action(self, state, stochastic=0, deterministic=0):
+        if state.ndim == 1:
+            action_dim = [-1]
+            states = torch.as_tensor((state,), dtype=torch.float32, device=self.device)
+        elif state.ndim > 1:
+            action_dim = list(state.shape[:-1])
+            action_dim.append(-1)
+            states = torch.as_tensor(state, dtype=torch.float32, device=self.device)
+            states.view(-1, states.shape[-1])
+        else:
+            raise NotImplementedError
+        actions, noises, deterministic_actions = self.act.get_action(states, stochastic,
+                                                                     deterministic)  # plan to be get_action_a_noise
+
+        if isinstance(actions, list):  # 如果是Multi-Discrete
+            if actions is None:
+                raise NotImplementedError
+            actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
+            noises = [noise.view(*action_dim).detach().cpu().numpy() for noise in noises]
+            if deterministic_actions is not None:
+                deterministic_actions = np.array([action.view(*action_dim).detach().cpu().numpy()
+                                                  for action in deterministic_actions])
+            return actions, noises, deterministic_actions
+        else:
+            raise NotImplementedError
+
+    def prepare_buffer(self, buffer):
+        with torch.no_grad():  # compute reverse reward
+            states =[]
+            actions =[]
+            r_sums =[]
+            logprobs =[]
+            advantages = []
+            reward_samples, mask_samples, action_samples, a_noise_samples, state_samples = buffer.sample_all()
+            for env_id in range(self.env_num):
+                for i, agent_id in enumerate(self.total_trainers_envs[env_id]):
+                    data_len = len(state_samples[env_id][i])
+                    value = self.cri_target(state_samples[env_id][i])
+                    logprob = self.act.get_old_logprob(action_samples[env_id][i], a_noise_samples[env_id][i])
+                    try:
+                        pre_state = torch.as_tensor((self.last_states[env_id][agent_id],),
+                                                    dtype=torch.float32, device=self.device)
+                    except TypeError:
+                        print(self.last_states)
+                        raise TypeError
+                    pre_r_sum = self.cri(pre_state).detach()
+                    r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][i],
+                                                           mask_samples[env_id][i], value, pre_r_sum)
+                    states.append(state_samples[env_id][i])
+                    actions.append(action_samples[env_id][i])
+                    r_sums.append(r_sum)
+                    logprobs.append(logprob)
+                    advantages.append(advantage)
+            states = torch.cat(states)
+            actions = torch.cat(actions)
+            r_sums = torch.cat(r_sums)
+            logprobs = torch.cat(logprobs)
+            advantages = torch.cat(advantages)
+        return states, actions, r_sums, logprobs, advantages

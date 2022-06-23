@@ -2,6 +2,7 @@ import robomaster2D
 import gym
 import numpy as np
 from copy import deepcopy
+import torch.multiprocessing as mp
 
 gym.logger.set_level(40)
 
@@ -10,7 +11,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
     def __init__(self, env, if_print=True):
         self.env = gym.make(env) if isinstance(env, str) else env
         super(PreprocessEnv, self).__init__(self.env)
-
+        self.if_multi_processing = False
         (self.env_name, self.state_dim, self.action_dim, self.action_max, self.max_step,
          self.if_discrete, self.if_multi_discrete, self.target_return) = get_gym_env_info(self.env, if_print)
 
@@ -27,6 +28,76 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         self.reward_dict = self.env.rewards
         return [np.array(state).astype(np.float32) for state in states], \
                [np.array(reward).astype(np.float32) for reward in rewards], done, info
+
+    def display_characters(self, characters):
+        self.env.display_characters(characters)
+
+class VecEnvironments:
+    def __init__(self, env_name, env_num):
+        self.env_num = env_num
+        self.if_multi_processing = True
+        self.agent_conns, self.env_conns = zip(*[mp.Pipe() for _ in range(env_num)])
+        self.envs = [PreprocessEnv(env_name, if_print=True if env_id == 0 else False) for env_id in range(env_num)]
+        self.state_dim = self.envs[0].state_dim
+        self.action_dim = self.envs[0].action_dim
+        self.if_discrete = self.envs[0].if_discrete
+        self.if_multi_discrete = self.envs[0].if_multi_discrete
+        self.target_return = self.envs[0].target_return
+        self.env_name = self.envs[0].env_name
+        self.args = self.envs[0].env.args
+        self.max_step = self.envs[0].max_step
+        for index in range(env_num):
+            process = mp.Process(target=self.run, args=(index,))
+            process.start()
+            self.env_conns[index].close()
+
+    def run(self, index):
+        self.agent_conns[index].close()
+        while True:
+            request, action = self.env_conns[index].recv()
+            if request == "step":
+                self.env_conns[index].send(self.envs[index].step(action))
+            elif request == "reset":
+                self.env_conns[index].send(self.envs[index].reset())
+            elif request == "render":
+                self.envs[index].render()
+            elif request == "display_characters":
+                self.envs[index].env.display_characters(action)
+            elif request == "get_trainer_ids":
+                self.env_conns[index].send(self.envs[index].env.trainer_ids)
+            elif request == "get_tester_ids":
+                self.env_conns[index].send(self.envs[index].env.nn_enemy_ids)
+            else:
+                raise NotImplementedError
+
+    def render(self, index=0):
+        self.agent_conns[index].send(("render", None))
+
+    def display_characters(self, characters, index=0):
+        self.agent_conns[index].send(("display_characters", characters))
+
+    def reset(self):
+        [agent_conn.send(("reset", None)) for agent_conn in self.agent_conns]
+        curr_states = [agent_conn.recv() for agent_conn in self.agent_conns]
+        return np.array(curr_states)
+
+    def step(self, actions):
+        [agent_conn.send(("step", action)) for agent_conn, action in zip(self.agent_conns, actions)]
+        states, rewards, dones, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
+        states = list(states)
+        for env_id in range(self.env_num):
+            if dones[env_id]:
+                self.agent_conns[env_id].send(("reset", None))
+                states[env_id] = self.agent_conns[env_id].recv()
+        return np.array(states), np.array(rewards), dones, infos
+
+    def get_trainer_ids(self):
+        [agent_conn.send(("get_trainer_ids", None)) for agent_conn in self.agent_conns]
+        return [agent_conn.recv() for agent_conn in self.agent_conns]
+
+    def get_tester_ids(self):
+        [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
+        return [agent_conn.recv() for agent_conn in self.agent_conns]
 
 
 def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):

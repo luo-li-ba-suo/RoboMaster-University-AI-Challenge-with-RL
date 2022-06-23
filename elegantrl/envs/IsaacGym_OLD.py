@@ -49,7 +49,7 @@ class IsaacVecEnv:
         rl_device_id = device_id if rl_device_id is None else rl_device_id
         args.rl_device = f"cuda:{rl_device_id}" if rl_device_id >= 0 else "cpu"
         args.device_id = device_id  # PhyX device
-        args.num_envs = env_num  # in `.../cfg/train/xxx.yaml`, `numEnvs`
+        args.env_num = env_num  # in `.../cfg/train/xxx.yaml`, `numEnvs`
         # set before load_cfg()
 
         cfg, cfg_train, log_dir = load_cfg(args)

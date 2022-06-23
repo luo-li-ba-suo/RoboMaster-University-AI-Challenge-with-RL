@@ -55,6 +55,7 @@ class ReplayBuffer:
         state_ary = np.array([item[0] for item in trajectory_list], dtype=np.float32)
         other_ary = np.array([item[1] for item in trajectory_list], dtype=np.float32)
         self.extend_buffer(state_ary, other_ary)
+        return state_ary.shape[0]
 
     def sample_batch(self, batch_size):
         indices = rd.randint(self.now_len - 1, size=batch_size)
@@ -80,3 +81,66 @@ class ReplayBuffer:
         self.next_idx = 0
         self.now_len = 0
         self.if_full = False
+
+
+class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env):
+        super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
+        if env is None:
+            raise NotImplementedError
+        self.env_num = env.env_num
+        self.total_trainers_envs = env.get_trainer_ids()
+        self.buf_other = [[[] for _ in trainers]
+                          for trainers in self.total_trainers_envs]
+        self.buf_state = [[[] for _ in trainers]
+                          for trainers in self.total_trainers_envs]
+
+    def extend_buffer_from_list(self, trajectory_list):
+        step_num = 0
+        states_ary = [[] for _ in range(self.env_num)]
+        others_ary = [[] for _ in range(self.env_num)]
+        for env_id in range(self.env_num):
+            for n in self.total_trainers_envs[env_id]:
+                state_ary = np.array([item[0] for item in trajectory_list[env_id][n]], dtype=np.float32)
+                step_num += state_ary.shape[0]
+                states_ary[env_id].append(state_ary)
+                others_ary[env_id].append(np.array([item[1] for item in trajectory_list[env_id][n]], dtype=np.float32))
+        self.extend_buffer(states_ary, others_ary)
+        return step_num
+
+    def extend_buffer(self, states, others):  # CPU array to CPU array
+        for env_id in range(self.env_num):
+            for i in range(len(self.total_trainers_envs[env_id])):
+                state = states[env_id][i]
+                other = others[env_id][i]
+                size = len(other)
+                next_idx = self.next_idx + size
+                if next_idx > self.max_len:
+                    self.buf_state[env_id][i][self.next_idx:self.max_len] = state[:self.max_len - self.next_idx]
+                    self.buf_other[env_id][i][self.next_idx:self.max_len] = other[:self.max_len - self.next_idx]
+                    self.if_full = True
+
+                    next_idx = next_idx - self.max_len
+                    self.buf_state[env_id][i][0:next_idx] = state[-next_idx:]
+                    self.buf_other[env_id][i][0:next_idx] = other[-next_idx:]
+                else:
+                    self.buf_state[env_id][i][self.next_idx:next_idx] = state
+                    self.buf_other[env_id][i][self.next_idx:next_idx] = other
+                self.next_idx = next_idx
+
+    def sample_all(self):
+        reward = [[] for _ in range(self.env_num)]
+        mask = [[] for _ in range(self.env_num)]
+        action = [[] for _ in range(self.env_num)]
+        action_noise = [[] for _ in range(self.env_num)]
+        state = [[] for _ in range(self.env_num)]
+        for env_id in range(self.env_num):
+            for agent_id in range(len(self.total_trainers_envs[env_id])):
+                buf_other = np.array(self.buf_other[env_id][agent_id])
+                buf_state = np.array(self.buf_state[env_id][agent_id])
+                reward[env_id].append(torch.as_tensor(buf_other[:, 0], device=self.device))
+                mask[env_id].append(torch.as_tensor(buf_other[:, 1], device=self.device))
+                action[env_id].append(torch.as_tensor(buf_other[:, 2:2 + self.action_dim], device=self.device))
+                action_noise[env_id].append(torch.as_tensor(buf_other[:, 2 + self.action_dim:], device=self.device))
+                state[env_id].append(torch.as_tensor(buf_state, device=self.device))
+        return reward, mask, action, action_noise, state
