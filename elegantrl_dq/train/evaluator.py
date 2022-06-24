@@ -86,9 +86,9 @@ class Evaluator:
             elif not self.epoch % self.save_interval:
                 '''save policy network in *.pth'''
                 act_save_path = f'{self.cwd}/actor_step:' + str(self.total_step) + '.pth'
-                torch.save(act.state_dict(), os.path.dirname(os.path.realpath(__file__)) + '/' + act_save_path)
+                torch.save(act.state_dict(), act_save_path)
                 act_save_path = f'{self.cwd}/critic_step:' + str(self.total_step) + '.pth'
-                torch.save(cri.state_dict(), os.path.dirname(os.path.realpath(__file__)) + '/' + act_save_path)
+                torch.save(cri.state_dict(), act_save_path)
 
             '''save record in logger'''
             train_infos = {'Epoch': self.epoch,
