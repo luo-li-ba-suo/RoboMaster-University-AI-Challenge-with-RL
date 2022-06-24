@@ -1,6 +1,5 @@
 import time
-import torch
-import os
+from func_timeout import func_set_timeout
 from elegantrl_dq.envs.env import *
 from elegantrl_dq.agents.net import *
 
@@ -175,12 +174,19 @@ class AsyncEvaluator:
             else:
                 raise NotImplementedError
 
-    def update(self, steps, logging_tuple):
+    @func_set_timeout(0.5)
+    def update_time_limited(self, steps, logging_tuple):
         message = self.evaluator_conn.recv()
         if message == "finish" or "start":
             self.evaluator_conn.send(("update", (steps, logging_tuple)))
             return True
         return False
+
+    def update(self, steps, logging_tuple):
+        try:
+            return self.update_time_limited(steps, logging_tuple)
+        except BaseException as _:
+            return False
 
 def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
     episode_return = 0.0  # sum of rewards in an episode
