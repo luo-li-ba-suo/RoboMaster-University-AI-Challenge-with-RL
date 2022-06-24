@@ -231,8 +231,14 @@ def train_and_evaluate(args):
     while if_train:
         if if_print_time:
             start_explore = time.time()
-        with torch.no_grad():
-            trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
+        if_explore_successful = False
+        while not if_explore_successful:
+            try:
+                with torch.no_grad():
+                    trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
+                    if_explore_successful = True
+            except BaseException as e:
+                print(e, ' Explore Again.')
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
             start_update_net = time.time()
