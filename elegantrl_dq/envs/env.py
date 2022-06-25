@@ -35,6 +35,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
 class VecEnvironments:
     def __init__(self, env_name, env_num):
         self.env_num = env_num
+        print(f"\n{env_num} envs launched \n")
         self.if_multi_processing = True
         self.agent_conns, self.env_conns = zip(*[mp.Pipe() for _ in range(env_num)])
         self.envs = [PreprocessEnv(env_name, if_print=True if env_id == 0 else False) for env_id in range(env_num)]
