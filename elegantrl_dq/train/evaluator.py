@@ -120,13 +120,14 @@ class Evaluator:
 
 
 class AsyncEvaluator:
-    def __init__(self, models, cwd, agent_id, eval_times1, eval_times2, eval_gap, env_name, device, save_interval,
+    def __init__(self, models, cwd, agent_id, eval_times1, eval_times2, env_name, device, save_interval,
                  logger):
         self.logger = logger
         env = PreprocessEnv(env_name)
         env.render()
         self.device = device
-        self.evaluator = Evaluator(cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval)
+        self.evaluator = Evaluator(cwd, agent_id, eval_times1, eval_times2, 0, env, device, save_interval)
+
         _mp = mp.get_context("spawn")
         self.update_num = _mp.Value("i", 0)
 
