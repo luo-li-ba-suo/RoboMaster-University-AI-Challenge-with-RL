@@ -19,6 +19,7 @@ def demo_discrete_action():
         args.agent = AgentDiscretePPO()
         args.env = PreprocessEnv(env_name)  # 表示训练所有trainer中的第一个，其他trainer会一起共享模型
     if not args.new_processing_for_evaluation:
+        args.eval_gap = 60
         args.env_eval = PreprocessEnv(env_name)
     args.agent.cri_target = False
     args.reward_scale = 2 ** -1
@@ -35,9 +36,8 @@ def demo_discrete_action():
 
     args.random_seed = 1
 
-    args.eval_gap = 60
-    args.eval_times1 = 5
-    args.eval_times2 = 3
+    args.eval_times1 = 10
+    args.eval_times2 = 20
 
     args.if_print_time = True
     args.if_train = True
