@@ -1,7 +1,7 @@
 import time
-from func_timeout import func_set_timeout
 from elegantrl_dq.envs.env import *
 from elegantrl_dq.agents.net import *
+
 
 class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval):
@@ -136,10 +136,25 @@ class AsyncEvaluator:
         self.device = device
         self.evaluator = Evaluator(cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval)
         _mp = mp.get_context("spawn")
-        self.evaluator_conn, self.env_conn = mp.Pipe()
+        self.update_num = _mp.Value("i", 0)
+
+        self.evaluator_conn, self.env_conn = _mp.Pipe()
         process = _mp.Process(target=self.run, args=(models,))
         process.start()
         self.env_conn.close()
+
+        self.evaluator_monitor_conn, self.monitor_conn = _mp.Pipe()
+        process_monitor = mp.Process(target=self.run_monitor, args=())
+        process_monitor.start()
+        self.monitor_conn.close()
+
+    def run_monitor(self):
+        self.evaluator_monitor_conn.close()
+        while True:
+            reply = self.monitor_conn.recv()
+            if reply == "update":
+                with self.update_num.get_lock():
+                    self.update_num.value += 1
 
     def run(self, models):
         act = models['act']
@@ -158,35 +173,25 @@ class AsyncEvaluator:
         if if_build_enemy_act:
             local_enemy_act.eval()
         self.evaluator_conn.close()
-        self.env_conn.send('start')
         while True:
-            request, package = self.env_conn.recv()
-            if request == "update":
-                steps, logging_tuple = package
-                local_act.load_state_dict(act.state_dict())
-                local_cri.load_state_dict(cri.state_dict())
-                if if_build_enemy_act:
-                    local_enemy_act.load_state_dict(enemy_act.state_dict())
+            with self.update_num.get_lock():
+                if self.update_num.value == 0:
+                    continue
+                for _ in range(self.update_num.value):
+                    steps, logging_tuple = self.env_conn.recv()
+                self.update_num.value = 0
+            local_act.load_state_dict(act.state_dict())
+            local_cri.load_state_dict(cri.state_dict())
+            if if_build_enemy_act:
+                local_enemy_act.load_state_dict(enemy_act.state_dict())
 
-                self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=self.logger,
-                                             steps=steps, log_tuple=logging_tuple)
-                self.env_conn.send('finish')
-            else:
-                raise NotImplementedError
-
-    @func_set_timeout(0.5)
-    def update_time_limited(self, steps, logging_tuple):
-        message = self.evaluator_conn.recv()
-        if message == "finish" or "start":
-            self.evaluator_conn.send(("update", (steps, logging_tuple)))
-            return True
-        return False
+            self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=self.logger,
+                                         steps=steps, log_tuple=logging_tuple)
 
     def update(self, steps, logging_tuple):
-        try:
-            return self.update_time_limited(steps, logging_tuple)
-        except BaseException as _:
-            return False
+        self.evaluator_monitor_conn.send("update")
+        self.evaluator_conn.send((steps, logging_tuple))
+
 
 def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
     episode_return = 0.0  # sum of rewards in an episode
