@@ -1,16 +1,12 @@
 from pathlib import Path
-import wandb
 import os
 
 from elegantrl_dq.train.replay_buffer import *
 from elegantrl_dq.train.evaluator import *
 
-'''run.py'''
-
 
 class Arguments:
     def __init__(self, agent=None, env=None, gpu_id=None, if_on_policy=False):
-        self._mp = None
         self.agent = agent  # Deep Reinforcement Learning algorithm
         self.cwd = time.strftime("%Y-%m-%d_%H-%M-%S",
                                  time.localtime())  # current work directory. cwd is None means set it automatically
@@ -137,7 +133,8 @@ def train_and_evaluate(args):
     if_train = args.if_train
     if if_train:
         os.makedirs(cwd)
-        if if_wandb:
+        if if_wandb and not new_processing_for_evaluation:
+            import wandb
             '''保存数据'''
             log_dir = Path("./results/wandb_logs") / args.env.env_name / 'NoObstacle' / 'ppo'
             os.makedirs(log_dir, exist_ok=True)
@@ -151,7 +148,6 @@ def train_and_evaluate(args):
                                    job_type="MultiEnvs",
                                    reinit=True)
             # wandb_run.config.update(env.args)  # TODO:环境的args导不进来
-            wandb_run.config.update(args)
         else:
             wandb_run = None
     else:

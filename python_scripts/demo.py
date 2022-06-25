@@ -9,7 +9,7 @@ def demo_discrete_action():
     args = Arguments(if_on_policy=True)  # hyper-parameters of on-policy is different from off-policy
     env_name = 'Robomaster-v0'
     args.if_multi_processing = True
-    args.new_processing_for_evaluation = False
+    args.new_processing_for_evaluation = True
     args.num_envs = 8
     args.if_wandb = True
     if args.if_multi_processing:

@@ -22,7 +22,7 @@ class Parameters:
     overheating_protection = True
 
     # 有关地图信息：
-    enable_blocks = True
+    enable_blocks = False
 
     start_pos = [[758, 398],
                  [758, 50],
