@@ -385,7 +385,8 @@ class MultiEnvDiscretePPO(AgentPPO):
         for env_id in range(env.env_num):
             # 在last_trainers_envs中可能缺失了中途死亡的智能体
             for n in last_trainers_envs[env_id]:
-                self.last_states[env_id][n] = states_envs[env_id][n]
+                if states_envs[env_id][n].shape:  # TODO:为什么会出现bug？
+                    self.last_states[env_id][n] = states_envs[env_id][n]
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
