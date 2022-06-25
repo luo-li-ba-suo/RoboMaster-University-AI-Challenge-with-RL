@@ -7,7 +7,6 @@ class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
-        self.total_step = 0
 
         self.cwd = cwd  # constant
         self.device = device
@@ -21,9 +20,6 @@ class Evaluator:
         self.start_time = time.time()
         self.eval_time = -1  # an early time
         self.save_interval = save_interval
-        print(f"{'ID':>2} {'Step':>8} {'MaxR':>8} |"
-              f"{'avgR':>8} {'stdR':>8} |{'avgS':>5} {'stdS':>4} |"
-              f"{'objC':>8} {'etc.':>8}")
         self.epoch = 0
 
         self.record_controller_id = 0
@@ -31,13 +27,13 @@ class Evaluator:
     def evaluate_save(self, act, cri, steps=0, log_tuple=None, logger=None, enemy_act=None):
         if log_tuple is None:
             log_tuple = [0, 0, 0]
-        self.total_step += steps  # update total training steps
 
         if time.time() - self.eval_time > self.eval_gap:
             self.eval_time = time.time()
             rewards_steps_list = []
             infos_dict = {}
             self.env.display_characters("正在评估...")
+            eval_times = self.eval_times1
             for _ in range(self.eval_times1):
                 reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
                                                                                    enemy_act)
@@ -56,6 +52,7 @@ class Evaluator:
             r_avg, r_std, s_avg, s_std = self.get_r_avg_std_s_avg_std(rewards_steps_list)
 
             if r_avg > self.r_max:  # evaluate actor twice to save CPU Usage and keep precision
+                eval_times += self.eval_times2 - self.eval_times1
                 for _ in range(self.eval_times2 - self.eval_times1):
                     reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
                                                                                        enemy_act)
@@ -76,17 +73,16 @@ class Evaluator:
                 # print('current dir:'+os.path.dirname(os.path.realpath(__file__)))
                 # print('act_save_path:'+act_save_path)
                 torch.save(act.state_dict(), act_save_path)
-                act_save_path = f'{self.cwd}/actor_step:' + str(self.total_step) + '_best.pth'
+                act_save_path = f'{self.cwd}/actor_step:' + str(steps) + '_best.pth'
                 torch.save(act.state_dict(), act_save_path)
                 if logger:
                     logger.save(act_save_path)
 
-                print(f"{self.agent_id:<2} {self.total_step:8.2e} {self.r_max:8.2f} |")  # save policy and print
             elif not self.epoch % self.save_interval:
                 '''save policy network in *.pth'''
-                act_save_path = f'{self.cwd}/actor_step:' + str(self.total_step) + '.pth'
+                act_save_path = f'{self.cwd}/actor_step:' + str(steps) + '.pth'
                 torch.save(act.state_dict(), act_save_path)
-                act_save_path = f'{self.cwd}/critic_step:' + str(self.total_step) + '.pth'
+                act_save_path = f'{self.cwd}/critic_step:' + str(steps) + '.pth'
                 torch.save(cri.state_dict(), act_save_path)
 
             '''save record in logger'''
@@ -102,22 +98,18 @@ class Evaluator:
                            str(self.agent_id) + '_logprob': log_tuple[2]}
             train_infos.update(infos_dict)
             if logger:
-                logger.log(train_infos, step=self.total_step)
+                logger.log(train_infos, step=steps)
             self.epoch += 1
-            if self.used_time is None:
-                self.used_time = int(time.time() - self.start_time)
-                print(f" {'ID':>2} {'Step':>8} {'TargetR':>8} |{'avgR':>8} {'stdR':>8} |"
-                      f"  {'UsedTime':>8}  ########\n"
-                      f"{self.agent_id:<2} {self.total_step:8.2e} |"
-                      f"{r_avg:8.2f} {r_std:8.2f} |"
-                      f"  {self.used_time:>8}  ########")
-
-            # plan to
-            # if time.time() - self.print_time > self.show_gap:
-            print(f" {self.agent_id:<2} {self.total_step:8.2e} {self.r_max:8.2f} |"
-                  f"{r_avg:8.2f} {r_std:8.2f} |{s_avg:5.0f} {s_std:4.0f} |"
-                  f"{' '.join(f'{n:8.2f}' for n in log_tuple)} | "
-                  f"{infos_dict['red_win_rate']:.2f}, {infos_dict['red_draw_rate']:.2f}")
+            print(f"----------agent {self.agent_id:<2}--{steps:8.2e} steps".ljust(50, "-"),
+                  f"\n| Evaluated {eval_times} times".ljust(50, " ") + "|",
+                  f"\n| cost time:{time.time() - self.eval_time:8.2f} s".ljust(50, " ") + "|",
+                  f"\n| r_max:{self.r_max:8.2f}, r_avg:{r_avg:8.2f}, r_std:{r_std:8.2f}".ljust(50, " ") + "|",
+                  f"\n| average_episode_num:{s_avg:5.0f}, std_episode_num:{s_std:4.0f}".ljust(50, " ") + "|",
+                  f"\n| critic: {log_tuple[0]:8.4f}, actor: {log_tuple[1]:8.4f}".ljust(50, " ") + "|",
+                  f"\n| logprob: {log_tuple[2]:8.4f}".ljust(50, " ") + "|",
+                  f"\n| red_win_rate:{infos_dict['red_win_rate']:.2f}, "
+                  f"red_draw_rate:{infos_dict['red_draw_rate']:.2f}".ljust(50, " ") + "|",
+                  "\n---------------------------------".ljust(50, "-"))
 
     @staticmethod
     def get_r_avg_std_s_avg_std(rewards_steps_list):
