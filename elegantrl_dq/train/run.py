@@ -1,27 +1,24 @@
-from pathlib import Path
-import os
-
 from elegantrl_dq.train.replay_buffer import *
 from elegantrl_dq.train.evaluator import *
 
 
-class Arguments:
-    def __init__(self, agent=None, env=None, gpu_id=None, if_on_policy=False):
-        self.agent = agent  # Deep Reinforcement Learning algorithm
+class Configs:
+    def __init__(self, gpu_id=None, if_on_policy=False):
         self.cwd = time.strftime("%Y-%m-%d_%H-%M-%S",
                                  time.localtime())  # current work directory. cwd is None means set it automatically
         self.enemy_cwd = None
         self.if_train = True
-        self.env = env  # the environment for training
-        self.env_eval = None  # the environment for evaluating
         self.gpu_id = gpu_id  # choose the GPU for running. gpu_id is None means set it automatically
         self.rollout_num = 2  # the number of rollout workers (larger is not always faster)
         self.num_threads = 8  # cpu_num for evaluate model, torch.set_num_threads(self.num_threads)
         self.if_print_time = False
-        '''Arguments for multi-processing envs'''
+        '''Arguments for multi-processing'''
         self.if_multi_processing = True
         self.num_envs = 2
         self.new_processing_for_evaluation = False
+        '''Arguments for env'''
+        self.env_name = None
+        self.env_config = None
 
         '''Arguments for training (off-policy)'''
         self.learning_rate = 1e-4
@@ -46,7 +43,6 @@ class Arguments:
             self.if_per_or_gae = False  # PER for off-policy sparse reward: Prioritized Experience Replay.
 
         '''Arguments for evaluate'''
-        self.if_wandb = True
         self.eval_gap = 60 * 10  # evaluate the agent per eval_gap seconds
         self.eval_times1 = 2 ** 2  # evaluation times
         self.eval_times2 = 2 ** 4  # evaluation times if 'eval_reward > max_reward'
@@ -63,14 +59,32 @@ class Arguments:
         self.lambda_entropy = 0.02  # could be 0.02
         self.lambda_gae_adv = 0.98
 
+        '''Arguments for wandb'''
+        self.if_wandb = True
+        self.wandb_user = 'dujinqi'
+        self.wandb_notes = 'MultiEnvs'
+        self.wandb_name = 'ppo_NVE_2v2_MultiEnvs_seed=' + str(self.random_seed)
+        self.wandb_group = 'ObstacleMap'
+        self.wandb_job_type = 'StaticEnemy'
+
+
+class Arguments:
+    def __init__(self, agent=None, env=None, gpu_id=None, if_on_policy=False):
+        self.agent = agent  # Deep Reinforcement Learning algorithm
+        self.env = env  # the environment for training
+        self.env_eval = None  # the environment for evaluating
+        self.config = Configs(gpu_id=gpu_id, if_on_policy=if_on_policy)
+
     def init_before_training(self, process_id=0):
+        self.config.env_name = self.env.env_name
+        self.config.env_config = self.env.args.get_dict()
         # ppo
         if hasattr(self.agent, 'ratio_clip'):
-            self.agent.ratio_clip = self.ratio_clip
+            self.agent.ratio_clip = self.config.ratio_clip
         if hasattr(self.agent, 'lambda_entropy'):
-            self.agent.lambda_entropy = self.lambda_entropy
+            self.agent.lambda_entropy = self.config.lambda_entropy
         if hasattr(self.agent, 'lambda_gae_adv'):
-            self.agent.lambda_gae_adv = self.lambda_gae_adv
+            self.agent.lambda_gae_adv = self.config.lambda_gae_adv
 
         if self.agent is None:
             raise RuntimeError('\n| Why agent=None? Assignment args.agent = AgentXXX please.')
@@ -82,40 +96,41 @@ class Arguments:
             raise RuntimeError('\n| What is env.env_name? use env=PreprocessEnv(env). It is a Wrapper.')
 
         '''set None value automatically'''
-        if self.gpu_id is None:  # set gpu_id as '0' in default
-            self.gpu_id = '0'
+        if self.config.gpu_id is None:  # set gpu_id as '0' in default
+            self.config.gpu_id = '0'
 
-        if self.cwd is None:
+        if self.config.cwd is None:
             agent_name = self.agent.__class__.__name__
-            self.cwd = f'./{self.env.env_name}_{agent_name}'
+            self.config.cwd = f'./{self.env.env_name}_{agent_name}'
 
         if process_id == 0:
-            print(f'| GPU id: {self.gpu_id}, cwd: {self.cwd}')
+            print(f'| GPU id: {self.config.gpu_id}, cwd: {self.config.cwd}')
 
             import shutil  # remove history according to bool(if_remove)
-            if self.if_remove is None:
-                self.if_remove = bool(input("PRESS 'y' to REMOVE: {}? ".format(self.cwd)) == 'y')
-            if self.if_remove:
-                shutil.rmtree(self.cwd, ignore_errors=True)
+            if self.config.if_remove is None:
+                self.config.if_remove = bool(input("PRESS 'y' to REMOVE: {}? ".format(self.config.cwd)) == 'y')
+            if self.config.if_remove:
+                shutil.rmtree(self.config.cwd, ignore_errors=True)
                 print("| Remove history")
             # os.makedirs(self.cwd, exist_ok=True)
 
-        np.random.seed(self.random_seed)
-        torch.manual_seed(self.random_seed)
-        torch.set_num_threads(self.num_threads)
+        np.random.seed(self.config.random_seed)
+        torch.manual_seed(self.config.random_seed)
+        torch.set_num_threads(self.config.num_threads)
         torch.set_default_dtype(torch.float32)
 
-        gpu_id = self.gpu_id[process_id] if isinstance(self.gpu_id, list) else self.gpu_id
+        gpu_id = self.config.gpu_id[process_id] if isinstance(self.config.gpu_id, list) else self.config.gpu_id
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+
 
 def train_and_evaluate(args):
     args.init_before_training()
 
     '''basic arguments'''
-    cwd = os.path.join('./results/models/', args.cwd)
+    cwd = os.path.join('./results/models/', args.config.cwd)
     cwd = os.path.normpath(cwd)
-    if args.enemy_cwd:
-        enemy_cwd = os.path.join('./results/models/', args.enemy_cwd)
+    if args.config.enemy_cwd:
+        enemy_cwd = os.path.join('./results/models/', args.config.enemy_cwd)
         enemy_cwd = os.path.normpath(enemy_cwd)
         if_build_enemy_act = True
     else:
@@ -123,14 +138,15 @@ def train_and_evaluate(args):
         if_build_enemy_act = False
     env = args.env
     env_eval = args.env_eval
-    if_wandb = args.if_wandb
-    if_print_time = args.if_print_time
+    if_wandb = args.config.if_wandb
+    if_print_time = args.config.if_print_time
     agent = args.agent
-    gpu_id = args.gpu_id
-    if_multi_processing = args.if_multi_processing
-    new_processing_for_evaluation = args.new_processing_for_evaluation
+    gpu_id = args.config.gpu_id
+    if_multi_processing = args.config.if_multi_processing
+    new_processing_for_evaluation = args.config.new_processing_for_evaluation
+    configs = args.config
 
-    if_train = args.if_train
+    if_train = args.config.if_train
     if if_train:
         os.makedirs(cwd)
         if if_wandb and not new_processing_for_evaluation:
@@ -138,12 +154,12 @@ def train_and_evaluate(args):
             '''保存数据'''
             log_dir = Path("./results/wandb_logs") / args.env.env_name / 'NoObstacle' / 'ppo'
             os.makedirs(log_dir, exist_ok=True)
-            wandb_run = wandb.init(config=args,
+            wandb_run = wandb.init(config=configs,
                                    project='Robomaster',
                                    entity='dujinqi',
                                    notes='MultiEnvs',
-                                   name='ppo_NVE_2v2_MultiEnvs_seed=' + str(args.random_seed),
-                                   group='ObstacleMap',
+                                   name='ppo_NVE_2v2_MultiEnvs_seed=' + str(args.config.random_seed),
+                                   group='NoObstacleMap',
                                    dir=log_dir,
                                    job_type="MultiEnvs",
                                    reinit=True)
@@ -153,27 +169,27 @@ def train_and_evaluate(args):
     else:
         wandb_run = None
     '''training arguments'''
-    net_dim = args.net_dim
-    # max_memo = args.max_memo
-    break_step = args.break_step
-    batch_size = args.batch_size
-    target_step = args.target_step
-    repeat_times = args.repeat_times
-    repeat_times_policy = args.repeat_times_policy
-    learning_rate = args.learning_rate
-    if_per_or_gae = args.if_per_or_gae
-    if_break_early = args.if_allow_break
+    net_dim = args.config.net_dim
+    # max_memo = args.config.max_memo
+    break_step = args.config.break_step
+    batch_size = args.config.batch_size
+    target_step = args.config.target_step
+    repeat_times = args.config.repeat_times
+    repeat_times_policy = args.config.repeat_times_policy
+    learning_rate = args.config.learning_rate
+    if_per_or_gae = args.config.if_per_or_gae
+    if_break_early = args.config.if_allow_break
 
-    gamma = args.gamma
-    reward_scale = args.reward_scale
-    soft_update_tau = args.soft_update_tau
+    gamma = args.config.gamma
+    reward_scale = args.config.reward_scale
+    soft_update_tau = args.config.soft_update_tau
     # 开始训练actor的step
-    train_actor_step = args.train_actor_step
+    train_actor_step = args.config.train_actor_step
     '''evaluating arguments'''
-    show_gap = args.eval_gap
-    eval_times1 = args.eval_times1
-    eval_times2 = args.eval_times2
-    save_interval = args.save_interval
+    show_gap = args.config.eval_gap
+    eval_times1 = args.config.eval_times1
+    eval_times2 = args.config.eval_times2
+    save_interval = args.config.save_interval
 
     del args  # In order to show these hyper-parameters clearly, I put them above.
 
@@ -201,9 +217,10 @@ def train_and_evaluate(args):
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
     if if_train and new_processing_for_evaluation:
-        async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device, env_name=env.env_name,
+        async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device,
+                                         env_name=env.env_name,
                                          eval_times1=eval_times1, eval_times2=eval_times2,
-                                         save_interval=save_interval, logger=wandb_run)
+                                         save_interval=save_interval, configs=configs)
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
@@ -243,11 +260,11 @@ def train_and_evaluate(args):
         with torch.no_grad():
             if not new_processing_for_evaluation:
                 evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run,
-                                                        enemy_act=agent.enemy_act)
+                                        enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
             if_train = not (if_break_early or total_step >= break_step
-                                           or os.path.exists(f'{cwd}/stop'))
+                            or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
             print(f'| EvaluateUsedTime: {time.time() - start_evaluate:.0f}s')
     print(f'| UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')

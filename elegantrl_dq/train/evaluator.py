@@ -1,3 +1,5 @@
+from pathlib import Path
+import os
 import time
 from elegantrl_dq.envs.env import *
 from elegantrl_dq.agents.net import *
@@ -121,8 +123,8 @@ class Evaluator:
 
 class AsyncEvaluator:
     def __init__(self, models, cwd, agent_id, eval_times1, eval_times2, env_name, device, save_interval,
-                 logger):
-        self.logger = logger
+                 configs):
+        self.configs = configs
         env = PreprocessEnv(env_name)
         env.render()
         self.device = device
@@ -150,6 +152,23 @@ class AsyncEvaluator:
                     self.update_num.value += 1
 
     def run(self, models):
+        if self.configs.if_wandb:
+            import wandb
+            '''保存数据'''
+            log_dir = Path("./results/wandb_logs") / self.configs.env_name / 'NoObstacle' / 'ppo'
+            os.makedirs(log_dir, exist_ok=True)
+            logger = wandb.init(config=self.configs,
+                                   project=self.configs.env_name,
+                                   entity=self.configs.wandb_user,
+                                   notes=self.configs.wandb_notes,
+                                   name=self.configs.wandb_name,
+                                   group=self.configs.wandb_group,
+                                   dir=log_dir,
+                                   job_type=self.configs.wandb_job_type,
+                                   reinit=True)
+            logger.config.update(self.configs.env_config)
+        else:
+            logger = None
         act = models['act']
         cri = models['cri']
         enemy_act = models['enemy_act']
@@ -178,7 +197,7 @@ class AsyncEvaluator:
             if if_build_enemy_act:
                 local_enemy_act.load_state_dict(enemy_act.state_dict())
 
-            self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=self.logger,
+            self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=logger,
                                          steps=steps, log_tuple=logging_tuple)
 
     def update(self, steps, logging_tuple):

@@ -32,6 +32,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
     def display_characters(self, characters):
         self.env.display_characters(characters)
 
+
 class VecEnvironments:
     def __init__(self, env_name, env_num):
         self.env_num = env_num

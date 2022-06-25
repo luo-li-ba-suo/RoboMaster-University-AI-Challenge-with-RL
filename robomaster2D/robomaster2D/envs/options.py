@@ -78,3 +78,10 @@ class Parameters:
     red_agents_path = 'src.agents.rl_trainer'
     blue_agents_path = 'src.agents.handcrafted_enemy'
 
+    def get_dict(self):
+        dict_ = {}
+        for name in dir(self):
+            value = getattr(self, name)
+            if not name.startswith('__') and not callable(value):
+                dict_[name] = value
+        return dict_
