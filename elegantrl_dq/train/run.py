@@ -1,7 +1,6 @@
 from pathlib import Path
 import wandb
-from copy import deepcopy
-import torch.multiprocessing as mp
+import os
 
 from elegantrl_dq.train.replay_buffer import *
 from elegantrl_dq.train.evaluator import *
@@ -112,8 +111,6 @@ class Arguments:
 
         gpu_id = self.gpu_id[process_id] if isinstance(self.gpu_id, list) else self.gpu_id
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-        if self.if_multi_processing:
-            mp.get_context("spawn")
 
 def train_and_evaluate(args):
     args.init_before_training()
@@ -209,7 +206,7 @@ def train_and_evaluate(args):
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
     if if_train and new_processing_for_evaluation:
         async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device, env_name=env.env_name,
-                                         eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
+                                         eval_times1=eval_times1, eval_times2=eval_times2,
                                          save_interval=save_interval, logger=wandb_run)
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
@@ -231,14 +228,8 @@ def train_and_evaluate(args):
     while if_train:
         if if_print_time:
             start_explore = time.time()
-        if_explore_successful = False
-        while not if_explore_successful:
-            try:
-                with torch.no_grad():
-                    trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
-                    if_explore_successful = True
-            except BaseException as e:
-                print(e, ' Explore Again.')
+        with torch.no_grad():
+            trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
             start_update_net = time.time()
@@ -258,7 +249,7 @@ def train_and_evaluate(args):
                 evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run,
                                                         enemy_act=agent.enemy_act)
             else:
-                async_evaluator.update(steps, logging_tuple)
+                async_evaluator.update(total_step, logging_tuple)
             if_train = not (if_break_early or total_step >= break_step
                                            or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
