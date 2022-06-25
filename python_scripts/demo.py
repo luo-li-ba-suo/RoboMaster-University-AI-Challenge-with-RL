@@ -32,7 +32,7 @@ def demo_discrete_action():
     args.if_per_or_gae = True
     args.if_allow_break = False
     args.break_step = 20000000
-    args.gpu_id = sys.argv[-1][-4]
+
     args.random_seed = 1
 
     args.eval_gap = 60
