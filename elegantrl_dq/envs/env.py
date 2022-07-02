@@ -14,7 +14,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         self.if_multi_processing = False
         (self.env_name, self.state_dim, self.action_dim, self.action_max, self.max_step,
          self.if_discrete, self.if_multi_discrete, self.target_return) = get_gym_env_info(self.env, if_print)
-
+        self.args = self.env.args
         self.reset = self.reset_type
         self.step = self.step_type
 
