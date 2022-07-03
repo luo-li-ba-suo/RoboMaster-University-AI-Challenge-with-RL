@@ -63,10 +63,10 @@ class Alarm20hz(object):
         self.go_off_flag = False
 
     def go_off(self, frame):
-        self.delta_frame += frame - self.last_frame
-        if self.delta_frame == 0:  # 使得在同一帧中可以重复使用
+        if frame == self.last_frame:  # 使得在同一帧中可以重复使用
             return self.go_off_flag
-        self.last_tick = frame
+        self.delta_frame += frame - self.last_frame
+        self.last_frame = frame
         if self.delta_frame >= self.alarm_interval_frame:
             self.delta_frame -= self.alarm_interval_frame
             self.go_off_flag = True
