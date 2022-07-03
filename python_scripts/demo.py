@@ -12,37 +12,42 @@ def demo_discrete_action():
     args.config.new_processing_for_evaluation = True
     args.config.num_envs = 8
     args.config.if_wandb = True
-    if args.config.if_multi_processing:
-        args.agent = MultiEnvDiscretePPO()
-        args.env = VecEnvironments(env_name, args.config.num_envs)
-    else:
-        args.agent = AgentDiscretePPO()
-        args.env = PreprocessEnv(env_name)  # 表示训练所有trainer中的第一个，其他trainer会一起共享模型
-    if not args.config.new_processing_for_evaluation:
-        args.config.eval_gap = 60
-        args.env_eval = PreprocessEnv(env_name)
-    args.agent.cri_target = False
+
     args.config.reward_scale = 2 ** -1
     args.config.net_dim = 128
     args.config.gamma = 0.98
     args.config.batch_size = 256
-    args.config.repeat_times = 8
-    args.config.repeat_times_policy = 8
+    args.config.repeat_times = 16
+    args.config.repeat_times_policy = 5
     args.config.target_step = 4096
     args.config.learning_rate = 1e-4
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
-    args.config.break_step = 20000000
+    args.config.break_step = 5000000
 
     args.config.random_seed = 1
 
-    args.config.eval_times1 = 10
-    args.config.eval_times2 = 20
+    args.config.eval_times1 = 20
+    args.config.eval_times2 = 30
 
     args.config.if_print_time = True
     args.config.if_train = True
     # args.cwd = '2022-05-14_21-13-49-perfect'
     # args.enemy_cwd = '2022-05-10_17-33-26'
+
+    if args.config.if_multi_processing and args.config.if_train:
+        args.agent = MultiEnvDiscretePPO()
+        args.env = VecEnvironments(env_name, args.config.num_envs)
+    else:
+        args.agent = AgentDiscretePPO()
+        args.env = PreprocessEnv(env_name)  # 表示训练所有trainer中的第一个，其他trainer会一起共享模型
+    if not args.config.if_train:
+        args.config.eval_gap = 0
+        args.env_eval = PreprocessEnv(env_name)
+    elif not args.config.new_processing_for_evaluation:
+        args.config.eval_gap = 60
+        args.env_eval = PreprocessEnv(env_name)
+    args.agent.cri_target = False
     '''train and evaluate'''
     train_and_evaluate(args)
 

@@ -62,10 +62,10 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'MultiEnvs'
-        self.wandb_name = 'ppo_NVE_2v2_MultiEnvs_seed=' + str(self.random_seed)
-        self.wandb_group = 'ObstacleMap'
-        self.wandb_job_type = 'StaticEnemy'
+        self.wandb_notes = 'old Adv Computation'
+        self.wandb_name = 'ppo_oldAdv_seed=' + str(self.random_seed)
+        self.wandb_group = None  # 是否障碍物地图
+        self.wandb_job_type = None  # 是否神经网络控制的敌人
 
 
 class Arguments:
@@ -78,6 +78,20 @@ class Arguments:
     def init_before_training(self, process_id=0):
         self.config.env_name = self.env.env_name
         self.config.env_config = self.env.args.get_dict()
+
+        if self.config.env_config['enable_blocks']:
+            self.config.wandb_group = 'ObstacleMap'
+        else:
+            self.config.wandb_group = 'NoObstacleMap'
+        robot_r_num = self.config.env_config['robot_r_num']
+        robot_b_num = self.config.env_config['robot_b_num']
+        red_agent = self.config.env_config['red_agents_path'].split('.')[-1]
+        blue_agent = self.config.env_config['red_agents_path'].split('.')[-1]
+        if 'handcrafted_enemy' in self.config.env_config['blue_agents_path']:
+            self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
+        else:
+            self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
+
         # ppo
         if hasattr(self.agent, 'ratio_clip'):
             self.agent.ratio_clip = self.config.ratio_clip
@@ -195,7 +209,7 @@ def train_and_evaluate(args):
 
     '''init: environment'''
     env.render()
-    if not if_multi_processing:
+    if not if_multi_processing or not if_train:
         env_eval.render()
     max_step = env.max_step
     state_dim = env.state_dim
@@ -209,7 +223,7 @@ def train_and_evaluate(args):
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
-    if if_multi_processing:
+    if if_multi_processing and if_train:
         buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                                  action_dim=action_dim,
                                                  if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
@@ -224,7 +238,7 @@ def train_and_evaluate(args):
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
-                              save_interval=save_interval)  # build Evaluator
+                              save_interval=save_interval, if_train=if_train)  # build Evaluator
 
     '''prepare for training'''
     agent.save_load_model(cwd=cwd, if_save=False)  # 读取上一次训练模型
@@ -232,7 +246,7 @@ def train_and_evaluate(args):
         agent.load_enemy_model(cwd=enemy_cwd)
     total_step = 0
     '''testing'''
-    if not new_processing_for_evaluation and not if_train:
+    if not if_train:
         while True:
             evaluator.evaluate_save(agent.act, agent.cri, enemy_act=agent.enemy_act)
     '''start training'''
@@ -263,10 +277,10 @@ def train_and_evaluate(args):
                                         enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
-            if_train = not (if_break_early or total_step >= break_step
-                            or os.path.exists(f'{cwd}/stop'))
+            if_train = not(total_step < break_step or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
             print(f'| EvaluateUsedTime: {time.time() - start_evaluate:.0f}s')
     print(f'| UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
-    if if_train and wandb_run:
+    if wandb_run:
         wandb_run.finish()
+    os.kill(int(process_info()['pid']), signal.SIGTERM)
