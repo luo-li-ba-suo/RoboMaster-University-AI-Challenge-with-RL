@@ -1,5 +1,8 @@
+import signal
+
 from elegantrl_dq.train.replay_buffer import *
 from elegantrl_dq.train.evaluator import *
+from elegantrl_dq.utils.process_log import process_info
 
 
 class Configs:
