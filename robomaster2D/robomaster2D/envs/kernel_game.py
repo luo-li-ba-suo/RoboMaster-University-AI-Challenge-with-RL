@@ -126,7 +126,6 @@ class State(object):  # 总状态
         self.time = 0  # 比赛剩余时间
         self.frame = 0
         self.step = 0
-        self.episode = -1
         self.robots = []  # 车的状态
         self.robot_r_num = options.robot_r_num
         self.robot_b_num = options.robot_b_num
@@ -163,7 +162,6 @@ class State(object):  # 总状态
         self.r_win_record = WinRateManager()
 
     def reset(self, time, start_pos, start_angle, start_bullet, start_hp):
-        self.episode += 1
         self.time = time  # 比赛剩余时间
         self.frame = 0
         self.step = 0

@@ -361,8 +361,7 @@ class User_Interface(object):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 30, 22 + i * 17))
 
-            tags_state = {'轮数': self.state.episode,
-                          'frame': self.state.frame}
+            tags_state = {'frame': self.state.frame}
             for i, tag in enumerate(tags_state):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 130, 22 + i * 17))
