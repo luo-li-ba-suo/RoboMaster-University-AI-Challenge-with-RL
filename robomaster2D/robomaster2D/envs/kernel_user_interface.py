@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pygame
-from src.buttons import Buttons
+from robomaster2D.envs.src.buttons import Buttons
 import os
 
 try:
@@ -16,8 +16,10 @@ class Robot(pygame.sprite.Sprite):
         self.idx = idx
         self.color = color
         self.font = font
-        self.chassis_img = pygame.image.load('./imgs/chassis_g.png')
-        self.gimbal_img = pygame.image.load('./imgs/gimbal_g.png')
+        self.chassis_img = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                          './imgs/chassis_g.png'))
+        self.gimbal_img = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                         './imgs/gimbal_g.png'))
         self.chassis_rotate = pygame.transform.rotate(self.chassis_img, 0)
         self.gimbal_rotate = pygame.transform.rotate(self.gimbal_img, 0)
         self.chassis_rect = self.chassis_rotate.get_rect()
@@ -88,7 +90,8 @@ class User_Interface(object):
         self.black = (0, 0, 0)
         self.background_color = self.gray2
         self.font_colors = [self.black, self.red]
-        self.font = pygame.font.Font('SweiAxLegCJKtc-Black.ttf', 13)
+        self.font = pygame.font.Font(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                  'SweiAxLegCJKtc-Black.ttf'), 13)
 
         self.screen_length = int(map.map_length * 2)
         self.screen_width = map.map_width * 2
@@ -164,6 +167,10 @@ class User_Interface(object):
         buttons = [button_figure, button_pause, button_switch,
                    button_reset, button_energy_saving,
                    button_increase_frame_rate, button_training]
+        for button in buttons:
+            for key in button['img_path']:
+                button['img_path'][key] = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                       button['img_path'][key])
         self.buttons = Buttons(buttons)
         self.button_id = {button['name']: i for i, button in enumerate(buttons)}
         self.feedback_UI = {'reset': [], 'reset_frame': [], 'continue': False}
@@ -245,7 +252,8 @@ class User_Interface(object):
                          [0, 0, self.map.map_length, self.map.map_width], 0)
         for i in range(self.map.barriers.shape[0]):
             self.barriers_img.append(
-                pygame.image.load('./imgs/barrier_{}.png'.format(self.barriers2pics[i])))
+                pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                               './imgs/barrier_{}.png'.format(self.barriers2pics[i]))))
             self.barriers_rect.append(self.barriers_img[-1].get_rect())
             self.barriers_rect[-1].center = [self.map.barriers[i][0:2].mean(), self.map.barriers[i][2:4].mean()]
         # 旋转中间的障碍块
@@ -258,7 +266,8 @@ class User_Interface(object):
         self.start_areas_rect = []
         for oi, o in enumerate(['red', 'blue']):
             for ti, t in enumerate(['start', 'start']):
-                self.start_areas_img.append(pygame.image.load('./imgs/area_{}_{}.png'.format(t, o)))
+                self.start_areas_img.append(pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                                           'imgs/area_{}_{}.png'.format(t, o))))
                 self.start_areas_rect.append(self.start_areas_img[-1].get_rect())
                 self.start_areas_rect[-1].center = [self.map.start_areas[oi, ti][0:2].mean(),
                                                     self.map.start_areas[oi, ti][2:4].mean()]
@@ -267,7 +276,10 @@ class User_Interface(object):
         for i in range(len(self.start_areas_rect)):
             self.surface_background.blit(self.start_areas_img[i], self.start_areas_rect[i])
         # 绘制背景图片
-        self.background_img_path = ['./imgs/background/crosswise.png', './imgs/background/vertical.png']
+        self.background_img_path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                 'imgs/background/crosswise.png'),
+                                    os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                 'imgs/background/vertical.png')]
         self.background_img_coor = [[[405, 672]], [[1011, 494], [1410, 494]]]
         self.background_img_resize = [[[808, 448]], [[400, 800], [400, 800]]]
         for i, img_coors in enumerate(self.background_img_coor):
@@ -284,7 +296,8 @@ class User_Interface(object):
             pygame.draw.circle(self.surface_background, [166, 0, 166], [404, self.map.barriers[4][3]], 1, 1)
 
     def initial_objects(self):
-        self.bullet_img = pygame.image.load('./imgs/bullet_s.png')
+        self.bullet_img = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                         './imgs/bullet_s.png'))
         self.bullet_rect = self.bullet_img.get_rect()
         for n in range(self.state.robot_num):
             self.robot_group.add(Robot(n,
@@ -294,7 +307,8 @@ class User_Interface(object):
             # load buff areas imgs
             for oi, o in enumerate(
                     ['hp_blue', 'bullet_blue', 'hp_red', 'bullet_red', 'no_shoot', 'no_move', 'no_buff']):
-                self.buff_group.add(Buff('./imgs/area_{}.png'.format(o)))
+                self.buff_group.add(Buff(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                      './imgs/area_{}.png'.format(o))))
 
     def update_buff(self):
         if self.state.buff is not None:

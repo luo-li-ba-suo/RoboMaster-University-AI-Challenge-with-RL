@@ -327,7 +327,7 @@ class Simulator(object):
         self.delay_per_frame = options.time_delay_frame
 
     def init_render(self, options):
-        from kernel_user_interface import User_Interface
+        from robomaster2D.envs.kernel_user_interface import User_Interface
         self.module_UI = User_Interface(
             self.state, self.module_engine, self.orders, self.map, options)
         self.module_engine.init_render()
