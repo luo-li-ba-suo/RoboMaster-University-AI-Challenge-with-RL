@@ -62,11 +62,15 @@ class Configs:
         self.lambda_entropy = 0  # could be 0.02
         self.lambda_gae_adv = 0.98
 
+        '''Arguments for self play '''
+        self.self_play = True
+        self.fix_evaluation_enemy_policy = True
+
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'old Adv Computation'
-        self.wandb_name = 'ppo_oldAdv_seed=' + str(self.random_seed)
+        self.wandb_notes = 'fix enemy policy during evaluation'
+        self.wandb_name = 'ppo_self_play_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -195,7 +199,9 @@ def train_and_evaluate(args):
     repeat_times_policy = args.config.repeat_times_policy
     learning_rate = args.config.learning_rate
     if_per_or_gae = args.config.if_per_or_gae
-    if_break_early = args.config.if_allow_break
+
+    self_play = args.config.self_play
+    fix_evaluation_enemy_policy = args.config.fix_evaluation_enemy_policy
 
     gamma = args.config.gamma
     reward_scale = args.config.reward_scale
@@ -222,7 +228,7 @@ def train_and_evaluate(args):
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
-               env=env)
+               env=env, self_play=self_play, enemy_policy_share_memory=not fix_evaluation_enemy_policy)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -237,7 +243,8 @@ def train_and_evaluate(args):
         async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device,
                                          env_name=env.env_name,
                                          eval_times1=eval_times1, eval_times2=eval_times2,
-                                         save_interval=save_interval, configs=configs)
+                                         save_interval=save_interval, configs=configs,
+                                         fix_enemy_policy=fix_evaluation_enemy_policy)
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
@@ -280,10 +287,10 @@ def train_and_evaluate(args):
                                         enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
-            if_train = not(total_step < break_step or os.path.exists(f'{cwd}/stop'))
+            if_train = not(total_step >= break_step or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
             print(f'| EvaluateUsedTime: {time.time() - start_evaluate:.0f}s')
-    print(f'| UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
+    print(f'| **** Training Finished **** | UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
     if wandb_run:
         wandb_run.finish()
     os.kill(int(process_info()['pid']), signal.SIGTERM)
