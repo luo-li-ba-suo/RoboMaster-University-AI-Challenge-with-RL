@@ -59,10 +59,11 @@ class Alarm20hz(object):
         # 如果没有接收到闹铃响起将会堆积
         self.alarm_interval_frame = frame_num_one_second // 20
         self.delta_frame = 0
-        self.last_frame = 0
+        self.last_frame = -1
         self.go_off_flag = False
 
     def go_off(self, frame):
+        assert frame >= self.last_frame, "alarm 20hz not reset"
         if frame == self.last_frame:  # 使得在同一帧中可以重复使用
             return self.go_off_flag
         self.delta_frame += frame - self.last_frame
@@ -157,7 +158,7 @@ class State(object):  # 总状态
         # 是否暂停运行等待用户指令
         self.wait_for_user_input = False
         # 20hz的闹钟
-        self.alarm20hz = Alarm20hz(options.frame_num_one_second)
+        self.alarm20hz = Alarm20hz(self.frame_num_one_second)
 
         self.r_win_record = WinRateManager()
 
@@ -173,6 +174,8 @@ class State(object):  # 总状态
         self.camera_vision = np.zeros((self.robot_num, self.robot_num), dtype='int8')
         self.lidar_detect = np.zeros((self.robot_num, self.lidar_num), dtype='float64')
         self.relative_angle = np.zeros((self.robot_num, self.robot_num), dtype='float64')
+        # 20hz的闹钟
+        self.alarm20hz = Alarm20hz(self.frame_num_one_second)
 
         for n in range(self.robot_r_num):
             self.robots.append(Robot(self.robot_r_num, self.robot_num, 0, n, x=start_pos[n][0],
