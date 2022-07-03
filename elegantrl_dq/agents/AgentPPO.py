@@ -302,7 +302,11 @@ class AgentDiscretePPO(AgentPPO):
 class MultiEnvDiscretePPO(AgentPPO):
     def __init__(self):
         super().__init__()
+        # self play
         self.self_play = None
+        self.enemy_act_update_interval = 10
+        self.enemy_act_update_iter = 0
+
         self.enemy_act = None
         self.models = None
         self.env_num = None
@@ -318,7 +322,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
-        if self_play or if_build_enemy_act:
+        if self_play:
+            self.enemy_act = deepcopy(self.act)
+        if if_build_enemy_act:
             self.enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
         self.cri = CriticAdv(net_dim, state_dim).to(self.device)
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
@@ -365,9 +371,6 @@ class MultiEnvDiscretePPO(AgentPPO):
         # states.size: [env_num, trainer_num, state_size]
         states_envs = self.state
         step = 0
-
-        # 更新敌方策略
-        self.update_enemy_policy()
 
         while step < target_step:
             actions_for_env = [[None for _ in range(len(states_envs[env_id]))]
@@ -425,6 +428,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                         step += 1
 
                     trainer_i += 1
+
+        # 更新敌方策略
+        self.update_enemy_policy()
 
         self.state = states_envs
         for env_id in range(env.env_num):
@@ -500,4 +506,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         return states, actions, r_sums, logprobs, advantages
 
     def update_enemy_policy(self):
-        self.enemy_act.load_state_dict(self.act.state_dict())
+        if self.enemy_act_update_iter > self.enemy_act_update_interval:
+            self.enemy_act_update_iter = 0
+            self.enemy_act.load_state_dict(self.act.state_dict())
+        self.enemy_act_update_iter += 1
