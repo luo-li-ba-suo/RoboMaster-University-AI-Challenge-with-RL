@@ -224,7 +224,7 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
     state = env.reset()
-    trainer_ids_in_the_start = env.env.trainer_ids
+    trainer_ids_in_the_start = env.env.trainer_ids.copy()
 
     for episode_step in range(max_step):
         a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
