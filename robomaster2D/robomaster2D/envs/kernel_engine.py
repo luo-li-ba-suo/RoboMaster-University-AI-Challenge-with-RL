@@ -414,7 +414,7 @@ class Engine(object):
         check_result = False
         armors, outlines = get_points_armor_vertex(self.state.robots[n])
         if self.render_inited:
-                self.points_for_render[n] = armors + outlines
+            self.points_for_render[n] = armors + outlines
         for j in range(4):
             armor0 = armors[2 * j]
             armor1 = armors[2 * j + 1]
@@ -480,13 +480,3 @@ class Engine(object):
         if self.state.robots[n].y > self.map.map_width + 10:
             self.state.robots[n].y = self.map.map_width + 10
 
-    def check_hit(self, n):
-        if self.wheel_hit:
-            self.wheel_hit = False
-            self.state.robots[n].wheel_hit += 1
-        if self.armor_hit:
-            self.armor_hit = False
-            self.state.robots[n].armor_hit += 1
-        if self.robot_hit:
-            self.robot_hit = False
-            self.state.robots[n].robot_hit += 1

@@ -114,7 +114,7 @@ class Multi_Record(object):
             for name in record:
                 if record[name].one_step:
                     string += str(i) + '.' + name[0:2] + ','
-        return parts
+        return string
 
 
 class Robot(object):
