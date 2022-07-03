@@ -291,6 +291,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.env_num = None
         self.total_trainers_envs = None
         self.last_states = None
+        self.if_complete_episode = True
+        self.trajectory_list_rest = None
+        self.remove_rest_trajectory = True
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False,
              env=None, if_build_enemy_act=False):
@@ -327,8 +330,15 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.last_states = [{trainer_id: self.state[env_num][trainer_id]
                              for trainer_id in last_trainers}
                             for env_num, last_trainers in enumerate(self.total_trainers_envs)]
+        if self.if_complete_episode:
+            self.trajectory_list_rest = [{trainer_id: [] for trainer_id in trainers} for trainers in
+                                         self.total_trainers_envs]
 
     def explore_env(self, env, target_step, reward_scale, gamma):
+        if self.remove_rest_trajectory:
+            self.trajectory_list_rest = [{trainer_id: [] for trainer_id in trainers} for trainers in
+                                         self.total_trainers_envs]
+            self.state = env.reset()
         trajectory_list = [{trainer_id: [] for trainer_id in trainers} for trainers in self.total_trainers_envs]
         logging_list = list()
         episode_rewards = list()
@@ -375,12 +385,22 @@ class MultiEnvDiscretePPO(AgentPPO):
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob))
                         episode_rewards.append(episode_reward[env_id][n])
                         episode_reward[env_id][n] = 0
+                        if self.if_complete_episode:
+                            self.trajectory_list_rest[env_id][n].append((states_concatenate[trainer_i], other))
+                            trajectory_list[env_id][n] += self.trajectory_list_rest[env_id][n]
+                            step += len(self.trajectory_list_rest[env_id][n])
+                            self.trajectory_list_rest[env_id][n] = []
                     else:
                         other = (rewards[env_id][i] * reward_scale, gamma,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob))
-                    trajectory_list[env_id][n].append((states_concatenate[trainer_i], other))
+                        if self.if_complete_episode:
+                            self.trajectory_list_rest[env_id][n].append((states_concatenate[trainer_i], other))
+                    if not self.if_complete_episode:
+                        trajectory_list[env_id][n].append((states_concatenate[trainer_i], other))
+                        step += 1
+
                     trainer_i += 1
-                    step += 1
+
         self.state = states_envs
         for env_id in range(env.env_num):
             # 在last_trainers_envs中可能缺失了中途死亡的智能体
