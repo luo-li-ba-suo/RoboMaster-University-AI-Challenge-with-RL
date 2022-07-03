@@ -89,6 +89,7 @@ class Evaluator:
                 torch.save(cri.state_dict(), act_save_path)
 
             if logger:
+                log_tuple[1] = abs(log_tuple[1])
                 '''save record in logger'''
                 train_infos = {'Epoch': self.epoch,
                                str(self.agent_id) + '_MaxR': self.r_max,
