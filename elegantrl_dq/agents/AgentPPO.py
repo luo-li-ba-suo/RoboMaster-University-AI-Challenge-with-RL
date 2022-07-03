@@ -309,9 +309,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.models = {'act': self.act,
                        'enemy_act': self.enemy_act,
                        'cri': self.cri,
-                       'net_dim':net_dim,
-                       'state_dim':state_dim,
-                       'action_dim':action_dim,
+                       'net_dim': net_dim,
+                       'state_dim': state_dim,
+                       'action_dim': action_dim,
                        'if_build_enemy_act': if_build_enemy_act}
 
         self.criterion = torch.nn.SmoothL1Loss()
@@ -338,7 +338,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         states_envs = self.state
         step = 0
         while step < target_step:
-            actions_for_env = [[None for _ in range(len(self.state[env_id]))]
+            actions_for_env = [[None for _ in range(len(states_envs[env_id]))]
                                for env_id in range(env.env_num)]
             last_trainers_envs = np.array(env.get_trainer_ids())
             last_testers_envs = np.array(env.get_tester_ids())
@@ -419,31 +419,29 @@ class MultiEnvDiscretePPO(AgentPPO):
 
     def prepare_buffer(self, buffer):
         with torch.no_grad():  # compute reverse reward
-            states =[]
-            actions =[]
-            r_sums =[]
-            logprobs =[]
+            states = []
+            actions = []
+            r_sums = []
+            logprobs = []
             advantages = []
             reward_samples, mask_samples, action_samples, a_noise_samples, state_samples = buffer.sample_all()
             for env_id in range(self.env_num):
-                for i, agent_id in enumerate(self.total_trainers_envs[env_id]):
-                    data_len = len(state_samples[env_id][i])
-                    value = self.cri_target(state_samples[env_id][i])
-                    logprob = self.act.get_old_logprob(action_samples[env_id][i], a_noise_samples[env_id][i])
-                    try:
-                        pre_state = torch.as_tensor((self.last_states[env_id][agent_id],),
-                                                    dtype=torch.float32, device=self.device)
-                    except TypeError:
-                        print(self.last_states)
-                        raise TypeError
-                    pre_r_sum = self.cri(pre_state).detach()
-                    r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][i],
-                                                           mask_samples[env_id][i], value, pre_r_sum)
-                    states.append(state_samples[env_id][i])
-                    actions.append(action_samples[env_id][i])
-                    r_sums.append(r_sum)
-                    logprobs.append(logprob)
-                    advantages.append(advantage)
+                for trainer in self.total_trainers_envs[env_id]:
+                    if trainer in state_samples[env_id]:
+                        data_len = len(state_samples[env_id][trainer])
+                        value = self.cri_target(state_samples[env_id][trainer])
+                        logprob = self.act.get_old_logprob(action_samples[env_id][trainer],
+                                                           a_noise_samples[env_id][trainer])
+                        last_state = torch.as_tensor((self.last_states[env_id][trainer],),
+                                                     dtype=torch.float32, device=self.device)
+                        rest_r_sum = self.cri(last_state).detach()
+                        r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][trainer],
+                                                               mask_samples[env_id][trainer], value, rest_r_sum)
+                        states.append(state_samples[env_id][trainer])
+                        actions.append(action_samples[env_id][trainer])
+                        r_sums.append(r_sum)
+                        logprobs.append(logprob)
+                        advantages.append(advantage)
             states = torch.cat(states)
             actions = torch.cat(actions)
             r_sums = torch.cat(r_sums)
