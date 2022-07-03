@@ -150,6 +150,8 @@ class AsyncEvaluator:
         process_monitor.start()
         self.monitor_conn.close()
 
+        self.fix_enemy_policy = True
+
     def run_monitor(self):
         self.evaluator_monitor_conn.close()
         while True:
@@ -192,6 +194,8 @@ class AsyncEvaluator:
         if if_build_enemy_act:
             local_enemy_act.eval()
         self.evaluator_conn.close()
+        if self.fix_enemy_policy and if_build_enemy_act:
+            local_enemy_act.load_state_dict(enemy_act.state_dict())
         while True:
             with self.update_num.get_lock():
                 if self.update_num.value == 0:
@@ -201,7 +205,7 @@ class AsyncEvaluator:
                 self.update_num.value = 0
             local_act.load_state_dict(act.state_dict())
             local_cri.load_state_dict(cri.state_dict())
-            if if_build_enemy_act:
+            if if_build_enemy_act and not self.fix_enemy_policy:
                 local_enemy_act.load_state_dict(enemy_act.state_dict())
 
             self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=logger,
