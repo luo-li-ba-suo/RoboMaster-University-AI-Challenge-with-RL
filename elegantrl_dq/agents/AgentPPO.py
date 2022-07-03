@@ -111,27 +111,42 @@ class AgentPPO:
         return state, action, r_sum, logprob, advantage
 
     @staticmethod
-    def get_reward_sum_raw(self, buf_len, buf_reward, buf_mask, buf_value, pre_r_sum) -> (torch.Tensor, torch.Tensor):
+    def get_reward_sum_raw(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
         buf_r_sum = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # reward sum
 
         for i in range(buf_len - 1, -1, -1):
-            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * pre_r_sum
-            pre_r_sum = buf_r_sum[i]
+            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * rest_r_sum
+            rest_r_sum = buf_r_sum[i]
         buf_advantage = buf_r_sum - (buf_mask * buf_value.squeeze(1))
         buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
         return buf_r_sum, buf_advantage
 
     @staticmethod
-    def get_reward_sum_gae(self, buf_len, buf_reward, buf_mask, buf_value, pre_r_sum) -> (torch.Tensor, torch.Tensor):
+    def get_reward_sum_gae(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
         buf_r_sum = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # old policy value
         buf_advantage = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # advantage value
 
-        pre_advantage = 0  # advantage value of previous step
+        pre_advantage = rest_r_sum  # advantage value of previous step
         for i in range(buf_len - 1, -1, -1):
-            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * pre_r_sum
-            pre_r_sum = buf_r_sum[i]
+            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * rest_r_sum
+            rest_r_sum = buf_r_sum[i]
 
             buf_advantage[i] = buf_reward[i] + buf_mask[i] * (pre_advantage - buf_value[i])  # fix a bug here
+            pre_advantage = buf_value[i] + buf_advantage[i] * self.lambda_gae_adv
+        buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
+        return buf_r_sum, buf_advantage
+
+    @staticmethod
+    def get_reward_sum_gae_fixed(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
+        buf_r_sum = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # old policy value
+        buf_advantage = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # advantage value
+
+        pre_advantage = rest_r_sum  # advantage value of previous step
+        for i in range(buf_len - 1, -1, -1):
+            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * rest_r_sum
+            rest_r_sum = buf_r_sum[i]
+
+            buf_advantage[i] = buf_reward[i] + buf_mask[i] * pre_advantage - buf_value[i]  # fix a bug here
             pre_advantage = buf_value[i] + buf_advantage[i] * self.lambda_gae_adv
         buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
         return buf_r_sum, buf_advantage

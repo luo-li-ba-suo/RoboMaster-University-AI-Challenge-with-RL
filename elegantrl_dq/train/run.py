@@ -59,7 +59,7 @@ class Configs:
 
         '''Arguments for algorithm'''
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0.02  # could be 0.02
+        self.lambda_entropy = 0  # could be 0.02
         self.lambda_gae_adv = 0.98
 
         '''Arguments for wandb'''
