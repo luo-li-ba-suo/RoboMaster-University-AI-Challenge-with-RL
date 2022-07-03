@@ -169,7 +169,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
             if deterministic:
                 start = 0 if not stochastic else stochastic
                 result_deterministic = result[start:deterministic + start]
-                deterministic_action = self.get_stochastic_action(result_deterministic)
+                deterministic_action = self.get_deterministic_action(result_deterministic)
 
         return stochastic_action, a_prob, deterministic_action
 
@@ -196,7 +196,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
             n = 0
             action = []
             for action_dim_ in self.action_dim:
-                action.append(result[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
+                action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
                 n += action_dim_
         else:
             raise NotImplementedError

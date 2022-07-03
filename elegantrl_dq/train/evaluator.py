@@ -129,10 +129,11 @@ class Evaluator:
 
 class AsyncEvaluator:
     def __init__(self, models, cwd, agent_id, eval_times1, eval_times2, env_name, device, save_interval,
-                 configs):
+                 configs, fix_enemy_policy=True):
         self.configs = configs
         env = PreprocessEnv(env_name)
-        env.render()
+        self.fix_enemy_policy = fix_enemy_policy
+
         self.device = device
         self.evaluator = Evaluator(cwd, agent_id, eval_times1, eval_times2, 0, env, device, save_interval,
                                    if_train=True)
@@ -150,7 +151,6 @@ class AsyncEvaluator:
         process_monitor.start()
         self.monitor_conn.close()
 
-        self.fix_enemy_policy = True
 
     def run_monitor(self):
         self.evaluator_monitor_conn.close()
