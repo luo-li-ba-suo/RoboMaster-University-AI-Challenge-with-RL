@@ -2,6 +2,7 @@ import numpy as np
 
 
 def get_alive_enemy_index(state, n, m):
+    assert m >= 0, 'get_alive_enemy_index error'
     if n < state.robot_r_num:
         m += state.robot_r_num
     # 以下是敌人血量判断，如果选中的敌人是死亡状态，则不瞄准，自动换另一个敌人
@@ -265,15 +266,13 @@ class Referee(object):
         return np.matmul(points + pan_vecter, rotate_matrix)
 
     def check_bullet(self, bullet, previous_center, act_feedback):
-        # bullet wall check
-        if bullet.center[0] <= 0 or bullet.center[0] >= self.map.map_length \
-                or bullet.center[1] <= 0 or bullet.center[1] >= self.map.map_width: return True
-        # bullet barrier check
+        # bullet barrier check TODO: 解决bug：如果子弹同时穿过障碍物与机器人，就会判定子弹撞上机器人，没有先后
         if self.line_barriers_check(bullet.center, previous_center): return True
         # bullet armor check
         for i in range(self.state.robot_num):
             if i == bullet.owner: continue
-            if np.abs(np.array(bullet.center) - np.array(self.state.robots[i].center)).sum() < 52.5:
+            # 177.5 = 125+30+22.5
+            if np.abs(np.array(bullet.center) - np.array(self.state.robots[i].center)).sum() <= 177.5:
                 points = self.transfer_to_robot_coordinate(np.array([bullet.center, previous_center]), i)
                 if self.segment(points[0], points[1], [-18.5, -5], [-18.5, 6]):
                     act_feedback.hit_source[i]['left'].append('BULLET' + str(bullet.owner))
@@ -290,4 +289,7 @@ class Referee(object):
                 if self.line_rect_check(points[0], points[1], [-18, -29, 18, 29]):
                     act_feedback.hit_source[i]['not_armor'].append('BULLET' + str(bullet.owner))
                     return True
+        # bullet wall check
+        if bullet.center[0] <= 0 or bullet.center[0] >= self.map.map_length \
+                or bullet.center[1] <= 0 or bullet.center[1] >= self.map.map_width: return True
         return False

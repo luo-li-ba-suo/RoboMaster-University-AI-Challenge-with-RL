@@ -112,23 +112,21 @@ class RMUA_Multi_agent_Env(gym.Env):
         for agent_ in self.simulator.agents:
             if agent_.name == 'rl_trainer':
                 agent = agent_
-        if not agent:
-            print("No rl trainer")
-            return
-        if action_type == 'MultiDiscrete':
-            for action in agent.actions:
-                actions.append(agent.actions[action])
-        elif action_type == 'Discrete':
-            for action in agent.actions:
-                actions *= agent.actions[action]
-        elif action_type == 'Hybrid':
-            actions = [[], [[], []]]
-            for action in agent.actions['Discrete']:
-                for robot in range(agent.num_robots):
-                    actions[0].append(agent.actions['Discrete'][action])
-            for action in agent.actions['Continuous'].keys():
-                actions[1][0].append(agent.actions['Continuous'][action][0])
-                actions[1][1].append(agent.actions['Continuous'][action][1])
+        if agent is not None:
+            if action_type == 'MultiDiscrete':
+                for action in agent.actions:
+                    actions.append(agent.actions[action])
+            elif action_type == 'Discrete':
+                for action in agent.actions:
+                    actions *= agent.actions[action]
+            elif action_type == 'Hybrid':
+                actions = [[], [[], []]]
+                for action in agent.actions['Discrete']:
+                    for robot in range(agent.num_robots):
+                        actions[0].append(agent.actions['Discrete'][action])
+                for action in agent.actions['Continuous'].keys():
+                    actions[1][0].append(agent.actions['Continuous'][action][0])
+                    actions[1][1].append(agent.actions['Continuous'][action][1])
         if action_type == 'MultiDiscrete':
             # 动作解码在rl_trainer.py中
             self.action_space = gym.spaces.MultiDiscrete(actions)
@@ -389,20 +387,18 @@ class RMUA_Multi_agent_Env(gym.Env):
 
 if __name__ == '__main__':
     args = Parameters()
-    args.red_agents_path = 'src.agents.random_enemy'
-    args.blue_agents_path = 'src.agents.human_agent'
+    args.red_agents_path = 'src.agents.human_agent'
+    args.blue_agents_path = 'src.agents.handcrafted_enemy'
     args.render_per_frame = 20
-    args.episode_time = 180
+    args.episode_step = 0
     args.render = True
     args.training_mode = False
     args.time_delay_frame = 0.1
     env = RMUA_Multi_agent_Env(args)
     env.simulator.state.pause = True
     env.reset()
+    env.render()
     for e in range(args.episodes):
         _, _, done, _ = env.step([])
         if done:
             env.reset()
-        if env.simulator.state.do_render is False:
-            print('Simulator closed')
-            break
