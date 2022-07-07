@@ -1,6 +1,8 @@
 # Robomaster AI Challenge仿真环境
-TODO:
-防止打死队友：瞄准敌人之后才允许射击（action mask）
+
+## 强化学习部分
+- TODO：actor网络最后一层权重用小std正交初始化
+- TODO：改relu为tanh
 
 ## 环境部分
 - 防止打死队友：瞄准敌人之后才允许射击（action mask）
