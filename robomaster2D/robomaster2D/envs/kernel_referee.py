@@ -266,30 +266,47 @@ class Referee(object):
         return np.matmul(points + pan_vecter, rotate_matrix)
 
     def check_bullet(self, bullet, previous_center, act_feedback):
-        # bullet barrier check TODO: 解决bug：如果子弹同时穿过障碍物与机器人，就会判定子弹撞上机器人，没有先后
-        if self.line_barriers_check(bullet.center, previous_center): return True
-        # bullet armor check
-        for i in range(self.state.robot_num):
-            if i == bullet.owner: continue
-            # 177.5 = 125+30+22.5
-            if np.abs(np.array(bullet.center) - np.array(self.state.robots[i].center)).sum() <= 177.5:
-                points = self.transfer_to_robot_coordinate(np.array([bullet.center, previous_center]), i)
-                if self.segment(points[0], points[1], [-18.5, -5], [-18.5, 6]):
-                    act_feedback.hit_source[i]['left'].append('BULLET' + str(bullet.owner))
-                    return True
-                if self.segment(points[0], points[1], [18.5, -5], [18.5, 6]):
-                    act_feedback.hit_source[i]['right'].append('BULLET' + str(bullet.owner))
-                    return True
-                if self.segment(points[0], points[1], [-5, 30], [5, 30]):
-                    act_feedback.hit_source[i]['behind'].append('BULLET' + str(bullet.owner))
-                    return True
-                if self.segment(points[0], points[1], [-5, -30], [5, -30]):
-                    act_feedback.hit_source[i]['front'].append('BULLET' + str(bullet.owner))
-                    return True
-                if self.line_rect_check(points[0], points[1], [-18, -29, 18, 29]):
-                    act_feedback.hit_source[i]['not_armor'].append('BULLET' + str(bullet.owner))
+        if not self.map.barriers.any():
+            # bullet armor check
+            if self.check_bullet_hit_robot(bullet.owner, bullet.center, previous_center, act_feedback):
+                return True
+        else:
+            num_segment = 10
+            next_center = np.array(previous_center, dtype=np.float32)
+            dis_segment = (bullet.center - previous_center) / num_segment
+            for _ in range(0, num_segment):
+                last_center = np.array(next_center)
+                next_center += dis_segment
+                # bullet barrier check
+                if self.line_barriers_check(next_center, last_center): return True
+                # bullet armor check
+                if self.check_bullet_hit_robot(bullet.owner, next_center, last_center, act_feedback, check_dis=65):
                     return True
         # bullet wall check
         if bullet.center[0] <= 0 or bullet.center[0] >= self.map.map_length \
                 or bullet.center[1] <= 0 or bullet.center[1] >= self.map.map_width: return True
+        return False
+
+    def check_bullet_hit_robot(self, bullet_owner, curr_center, previous_center, act_feedback, check_dis=177.5):
+        # bullet armor check
+        for i in range(self.state.robot_num):
+            if i == bullet_owner: continue
+            # 177.5 = 125+30+22.5
+            if np.abs(np.array(curr_center) - np.array(self.state.robots[i].center)).sum() <= check_dis:
+                points = self.transfer_to_robot_coordinate(np.array([curr_center, previous_center]), i)
+                if self.segment(points[0], points[1], [-18.5, -5], [-18.5, 6]):
+                    act_feedback.hit_source[i]['left'].append('BULLET' + str(bullet_owner))
+                    return True
+                if self.segment(points[0], points[1], [18.5, -5], [18.5, 6]):
+                    act_feedback.hit_source[i]['right'].append('BULLET' + str(bullet_owner))
+                    return True
+                if self.segment(points[0], points[1], [-5, 30], [5, 30]):
+                    act_feedback.hit_source[i]['behind'].append('BULLET' + str(bullet_owner))
+                    return True
+                if self.segment(points[0], points[1], [-5, -30], [5, -30]):
+                    act_feedback.hit_source[i]['front'].append('BULLET' + str(bullet_owner))
+                    return True
+                if self.line_rect_check(points[0], points[1], [-18, -29, 18, 29]):
+                    act_feedback.hit_source[i]['not_armor'].append('BULLET' + str(bullet_owner))
+                    return True
         return False
