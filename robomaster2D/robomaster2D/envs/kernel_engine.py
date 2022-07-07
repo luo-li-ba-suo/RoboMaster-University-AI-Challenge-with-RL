@@ -252,8 +252,11 @@ class Engine(object):
             if self.can_target_enemy_be_seen(n, m):
                 self.acts[n].yaw_speed, enemy_aimed = self.auto_aim(n, m)
                 if enemy_aimed:
-                    self.state.robots[n].aimed_enemy.append(m)
+                    self.state.robots[n].aimed_enemy = m
+                else:
+                    self.state.robots[n].aimed_enemy = None
             else:
+                self.state.robots[n].aimed_enemy = None
                 # 加速：
                 if orders.set[n].yaw != 0:
                     self.acts[n].yaw_speed += orders.set[n].yaw * self.state.robots[n].yaw_acceleration

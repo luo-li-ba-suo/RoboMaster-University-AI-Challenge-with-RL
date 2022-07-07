@@ -49,10 +49,8 @@ class My_Agent(object):
             self.orders.set[i].x = action[0]
             self.orders.set[i].y = action[1]
             self.orders.set[i].rotate = action[2]
-            # if ((game_state.camera_vision[i] > 0)[game_state.robot_r_num:]).any():
-            self.orders.set[i].shoot = action[3]
             if self.enemy_num > 1:
                 self.orders.set[i].shoot_target_enemy = action[4]
-            # elif action[3]:
-            #     print('want to shoot but see no enemy')
+            if game_state.robots[self.robot_ids[i]].aimed_enemy is not None:
+                self.orders.set[i].shoot = action[3]
         return self.orders

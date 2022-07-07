@@ -61,7 +61,7 @@ class My_Agent(object):
 
                     if key == 'yaw_right':
                         self.orders.set[i].yaw += 1
-                    if key == 'shoot':
+                    if key == 'shoot' and game_state.robots[self.robot_ids[i]].aimed_enemy is not None:
                         self.orders.set[i].shoot += 1
                     if key == 'aim':
                         self.orders.set[i].shoot_target_enemy += 1
