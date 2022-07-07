@@ -75,39 +75,40 @@ class Referee(object):
     def check_armor(self, act_feedback):
         # act_feedback.robot_collision_to_source()
         for n in range(self.state.robot_num):
-            for part in ['behind', 'front', 'left', 'right']:
-                # 根据子弹来源记录和扣血
-                BULLET_HIT = False
-                OTHER_HIT = False
-                for i in range(self.state.robot_num):
-                    if n == i: continue
-                    if 'BULLET' + str(i) in act_feedback.hit_source[n][part]:
-                        BULLET_HIT = True
-                        if self.state.robots[n].owner == self.state.robots[i].owner:
-                            self.state.robots[n].armor_hit_teammate_record.add(part)
-                            self.state.robots[i].teammate_hit_record.add(part)
-                        else:
-                            self.state.robots[n].armor_hit_enemy_record.add(part)
-                            self.state.robots[i].enemy_hit_record.add(part)
-                if 'ROBOT' in act_feedback.hit_source[n][part]:
-                    OTHER_HIT = True
-                    self.state.robots[n].armor_hit_robot_record.add(part)
-                if 'OBSTACLE' in act_feedback.hit_source[n][part]:
-                    OTHER_HIT = True
-                    self.state.robots[n].armor_hit_obstacle_record.add(part)
-                if 'BOUNDARY' in act_feedback.hit_source[n][part]:
-                    OTHER_HIT = True
-                    self.state.robots[n].armor_hit_wall_record.add(part)
-                if BULLET_HIT:
-                    self.state.robots[n].hp_loss.add(self.HP_reduction[part])
-                elif OTHER_HIT and self.collision_reduce_hp:
-                    self.state.robots[n].hp_loss.add(self.HP_reduction['not_bullet'])
-            if 'ROBOT' in act_feedback.hit_source[n]['not_armor']:
-                self.state.robots[n].wheel_hit_robot_record.add()
-            if 'OBSTACLE' in act_feedback.hit_source[n]['not_armor']:
-                self.state.robots[n].wheel_hit_obstacle_record.add()
-            if 'BOUNDARY' in act_feedback.hit_source[n]['not_armor']:
-                self.state.robots[n].wheel_hit_wall_record.add()
+            if self.state.robots[n].hp > 0:
+                for part in ['behind', 'front', 'left', 'right']:
+                    # 根据子弹来源记录和扣血
+                    BULLET_HIT = False
+                    OTHER_HIT = False
+                    for i in range(self.state.robot_num):
+                        if n == i: continue
+                        if 'BULLET' + str(i) in act_feedback.hit_source[n][part]:
+                            BULLET_HIT = True
+                            if self.state.robots[n].owner == self.state.robots[i].owner:
+                                self.state.robots[n].armor_hit_teammate_record.add(part)
+                                self.state.robots[i].teammate_hit_record.add(part)
+                            else:
+                                self.state.robots[n].armor_hit_enemy_record.add(part)
+                                self.state.robots[i].enemy_hit_record.add(part)
+                    if 'ROBOT' in act_feedback.hit_source[n][part]:
+                        OTHER_HIT = True
+                        self.state.robots[n].armor_hit_robot_record.add(part)
+                    if 'OBSTACLE' in act_feedback.hit_source[n][part]:
+                        OTHER_HIT = True
+                        self.state.robots[n].armor_hit_obstacle_record.add(part)
+                    if 'BOUNDARY' in act_feedback.hit_source[n][part]:
+                        OTHER_HIT = True
+                        self.state.robots[n].armor_hit_wall_record.add(part)
+                    if BULLET_HIT:
+                        self.state.robots[n].hp_loss.add(self.HP_reduction[part])
+                    elif OTHER_HIT and self.collision_reduce_hp:
+                        self.state.robots[n].hp_loss.add(self.HP_reduction['not_bullet'])
+                if 'ROBOT' in act_feedback.hit_source[n]['not_armor']:
+                    self.state.robots[n].wheel_hit_robot_record.add()
+                if 'OBSTACLE' in act_feedback.hit_source[n]['not_armor']:
+                    self.state.robots[n].wheel_hit_obstacle_record.add()
+                if 'BOUNDARY' in act_feedback.hit_source[n]['not_armor']:
+                    self.state.robots[n].wheel_hit_wall_record.add()
         act_feedback.reset()  # 在这里重置表示用过了才重置
 
     def buff_check(self):

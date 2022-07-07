@@ -71,7 +71,12 @@ class Armor_Record(object):
             armmor.reset_one_episode()
 
     def return_one_episode(self):
-        return sum([armmor.return_one_episode() for armmor in [self.left, self.right, self.front, self.behind]])
+        damage = 0
+        damage += self.left.return_one_episode() * 40
+        damage += self.right.return_one_episode() * 40
+        damage += self.front.return_one_episode() * 20
+        damage += self.behind.return_one_episode() * 60
+        return damage
 
     def print_one_step(self):
         parts = ''
@@ -303,5 +308,5 @@ class Bullet(object):
                     self.center[1] - self.center_original[1]) ** 2) ** 0.5
         self.step += 1
         if self.journey > self.journey_max:
-            return True if random.random() > 1/np.exp(800/self.journey_max) else False
+            return True if random.random() > 1 / np.exp(800 / self.journey_max) else False
         return False
