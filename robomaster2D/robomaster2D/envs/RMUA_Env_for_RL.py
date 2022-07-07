@@ -185,7 +185,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             return actions_blank
 
     def step(self, actions):
-        done = self.simulator.step(self.decode_actions(actions))  # 只给其中一个传动作
+        done, info = self.simulator.step(self.decode_actions(actions))  # 只给其中一个传动作
         r = self.compute_reward()
         # 记录每个机器人每回合的奖励：
         if done and self.do_render:
@@ -207,7 +207,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                           'robots_being_killed_': self.robots_being_killed}  # it's not recorded if its key ends with _
         else:
             info_dicts = {'robots_being_killed_': self.robots_being_killed}
-
+        info_dicts.update(info)
         return self.get_observations(), r, done, info_dicts
 
     def compute_reward(self):

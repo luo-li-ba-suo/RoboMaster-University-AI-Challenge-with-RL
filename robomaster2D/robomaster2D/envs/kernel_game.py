@@ -371,23 +371,38 @@ class Simulator(object):
         if self.parameters.episode_step:
             if self.state.step == self.parameters.episode_step:
                 done = True
-        red_win = True
-        blue_win = True
-        for n in range(self.parameters.robot_r_num):
-            if self.state.robots[n].hp > 0:
-                blue_win = False
-        for n in range(self.parameters.robot_b_num):
-            if self.state.robots[n + self.parameters.robot_r_num].hp > 0:
-                red_win = False
-        if red_win:
+        # 结算比赛结果
+        info = {}
+        if done:
+            blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
+                         for n in range(self.parameters.robot_b_num)]).all()
+            red_all_dead = np.array([self.state.robots[n].hp <= 0
+                         for n in range(self.parameters.robot_r_num)]).all()
+            # 首先判断是否有一方全部阵亡
+            if blue_all_dead and not red_all_dead:
+                info['win'] = 1
+            elif not blue_all_dead and red_all_dead:
+                info['win'] = -1
+            else:
+                # 对局结束时，双方机器人都尚有存活或者碰巧全体阵亡的话，伤害高的一方获胜
+                red_damage = sum([self.state.robots[n].get_damage_to_enmey()
+                                   for n in range(self.parameters.robot_r_num)])
+                blue_damage = sum([self.state.robots[n + self.parameters.robot_r_num].get_damage_to_enmey()
+                         for n in range(self.parameters.robot_b_num)])
+                if red_damage > blue_damage:
+                    info['win'] = 1
+                elif red_damage < blue_damage:
+                    info['win'] = -1
+                else:
+                    info['win'] = 0
+        if info['win'] == 1:
             self.state.r_win_record.win()
-        elif blue_win:
+        elif info['win'] == -1:
             self.state.r_win_record.fail()
-        elif done:
+        elif info['win'] == 0:
             self.state.r_win_record.draw()
-        # TODO: 对局结束时，双方机器人尚有存活的话，伤害高的一方获胜
-        done = done or red_win or blue_win
-        return done
+        done = done
+        return done, info
 
     #
     # def step_orders(self, orders):

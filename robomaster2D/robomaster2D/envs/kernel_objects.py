@@ -34,6 +34,9 @@ class Record(object):
     def print_one_step(self):
         return self.one_episode
 
+    def return_one_episode(self):
+        return self.one_episode
+
 
 class Armor_Record(object):
     type = 'armor_record'
@@ -66,6 +69,9 @@ class Armor_Record(object):
     def reset_one_episode(self):
         for armmor in [self.left, self.right, self.front, self.behind]:
             armmor.reset_one_episode()
+
+    def return_one_episode(self):
+        return sum([armmor.return_one_episode() for armmor in [self.left, self.right, self.front, self.behind]])
 
     def print_one_step(self):
         parts = ''
@@ -273,6 +279,9 @@ class Robot(object):
                 self.hp = 0
         if self.hp > 2000:
             self.hp = 2000
+
+    def get_damage_to_enmey(self):
+        return self.enemy_hit_record.return_one_episode()
 
 
 class Bullet(object):
