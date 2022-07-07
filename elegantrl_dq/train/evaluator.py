@@ -220,7 +220,7 @@ class AsyncEvaluator:
 def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
     episode_return = 0.0  # sum of rewards in an episode
     info_dict = None
-    episode_step = 1
+    episode_step = 0
     max_step = env.max_step
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete

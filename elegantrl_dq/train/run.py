@@ -232,13 +232,7 @@ def train_and_evaluate(args):
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
-    if if_multi_processing and if_train:
-        buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
-                                                 action_dim=action_dim,
-                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
-    else:
-        buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
-                              if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
+
     if if_train and new_processing_for_evaluation:
         async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device,
                                          env_name=env.env_name,
@@ -249,7 +243,13 @@ def train_and_evaluate(args):
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
                               save_interval=save_interval, if_train=if_train)  # build Evaluator
-
+    if if_multi_processing and if_train:
+        buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
+                                                 action_dim=action_dim,
+                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
+    else:
+        buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
+                              if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
     '''prepare for training'''
     agent.save_load_model(cwd=cwd, if_save=False)  # 读取上一次训练模型
     if if_build_enemy_act:
@@ -287,10 +287,10 @@ def train_and_evaluate(args):
                                         enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
-            if_train = not(total_step >= break_step or os.path.exists(f'{cwd}/stop'))
+            if_train = not (total_step >= break_step or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
             print(f'| EvaluateUsedTime: {time.time() - start_evaluate:.0f}s')
     print(f'| **** Training Finished **** | UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
     if wandb_run:
         wandb_run.finish()
-    os.kill(int(process_info()['pid']), signal.SIGTERM)
+    os.kill(int(process_info()['pid']), signal.SIGALRM)

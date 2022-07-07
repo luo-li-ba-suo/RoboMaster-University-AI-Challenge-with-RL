@@ -216,7 +216,7 @@ class AgentDiscretePPO(AgentPPO):
         self.last_alive_trainers = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, if_build_enemy_act=False,
-             env=None):
+             env=None, self_play=False, enemy_policy_share_memory=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.act = ActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -430,7 +430,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                     trainer_i += 1
 
         # 更新敌方策略
-        self.update_enemy_policy()
+        if self.self_play:
+            self.update_enemy_policy()
 
         self.state = states_envs
         for env_id in range(env.env_num):
