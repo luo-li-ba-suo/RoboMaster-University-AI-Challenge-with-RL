@@ -373,11 +373,13 @@ class Simulator(object):
                 done = True
         # 结算比赛结果
         info = {}
+        blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
+                                  for n in range(self.parameters.robot_b_num)]).all()
+        red_all_dead = np.array([self.state.robots[n].hp <= 0
+                                 for n in range(self.parameters.robot_r_num)]).all()
+        if blue_all_dead or red_all_dead:
+            done = True
         if done:
-            blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
-                                      for n in range(self.parameters.robot_b_num)]).all()
-            red_all_dead = np.array([self.state.robots[n].hp <= 0
-                                     for n in range(self.parameters.robot_r_num)]).all()
             # 首先判断是否有一方全部阵亡
             if blue_all_dead and not red_all_dead:
                 red_win = 1

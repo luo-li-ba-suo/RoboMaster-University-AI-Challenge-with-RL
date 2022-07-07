@@ -32,6 +32,7 @@ def demo_discrete_action():
 
     args.config.if_print_time = True
     args.config.if_train = True
+    args.config.self_play = False
     # args.cwd = '2022-05-14_21-13-49-perfect'
     # args.enemy_cwd = '2022-05-10_17-33-26'
 
