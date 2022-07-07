@@ -104,7 +104,7 @@ class Evaluator:
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
             self.epoch += 1
-            print(f"----------Agent {self.agent_id:<2} Steps:{steps:8.2e}".ljust(30, "-"),
+            print(f"---Agent {self.agent_id:<2} Steps:{steps:8.2e}".ljust(30, "-"),
                   f"\n| Evaluated {eval_times} times".ljust(30, " ") + "|",
                   f"\n| cost time:{time.time() - self.eval_time:8.2f} s".ljust(30, " ") + "|",
                   f"\n| r_avg:{log_tuple[3]:8.2f}".ljust(30, " ") + "|",
@@ -118,6 +118,8 @@ class Evaluator:
                   f"\n| logprob: {log_tuple[2]:8.4f}".ljust(30, " ") + "|",
                   f"\n| red_win_rate:{infos_dict['red_win_rate']:.2f}".ljust(30, " ") + "|",
                   f"\n| red_draw_rate:{infos_dict['red_draw_rate']:.2f}".ljust(30, " ") + "|",
+                  f"\n| new red_win_rate:{infos_dict['red_win']:.2f}".ljust(30, " ") + "|",
+                  f"\n| new red_fail_rate:{infos_dict['red_fail']:.2f}".ljust(30, " ") + "|",
                   "\n---------------------------------".ljust(30, "-"))
 
     @staticmethod
@@ -168,14 +170,14 @@ class AsyncEvaluator:
             log_dir = Path("./results/wandb_logs") / self.configs.env_name / 'NoObstacle' / 'ppo'
             os.makedirs(log_dir, exist_ok=True)
             logger = wandb.init(config=self.configs,
-                                   project=self.configs.env_name,
-                                   entity=self.configs.wandb_user,
-                                   notes=self.configs.wandb_notes,
-                                   name=self.configs.wandb_name,
-                                   group=self.configs.wandb_group,
-                                   dir=log_dir,
-                                   job_type=self.configs.wandb_job_type,
-                                   reinit=True)
+                                project=self.configs.env_name,
+                                entity=self.configs.wandb_user,
+                                notes=self.configs.wandb_notes,
+                                name=self.configs.wandb_name,
+                                group=self.configs.wandb_group,
+                                dir=log_dir,
+                                job_type=self.configs.wandb_job_type,
+                                reinit=True)
             logger.config.update(self.configs.env_config)
         else:
             logger = None

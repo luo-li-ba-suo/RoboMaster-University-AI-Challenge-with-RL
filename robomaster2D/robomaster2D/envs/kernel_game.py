@@ -375,33 +375,38 @@ class Simulator(object):
         info = {}
         if done:
             blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
-                         for n in range(self.parameters.robot_b_num)]).all()
+                                      for n in range(self.parameters.robot_b_num)]).all()
             red_all_dead = np.array([self.state.robots[n].hp <= 0
-                         for n in range(self.parameters.robot_r_num)]).all()
+                                     for n in range(self.parameters.robot_r_num)]).all()
             # 首先判断是否有一方全部阵亡
             if blue_all_dead and not red_all_dead:
-                info['win'] = 1
+                red_win = 1
             elif not blue_all_dead and red_all_dead:
-                info['win'] = -1
+                red_win = -1
             else:
                 # 对局结束时，双方机器人都尚有存活或者碰巧全体阵亡的话，伤害高的一方获胜
                 red_damage = sum([self.state.robots[n].get_damage_to_enmey()
-                                   for n in range(self.parameters.robot_r_num)])
+                                  for n in range(self.parameters.robot_r_num)])
                 blue_damage = sum([self.state.robots[n + self.parameters.robot_r_num].get_damage_to_enmey()
-                         for n in range(self.parameters.robot_b_num)])
+                                   for n in range(self.parameters.robot_b_num)])
                 if red_damage > blue_damage:
-                    info['win'] = 1
+                    red_win = 1
                 elif red_damage < blue_damage:
-                    info['win'] = -1
+                    red_win = -1
                 else:
-                    info['win'] = 0
-        if info['win'] == 1:
-            self.state.r_win_record.win()
-        elif info['win'] == -1:
-            self.state.r_win_record.fail()
-        elif info['win'] == 0:
-            self.state.r_win_record.draw()
-        done = done
+                    red_win = 0
+            if red_win == 1:
+                self.state.r_win_record.win()
+                info['win'] = 1
+                info['fail'] = 0
+            elif red_win == -1:
+                info['win'] = 0
+                info['fail'] = 1
+                self.state.r_win_record.fail()
+            elif red_win == 0:
+                info['win'] = 0
+                info['fail'] = 0
+                self.state.r_win_record.draw()
         return done, info
 
     #
