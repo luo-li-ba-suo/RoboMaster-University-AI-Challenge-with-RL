@@ -283,7 +283,7 @@ def train_and_evaluate(args):
         logging_tuple += logging_list
         with torch.no_grad():
             if not new_processing_for_evaluation:
-                evaluator.evaluate_save(agent.act, agent.cri, steps, logging_tuple, wandb_run,
+                evaluator.evaluate_save(agent.act, agent.cri, total_step, logging_tuple, wandb_run,
                                         enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
