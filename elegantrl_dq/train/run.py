@@ -176,15 +176,15 @@ def train_and_evaluate(args):
             log_dir = Path("./results/wandb_logs") / args.env.env_name / 'NoObstacle' / 'ppo'
             os.makedirs(log_dir, exist_ok=True)
             wandb_run = wandb.init(config=configs,
-                                   project='Robomaster',
-                                   entity='dujinqi',
-                                   notes='MultiEnvs',
-                                   name='ppo_NVE_2v2_MultiEnvs_seed=' + str(args.config.random_seed),
-                                   group='NoObstacleMap',
+                                   project=configs.env_name,
+                                   entity=configs.wandb_user,
+                                   notes=configs.wandb_notes,
+                                   name=configs.wandb_name,
+                                   group=configs.wandb_group,
                                    dir=log_dir,
-                                   job_type="MultiEnvs",
+                                   job_type=configs.wandb_job_type,
                                    reinit=True)
-            # wandb_run.config.update(env.args)  # TODO:环境的args导不进来
+            wandb_run.config.update(configs.env_config)
         else:
             wandb_run = None
     else:
@@ -293,4 +293,4 @@ def train_and_evaluate(args):
     print(f'| **** Training Finished **** | UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
     if wandb_run:
         wandb_run.finish()
-    os.kill(int(process_info()['pid']), signal.SIGALRM)
+    os.kill(int(process_info()['pid']), signal.SIGKILL)

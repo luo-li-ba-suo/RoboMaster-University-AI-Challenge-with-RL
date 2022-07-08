@@ -154,7 +154,6 @@ class AsyncEvaluator:
         process_monitor.start()
         self.monitor_conn.close()
 
-
     def run_monitor(self):
         self.evaluator_monitor_conn.close()
         while True:
