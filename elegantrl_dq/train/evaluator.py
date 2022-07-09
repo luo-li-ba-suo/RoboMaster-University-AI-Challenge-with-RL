@@ -6,7 +6,8 @@ from elegantrl_dq.agents.net import *
 
 
 class Evaluator:
-    def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train):
+    def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train,
+                 fix_enemy_policy=False):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
 
@@ -27,7 +28,14 @@ class Evaluator:
         self.record_controller_id = 0
         self.if_train = if_train
 
+        self.enemy_act = None
+        self.fix_enemy_policy = fix_enemy_policy
+
     def evaluate_save(self, act, cri, steps=0, log_tuple=None, logger=None, enemy_act=None):
+        if self.enemy_act is None and enemy_act:
+            self.enemy_act = deepcopy(enemy_act)
+        elif not self.fix_enemy_policy:
+            self.enemy_act = enemy_act
         if log_tuple is None:
             log_tuple = [0, 0, 0, 0]
 
@@ -39,7 +47,7 @@ class Evaluator:
             eval_times = self.eval_times1
             for _ in range(self.eval_times1):
                 reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                   enemy_act)
+                                                                                   self.enemy_act)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
                     if 'reward_' + key in infos_dict:
@@ -58,7 +66,7 @@ class Evaluator:
                 eval_times += self.eval_times2 - self.eval_times1
                 for _ in range(self.eval_times2 - self.eval_times1):
                     reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                       enemy_act)
+                                                                                       self.enemy_act)
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
                         infos_dict['reward_' + key].append(reward_dict[key])

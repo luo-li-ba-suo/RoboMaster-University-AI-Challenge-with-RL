@@ -239,7 +239,8 @@ def train_and_evaluate(args):
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
-                              save_interval=save_interval, if_train=if_train)  # build Evaluator
+                              save_interval=save_interval, if_train=if_train,
+                              fix_enemy_policy=fix_evaluation_enemy_policy)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                                  action_dim=action_dim,
