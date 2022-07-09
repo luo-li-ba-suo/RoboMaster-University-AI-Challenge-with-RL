@@ -93,11 +93,8 @@ class Arguments:
         robot_r_num = self.config.env_config['robot_r_num']
         robot_b_num = self.config.env_config['robot_b_num']
         red_agent = self.config.env_config['red_agents_path'].split('.')[-1]
-        blue_agent = self.config.env_config['red_agents_path'].split('.')[-1]
-        if 'handcrafted_enemy' in self.config.env_config['blue_agents_path']:
-            self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
-        else:
-            self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
+        blue_agent = self.config.env_config['blue_agents_path'].split('.')[-1]
+        self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
 
         # ppo
         if hasattr(self.agent, 'ratio_clip'):

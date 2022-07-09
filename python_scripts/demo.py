@@ -9,7 +9,7 @@ def demo_discrete_action():
     args = Arguments(if_on_policy=True)  # hyper-parameters of on-policy is different from off-policy
     env_name = 'Robomaster-v0'
     args.config.if_multi_processing = True
-    args.config.new_processing_for_evaluation = True
+    args.config.new_processing_for_evaluation = False
     args.config.num_envs = 8
     args.config.if_wandb = True
 
@@ -23,7 +23,7 @@ def demo_discrete_action():
     args.config.learning_rate = 1e-4
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
-    args.config.break_step = 5000000
+    args.config.break_step = 20000000
 
     args.config.random_seed = 1
 
@@ -46,7 +46,7 @@ def demo_discrete_action():
         args.config.eval_gap = 0
         args.env_eval = PreprocessEnv(env_name)
     elif not args.config.new_processing_for_evaluation:
-        args.config.eval_gap = 60
+        args.config.eval_gap = 60 * 3
         args.env_eval = PreprocessEnv(env_name)
     args.agent.cri_target = False
     '''train and evaluate'''
