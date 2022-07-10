@@ -23,7 +23,7 @@ def demo_discrete_action():
     args.config.learning_rate = 1e-4
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
-    args.config.break_step = 20000000
+    args.config.break_step = 10000000
 
     args.config.random_seed = 1
 
@@ -32,7 +32,7 @@ def demo_discrete_action():
 
     args.config.if_print_time = True
     args.config.if_train = True
-    args.config.self_play = False
+    args.config.self_play = True
     # args.cwd = '2022-05-14_21-13-49-perfect'
     # args.enemy_cwd = '2022-05-10_17-33-26'
 

@@ -69,8 +69,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'new win fail rule'
-        self.wandb_name = 'ppo_self_play_seed=' + str(self.random_seed)
+        self.wandb_notes = 'GAE corrected'
+        self.wandb_name = 'ppo_GAE_corrected_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -95,6 +95,7 @@ class Arguments:
         red_agent = self.config.env_config['red_agents_path'].split('.')[-1]
         blue_agent = self.config.env_config['blue_agents_path'].split('.')[-1]
         self.config.wandb_job_type = str(robot_r_num) + red_agent + '_vs_' + str(robot_b_num) + blue_agent
+        self.config.wandb_name += '_selfPlay' if self.config.self_play else ''
 
         # ppo
         if hasattr(self.agent, 'ratio_clip'):
@@ -225,7 +226,8 @@ def train_and_evaluate(args):
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
-               env=env, self_play=self_play, enemy_policy_share_memory=not fix_evaluation_enemy_policy)
+               env=env, self_play=self_play,
+               enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -267,6 +269,9 @@ def train_and_evaluate(args):
             trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
+            if time.time() - start_explore > 50:
+                env.stop()
+                break
             start_update_net = time.time()
         steps = buffer.extend_buffer_from_list(trajectory_list)
         total_step += steps

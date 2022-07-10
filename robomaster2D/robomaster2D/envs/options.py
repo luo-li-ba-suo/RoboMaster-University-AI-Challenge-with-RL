@@ -7,7 +7,7 @@ class Parameters:
     robot_b_num = 2
     red_agents_name = 'Critical Hit'
     blue_agents_name = 'HITCSC'
-    render = False
+
     superQuiet = True
     show_poses = False
     do_route_plan = False
@@ -20,9 +20,6 @@ class Parameters:
     frame_num_one_step = 1
     frame_num_one_second = 20.0  # >= 20; 最大需求频率为20hz（50ms）
     overheating_protection = True
-
-    # 有关地图信息：
-    enable_blocks = False
 
     start_pos = [[758, 398],
                  [758, 50],
@@ -70,6 +67,7 @@ class Parameters:
     show_figure = True
 
     # 有关测试：
+    render = False
     training_mode = False
     single_input = False
     time_delay_frame = 0
@@ -77,6 +75,9 @@ class Parameters:
     # 有關訓練
     red_agents_path = 'src.agents.rl_trainer'
     blue_agents_path = 'src.agents.nn_enemy'
+
+    # 有关地图信息：
+    enable_blocks = True
 
     def get_dict(self):
         dict_ = {}

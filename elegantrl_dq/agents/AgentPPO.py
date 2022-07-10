@@ -304,8 +304,8 @@ class MultiEnvDiscretePPO(AgentPPO):
         super().__init__()
         # self play
         self.self_play = None
-        self.enemy_act_update_interval = 10
-        self.enemy_act_update_iter = 0
+        self.enemy_act_update_interval = 1
+        self.enemy_update_steps = 0
 
         self.enemy_act = None
         self.models = None
@@ -324,7 +324,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
         if self_play:
             self.enemy_act = deepcopy(self.act)
-        if if_build_enemy_act:
+        elif if_build_enemy_act:
             self.enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
         self.cri = CriticAdv(net_dim, state_dim).to(self.device)
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
@@ -388,9 +388,11 @@ class MultiEnvDiscretePPO(AgentPPO):
             states_concatenate = np.array(states_concatenate)
             stochastic_num = sum([len(l) for l in last_trainers_envs])
             deterministic_num = sum([len(l) for l in last_testers_envs])
-            trainer_actions, actions_prob, tester_actions = self.select_action(states_concatenate,
-                                                                               stochastic_num,
-                                                                               deterministic_num)
+            trainer_actions, actions_prob, _ = self.select_action(states_concatenate, self.act,
+                                                                  stochastic_num, 0)
+            _, _, tester_actions = self.select_action(
+                states_concatenate[stochastic_num:stochastic_num + deterministic_num], self.enemy_act,
+                0, deterministic_num)
             trainer_i = tester_i = 0
             for env_id in range(env.env_num):
                 for trainer_id in last_trainers_envs[env_id]:
@@ -431,7 +433,7 @@ class MultiEnvDiscretePPO(AgentPPO):
 
         # 更新敌方策略
         if self.self_play:
-            self.update_enemy_policy()
+            self.update_enemy_policy(step)
 
         self.state = states_envs
         for env_id in range(env.env_num):
@@ -443,7 +445,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         logging_list.append(np.mean(episode_rewards))
         return trajectory_list, logging_list
 
-    def select_action(self, state, stochastic=0, deterministic=0):
+    def select_action(self, state, act=None, stochastic=0, deterministic=0):
+        if act is None:
+            act = self.act
         if state.ndim == 1:
             action_dim = [-1]
             deterministic_action_dim = [-1]
@@ -459,20 +463,16 @@ class MultiEnvDiscretePPO(AgentPPO):
             states.view(-1, states.shape[-1])
         else:
             raise NotImplementedError
-        actions, noises, deterministic_actions = self.act.get_action(states, stochastic,
-                                                                     deterministic)  # plan to be get_action_a_noise
+        actions, noises, deterministic_actions = act.get_action(states, stochastic,
+                                                                deterministic)  # plan to be get_action_a_noise
 
         if isinstance(actions, list):  # 如果是Multi-Discrete
-            if actions is None:
-                raise NotImplementedError
             actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
             noises = [noise.view(*action_dim).detach().cpu().numpy() for noise in noises]
-            if deterministic_actions is not None:
-                deterministic_actions = torch.cat([action.unsqueeze(0) for action in deterministic_actions]).T.view(
-                                                        *deterministic_action_dim).detach().cpu().numpy()
-            return actions, noises, deterministic_actions
-        else:
-            raise NotImplementedError
+        if deterministic_actions is not None:
+            deterministic_actions = torch.cat([action.unsqueeze(0) for action in deterministic_actions]).T.view(
+                *deterministic_action_dim).detach().cpu().numpy()
+        return actions, noises, deterministic_actions
 
     def prepare_buffer(self, buffer):
         with torch.no_grad():  # compute reverse reward
@@ -506,8 +506,8 @@ class MultiEnvDiscretePPO(AgentPPO):
             advantages = torch.cat(advantages)
         return states, actions, r_sums, logprobs, advantages
 
-    def update_enemy_policy(self):
-        if self.enemy_act_update_iter > self.enemy_act_update_interval:
-            self.enemy_act_update_iter = 0
+    def update_enemy_policy(self, step):
+        if self.enemy_update_steps > self.enemy_act_update_interval:
+            self.enemy_update_steps = 0
             self.enemy_act.load_state_dict(self.act.state_dict())
-        self.enemy_act_update_iter += 1
+        self.enemy_update_steps += step

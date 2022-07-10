@@ -69,6 +69,8 @@ class VecEnvironments:
                 self.env_conns[index].send(self.envs[index].env.trainer_ids)
             elif request == "get_tester_ids":
                 self.env_conns[index].send(self.envs[index].env.nn_enemy_ids)
+            elif request == "stop":
+                break
             else:
                 raise NotImplementedError
 
@@ -100,6 +102,9 @@ class VecEnvironments:
     def get_tester_ids(self):
         [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
         return [agent_conn.recv() for agent_conn in self.agent_conns]
+
+    def stop(self):
+        [agent_conn.send(("stop", None)) for agent_conn in self.agent_conns]
 
 
 def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
