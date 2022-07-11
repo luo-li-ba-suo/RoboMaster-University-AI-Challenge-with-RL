@@ -9,6 +9,7 @@
 - entropy loss暂时去掉
 
 ## 环境部分
+- 进入robomaster2D, 使用指令"pip install -e ."就可以安装环境;运行./robomaster2D/robomaster2D/envs文件夹下的RMUA_Env_for_RL.py文件即可手动控制机器人来测试环境
 - 防止打死队友：瞄准敌人之后才允许射击（action mask）
 - 解决bug：如果子弹同时穿过障碍物与机器人，就会判定子弹撞上机器人，没有先后
   - 解决办法：在有障碍物的情况下，将子弹轨迹分成多段判断
