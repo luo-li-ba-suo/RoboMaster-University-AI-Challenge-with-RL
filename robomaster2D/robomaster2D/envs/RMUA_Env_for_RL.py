@@ -239,18 +239,21 @@ class RMUA_Multi_agent_Env(gym.Env):
             # reward -= 0.01 * robot.teammate_hit_record.behind.one_step
             # reward -= 0.002 * robot.teammate_hit_record.front.one_step
             # '''轮子撞墙、撞机器人'''
-            # reward -= 0.001 * robot.wheel_hit_obstacle_record.one_step
-            # reward -= 0.001 * robot.wheel_hit_wall_record.one_step
-            # reward -= 0.001 * robot.wheel_hit_robot_record.one_step
+            self.rewards[n]['wheel_hit'] = 0
+            self.rewards[n]['wheel_hit'] -= 0.001 * robot.wheel_hit_obstacle_record.one_step
+            self.rewards[n]['wheel_hit'] -= 0.001 * robot.wheel_hit_wall_record.one_step
+            self.rewards[n]['wheel_hit'] -= 0.001 * robot.wheel_hit_robot_record.one_step
             # '''装甲板撞墙'''
-            # reward -= 0.005 * robot.armor_hit_wall_record.left.one_step
-            # reward -= 0.005 * robot.armor_hit_wall_record.right.one_step
-            # reward -= 0.01 * robot.armor_hit_wall_record.behind.one_step
-            # reward -= 0.002 * robot.armor_hit_wall_record.front.one_step
-            # reward -= 0.005 * robot.armor_hit_obstacle_record.left.one_step
-            # reward -= 0.005 * robot.armor_hit_obstacle_record.right.one_step
-            # reward -= 0.01 * robot.armor_hit_obstacle_record.behind.one_step
-            # reward -= 0.002 * robot.armor_hit_obstacle_record.front.one_step
+            self.rewards[n]['hit_by_wall'] = 0
+            self.rewards[n]['hit_by_wall'] -= 0.005 * robot.armor_hit_wall_record.left.one_step
+            self.rewards[n]['hit_by_wall'] -= 0.005 * robot.armor_hit_wall_record.right.one_step
+            self.rewards[n]['hit_by_wall'] -= 0.01 * robot.armor_hit_wall_record.behind.one_step
+            self.rewards[n]['hit_by_wall'] -= 0.002 * robot.armor_hit_wall_record.front.one_step
+            self.rewards[n]['hit_by_obstacle'] = 0
+            self.rewards[n]['hit_by_obstacle'] -= 0.005 * robot.armor_hit_obstacle_record.left.one_step
+            self.rewards[n]['hit_by_obstacle'] -= 0.005 * robot.armor_hit_obstacle_record.right.one_step
+            self.rewards[n]['hit_by_obstacle'] -= 0.01 * robot.armor_hit_obstacle_record.behind.one_step
+            self.rewards[n]['hit_by_obstacle'] -= 0.002 * robot.armor_hit_obstacle_record.front.one_step
             # '''装甲板撞机器人'''
             # reward -= 0.005 * robot.armor_hit_robot_record.left.one_step
             # reward -= 0.005 * robot.armor_hit_robot_record.right.one_step
