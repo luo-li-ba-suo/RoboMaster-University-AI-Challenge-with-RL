@@ -1,8 +1,12 @@
 # Robomaster AI Challenge仿真环境
 
 ## 强化学习部分
-- TODO：actor网络最后一层权重用小std正交初始化
-- TODO：改relu为tanh
+- 奖励：
+  - TODO：增加与障碍物碰撞的惩罚
+- TODO：增加局部地图和卷积神经网络
+- actor网络最后一层权重用小std正交初始化
+- 改relu为tanh后效果反变差
+- entropy loss暂时去掉
 
 ## 环境部分
 - 防止打死队友：瞄准敌人之后才允许射击（action mask）
