@@ -291,7 +291,7 @@ class Engine(object):
                             if self.collision_bounce:
                                 self.acts[n].rotate_speed *= -self.state.robots[n].move_discount
                             else:
-                                self.acts[n].rotate_speed = self.state.robots[n].move_discount
+                                self.acts[n].rotate_speed = 0
                             self.state.robots[n].angle = p
 
                 # move x and y
@@ -311,7 +311,7 @@ class Engine(object):
                             if self.collision_bounce:
                                 self.acts[n].x_speed *= -self.state.robots[n].move_discount
                             else:
-                                self.acts[n].x_speed = self.state.robots[n].move_discount
+                                self.acts[n].x_speed = 0
                             self.state.robots[n].x = p
                     # y
                     p = self.state.robots[n].y
@@ -327,7 +327,7 @@ class Engine(object):
                             if self.collision_bounce:
                                 self.acts[n].y_speed *= -self.state.robots[n].move_discount
                             else:
-                                self.acts[n].y_speed = self.state.robots[n].move_discount
+                                self.acts[n].y_speed = 0
                             self.state.robots[n].y = p
                     self.state.robots[n].center = np.array([self.state.robots[n].x, self.state.robots[n].y])
                 else:

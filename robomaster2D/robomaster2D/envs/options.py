@@ -48,7 +48,7 @@ class Parameters:
 
     # 有关物理效果
     impact_effect = True
-    collision_bounce = True
+    collision_bounce = False
 
     # 有關信息處理
     lidar_num = 8

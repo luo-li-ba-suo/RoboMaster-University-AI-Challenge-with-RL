@@ -69,8 +69,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'target aimed action mask'
-        self.wandb_name = 'ppo_moreValidTarget_seed=' + str(self.random_seed)
+        self.wandb_notes = 'Cancel Collision Bounce'
+        self.wandb_name = 'ppo_CancelCollisionBounce_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
