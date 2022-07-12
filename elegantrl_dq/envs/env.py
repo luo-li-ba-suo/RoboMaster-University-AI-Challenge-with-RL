@@ -54,6 +54,7 @@ class VecEnvironments:
             self.env_conns[index].close()
 
     def run(self, index):
+        np.random.seed(index)
         self.agent_conns[index].close()
         while True:
             request, action = self.env_conns[index].recv()
