@@ -248,8 +248,8 @@ class Engine(object):
 
             # rotate yaw
             m = orders.set[n].shoot_target_enemy
-            m = get_alive_enemy_index(self.state, n, m)
-            if self.can_target_enemy_be_seen(n, m):
+            m = self.get_valid_target_index(n, m)
+            if m is not None:
                 self.acts[n].yaw_speed, enemy_aimed = self.auto_aim(n, m)
                 if enemy_aimed:
                     self.state.robots[n].aimed_enemy = m
@@ -257,19 +257,19 @@ class Engine(object):
                     self.state.robots[n].aimed_enemy = None
             else:
                 self.state.robots[n].aimed_enemy = None
-                # 加速：
-                if orders.set[n].yaw != 0:
-                    self.acts[n].yaw_speed += orders.set[n].yaw * self.state.robots[n].yaw_acceleration
-                # 因阻力减速
-                else:
-                    if self.acts[n].yaw_speed > 0: self.acts[n].yaw_speed -= self.state.robots[n].yaw_drag_acceleration
-                    if self.acts[n].yaw_speed < 0: self.acts[n].yaw_speed += self.state.robots[n].yaw_drag_acceleration
-                    if abs(self.acts[n].yaw_speed) < self.state.robots[n].yaw_drag_acceleration:
-                        self.acts[n].yaw_speed = 0
-                if self.acts[n].yaw_speed > self.state.robots[n].yaw_rotate_speed_max:
-                    self.acts[n].yaw_speed = self.state.robots[n].yaw_rotate_speed_max
-                if self.acts[n].yaw_speed < -self.state.robots[n].yaw_rotate_speed_max:
-                    self.acts[n].yaw_speed = -self.state.robots[n].yaw_rotate_speed_max
+                # # 加速：
+                # if orders.set[n].yaw != 0:
+                #     self.acts[n].yaw_speed += orders.set[n].yaw * self.state.robots[n].yaw_acceleration
+                # # 因阻力减速
+                # else:
+                #     if self.acts[n].yaw_speed > 0: self.acts[n].yaw_speed -= self.state.robots[n].yaw_drag_acceleration
+                #     if self.acts[n].yaw_speed < 0: self.acts[n].yaw_speed += self.state.robots[n].yaw_drag_acceleration
+                #     if abs(self.acts[n].yaw_speed) < self.state.robots[n].yaw_drag_acceleration:
+                #         self.acts[n].yaw_speed = 0
+                # if self.acts[n].yaw_speed > self.state.robots[n].yaw_rotate_speed_max:
+                #     self.acts[n].yaw_speed = self.state.robots[n].yaw_rotate_speed_max
+                # if self.acts[n].yaw_speed < -self.state.robots[n].yaw_rotate_speed_max:
+                #     self.acts[n].yaw_speed = -self.state.robots[n].yaw_rotate_speed_max
             self.acts[n].shoot = orders.set[n].shoot
 
     def move_robot(self):
@@ -340,6 +340,26 @@ class Engine(object):
         if m in np.where((self.state.camera_vision[n] == 1))[0]:
             return True
         return False
+
+    def get_valid_target_index(self, n, m):
+        assert m >= 0, 'get_valid_target_index error'
+        if n < self.state.robot_r_num:
+            m += self.state.robot_r_num
+        # 以下是敌人血量判断以及是否能观测到的判断，如果选中的敌人是死亡状态或不能观测，则不瞄准，自动换另一个敌人
+        if self.state.robots[m].hp == 0 or not self.can_target_enemy_be_seen(n, m):
+            if n < self.state.robot_r_num and self.state.robot_b_num > 1:
+                if m == self.state.robot_r_num:
+                    m += 1
+                else:
+                    m -= 1
+            elif n >= self.state.robot_r_num > 1:
+                if m == 0:
+                    m += 1
+                else:
+                    m -= 1
+            if self.state.robots[m].hp == 0 or not self.can_target_enemy_be_seen(n, m):
+                return None
+        return m
 
     def auto_aim(self, n, m):
         x = self.state.robots[m].x - self.state.robots[n].x
@@ -482,4 +502,3 @@ class Engine(object):
             self.state.robots[n].x = self.map.map_length + 10
         if self.state.robots[n].y > self.map.map_width + 10:
             self.state.robots[n].y = self.map.map_width + 10
-

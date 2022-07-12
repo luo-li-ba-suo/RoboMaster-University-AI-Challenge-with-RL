@@ -1,25 +1,6 @@
 import numpy as np
 
 
-def get_alive_enemy_index(state, n, m):
-    assert m >= 0, 'get_alive_enemy_index error'
-    if n < state.robot_r_num:
-        m += state.robot_r_num
-    # 以下是敌人血量判断，如果选中的敌人是死亡状态，则不瞄准，自动换另一个敌人
-    if state.robots[m].hp == 0:
-        if n < state.robot_r_num and state.robot_b_num > 1:
-            if m == state.robot_r_num:
-                m += 1
-            else:
-                m -= 1
-        elif n >= state.robot_r_num > 1:
-            if m == 0:
-                m += 1
-            else:
-                m -= 1
-    return m
-
-
 def get_armor_center(robot, i):
     rotate_matrix = np.array([[np.cos(-np.deg2rad(robot.angle + 90)), -np.sin(-np.deg2rad(robot.angle + 90))],
                               [np.sin(-np.deg2rad(robot.angle + 90)), np.cos(-np.deg2rad(robot.angle + 90))]])
