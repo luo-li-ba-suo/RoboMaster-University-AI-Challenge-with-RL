@@ -213,7 +213,7 @@ class User_Interface(object):
         else:
             self.state.render_per_frame = 600
         if self.训练模式:
-            self.state.render_per_frame = 4000
+            self.state.render_per_frame = 600
             self.screen.fill(self.gray)
             self.buttons.render(self.screen, 'training')
             self.update_state_data()
