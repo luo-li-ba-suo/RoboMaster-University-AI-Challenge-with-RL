@@ -3,6 +3,7 @@
 ## 强化学习部分
 - 奖励：
   - TODO：增加与障碍物碰撞的惩罚
+- TODO: update obs space(such as velocity)
 - TODO：增加局部地图和卷积神经网络
 - actor网络最后一层权重用小std正交初始化
 - 改relu为tanh后效果反变差
