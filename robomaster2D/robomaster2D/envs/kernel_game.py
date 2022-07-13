@@ -446,7 +446,8 @@ class Simulator(object):
     '''
 
     def tick(self):
-        time.sleep(self.delay_per_frame)
+        if self.render_inited:
+            time.sleep(self.delay_per_frame)
         self.state.tick()  # 更新时间和buff等
         # 如果时间未到，则直接返回
         if self.state.if_not_started_yet():
