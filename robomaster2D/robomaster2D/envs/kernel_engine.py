@@ -257,6 +257,7 @@ class Engine(object):
                     self.state.robots[n].aimed_enemy = None
             else:
                 self.state.robots[n].aimed_enemy = None
+                self.acts[n].yaw_speed = 0
                 # # 加速：
                 # if orders.set[n].yaw != 0:
                 #     self.acts[n].yaw_speed += orders.set[n].yaw * self.state.robots[n].yaw_acceleration
