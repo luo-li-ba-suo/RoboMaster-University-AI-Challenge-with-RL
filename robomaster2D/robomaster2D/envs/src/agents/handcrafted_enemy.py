@@ -1,52 +1,11 @@
 from robomaster2D.envs.src.agents_common import *
 
 
-class My_Agent(object):
+class My_Agent(Base_Agent):
     def __init__(self, _id, options):
-        self.id = _id
+        super().__init__(_id, options)
         self.name = 'handcrafted_enemy'
-        self.robot_blue_num = options.robot_b_num
-        self.robot_red_num = options.robot_r_num
-        self.num_robots = options.robot_b_num if _id else options.robot_r_num
-        self.num_enemy_robots = options.robot_r_num if _id else options.robot_b_num
-        self.robot_ids = [(i + self.robot_red_num if _id else i) for i in range(self.num_robots)]
-        self.orders = Orders_set(self.num_robots)
-        self.keyboard_orders = [{'forward': 'K_w', 'backward': 'K_s', 'left': 'K_q', 'right': 'K_e',
-                                 'left_rotate': 'K_a', 'right_rotate': 'K_d',
-                                 'yaw_left': 'K_z', 'yaw_right': 'K_c', 'shoot': 'K_SPACE'},
-                                {'forward': 'K_p', 'backward': 'K_SEMICOLON', 'left': 'K_o', 'right': 'K_LEFTBRACKET',
-                                 'left_rotate': 'K_l', 'right_rotate': 'K_QUOTE',
-                                 'yaw_left': 'K_PERIOD', 'yaw_right': 'K_SLASH', 'shoot': 'K_RSHIFT'},
-                                {'forward': 'K_u', 'backward': 'K_j', 'left': 'K_y', 'right': 'K_i',
-                                 'left_rotate': 'K_h', 'right_rotate': 'K_k',
-                                 'yaw_left': 'K_n', 'yaw_right': 'K_COMMA', 'shoot': 'K_v'},
-                                {'forward': 'K_KP8', 'backward': 'K_KP5', 'left': 'K_KP7', 'right': 'K_KP9',
-                                 'left_rotate': 'K_KP4', 'right_rotate': 'K_KP6',
-                                 'yaw_left': 'K_KP1', 'yaw_right': 'K_KP3', 'shoot': 'K_DOWN'}]
-        self.keyboard_orders = self.keyboard_orders[2: self.num_robots + 2] if _id else \
-            self.keyboard_orders[0:self.num_robots]  # 蓝色和红色各自专用按键
-        self.action_type = options.action_type
-        self.actions = None
-        # self.state = {'x': [0, 808],
-        #               'y': [0, 448],
-        #               'angle': [-180, 180],
-        #               'yaw': [-90, 90],
-        #               'hp': [0, 2000],
-        #               'heat': [0, 400],
-        #               'freeze_time[0]': [0, 2000],
-        #               'freeze_time[1]': [0, 2000],
-        #               'bullet': [0, 500]
-        #               }
-        self.state = {'x': [0, 808],
-                      'y': [0, 448],
-                      'hp': [0, 1000],
-                      'angle': [-180, 180],
-                      'vx': [-10, 10],
-                      'vy': [-10, 10]
-                      # 'bullet': [0, 500]
-                      }
         self.frame = 0
-
 
     def Issue_Orders(self, game_state):  # 根据状态直接产生动作
         self.orders.reset()
@@ -71,7 +30,6 @@ class My_Agent(object):
                 if key_board_order['shoot'] in event:
                     self.orders.set[i].shoot += 1
         return self.orders
-
 
     def decode_actions(self, game_state, actions=None):  # 根据动作编码，解码产生动作
         # if not self.frame%10:
