@@ -59,7 +59,7 @@ class Configs:
 
         '''Arguments for algorithm'''
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0  # could be 0.02
+        self.lambda_entropy = 0.01  # could be 0.02
         self.lambda_gae_adv = 0.98
 
         '''Arguments for self play '''
@@ -69,8 +69,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'velocity_added'
-        self.wandb_name = 'ppo_ObsAddVxVy_seed=' + str(self.random_seed)
+        self.wandb_notes = 'Add Low Barrier'
+        self.wandb_name = 'ppo_AddLowBarrier_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -296,4 +296,4 @@ def train_and_evaluate(args):
     print(f'| **** Training Finished **** | UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
     if wandb_run:
         wandb_run.finish()
-    os.kill(int(process_info()['pid']), signal.SIGKILL)
+    # os.kill(int(process_info()['pid']), signal.SIGKILL)

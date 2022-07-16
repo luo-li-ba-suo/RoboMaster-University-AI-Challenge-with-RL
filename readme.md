@@ -1,15 +1,25 @@
 # Robomaster AI Challenge仿真环境
 
+
+## 下一步计划关键部分：
+计划参考捉迷藏工程
+### 对障碍物进行建模
+- 方法1：构建含障碍物的局部地图
+- 方法2：构建雷达点云地图
+### 构建行为树
+
+
+
 ## 强化学习部分
 - 奖励：
   - TODO：增加与障碍物碰撞的惩罚
 - TODO: update obs space(such as velocity)
-- TODO：增加局部地图和卷积神经网络
 - actor网络最后一层权重用小std正交初始化
 - 改relu为tanh后效果反变差
 - entropy loss暂时去掉
 
 ## 环境部分
+- 新增障碍物类型。场地中有两种不同高度的障碍物，较矮的障碍物只能阻挡机器人前进不能阻挡子弹，标记为1,其他的标记为0
 - 进入robomaster2D, 使用指令"pip install -e ."就可以安装环境;运行./robomaster2D/robomaster2D/envs文件夹下的RMUA_Env_for_RL.py文件即可手动控制机器人来测试环境
 - 防止打死队友：瞄准敌人之后才允许射击（action mask）
 - 解决bug：如果子弹同时穿过障碍物与机器人，就会判定子弹撞上机器人，没有先后

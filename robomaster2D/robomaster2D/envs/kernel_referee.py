@@ -199,9 +199,11 @@ class Referee(object):
         else:
             return False
 
-    def line_barriers_check(self, l1, l2):
+    def line_barriers_check(self, l1, l2, if_bullet=False):
         for i, b in enumerate(self.map.barriers):
-
+            # 如果判断的是子弹，且该障碍物是矮障碍物，则不判断
+            if if_bullet and self.map.barriers_mode[i] == 1:
+                continue
             sq = [b[0], b[2], b[1], b[3]]
             if i == 4:
                 if self.line_prismatic_check(l1, l2, sq): return True
@@ -260,7 +262,7 @@ class Referee(object):
                 last_center = np.array(next_center)
                 next_center += dis_segment
                 # bullet barrier check
-                if self.line_barriers_check(next_center, last_center): return True
+                if self.line_barriers_check(next_center, last_center, if_bullet=True): return True
                 # bullet armor check
                 if self.check_bullet_hit_robot(bullet.owner, next_center, last_center, act_feedback, check_dis=65):
                     return True

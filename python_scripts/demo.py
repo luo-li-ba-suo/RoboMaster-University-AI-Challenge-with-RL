@@ -33,8 +33,8 @@ def demo_discrete_action():
     args.config.if_print_time = True
     args.config.if_train = True
     args.config.self_play = True
-    # args.cwd = '2022-05-14_21-13-49-perfect'
-    # args.enemy_cwd = '2022-05-10_17-33-26'
+    # args.config.cwd = '2022-07-13_10-02-20'
+    # args.config.enemy_cwd = 'init_model'
 
     if args.config.if_multi_processing and args.config.if_train:
         args.agent = MultiEnvDiscretePPO()

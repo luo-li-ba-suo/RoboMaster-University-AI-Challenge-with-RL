@@ -489,7 +489,8 @@ class Simulator(object):
                 self.state.relative_angle[n, n - i - 1] = angle
                 camera_can_see = abs(angle) < self.state.robots[n].camera_angle
                 obstacle_block = self.module_referee.line_barriers_check(self.state.robots[n].center,
-                                                                         self.state.robots[n - i - 1].center) \
+                                                                         self.state.robots[n - i - 1].center,
+                                                                         if_bullet=True) \
                                  or self.module_referee.line_robots_check(self.state.robots[n].center,
                                                                           self.state.robots[n - i - 1].center)
                 dist = (x ** 2 + y ** 2) ** 0.5
