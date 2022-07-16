@@ -10,6 +10,7 @@ class Base_Agent(object):
         self.enemy_num = options.robot_r_num if _id else options.robot_b_num
         # robot id 表示agent对应的robot在kernel_game中的索引
         self.robot_ids = [(i + self.robot_red_num if _id else i) for i in range(self.num_robots)]
+        self.enemy_ids = [(i if _id else i + self.robot_red_num) for i in range(self.enemy_num)]
         self.action_type = options.action_type
         self.orders = Orders_set(self.num_robots)
         if self.action_type == 'Hybrid':
@@ -40,7 +41,8 @@ class Orders(object):  # 指令
         self.yaw = yaw  # -1~1	云台，-1：左转，0：不动，1：右转	b/m
         self.shoot_target_enemy = 0
         self.do_route_plan = do_route_plan
-        self.freq_update_goal = 20
+        self.stop = False
+        self.freq_update_goal = 5
         self.dir_relate_to_map = dir_relate_to_map
         self.swing = swing
 

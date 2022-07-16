@@ -1,6 +1,6 @@
 from robomaster2D.envs.kernel_referee import *
 from robomaster2D.envs.kernel_objects import Bullet
-import ctypes
+from robomaster2D.envs.kernel_route_plan import Route_Plan
 
 
 class Acts(object):  # 底层动作
@@ -46,77 +46,6 @@ class Act_feedback(object):
         #                                    {'behind': [], 'front': [], 'left': [], 'right': [], 'not_armor': []},
         #                                    {'behind': [], 'front': [], 'left': [], 'right': [],
         #                                     'not_armor': []}]  # 存放碰撞对象
-
-
-class Route_Plan(object):
-    def __init__(self, options):
-        self.blocks = []  # 障碍物
-        self.goals = {}
-        self.kernel_astar = []
-        self.robot_num = options.robot_r_num + options.robot_b_num
-        ll = ctypes.cdll.LoadLibrary
-        for n in range(self.robot_num):
-            self.kernel_astar.append(ll("./build/libicra_planning_0.so"))
-            self.kernel_astar[-1].init()
-        buff_red = [True, True, False, False, True, True] if options.buff_mode else []
-        buff_blue = [False, False, True, True, True, True] if options.buff_mode else []
-        block_robot = [True] * self.robot_num
-        self.block_info = []
-        for n in range(options.robot_r_num):
-            block_robot_copy = block_robot.copy()
-            block_robot_copy[n] = False
-            self.block_info.append(block_robot_copy + buff_red.copy())
-        for n in range(options.robot_b_num):
-            block_robot_copy = block_robot.copy()
-            block_robot_copy[n + options.robot_r_num] = False
-            self.block_info.append(block_robot_copy + buff_blue.copy())
-        '''
-        For example: four robots
-                            rhp   rbu   bhp     bbu    ns    nm    r1     r2    b1    b2
-        self.block_info = [[True, True, False, False, True, True, False, True, True, True],
-                           [True, True, False, False, True, True, True, False, True, True],
-                           [False, False, True, True, True, True, True, True, False, True],
-                           [False, False, True, True, True, True, True, True, True, False]]
-        '''
-        self.is_navs = [False] * self.robot_num
-
-    def show_blocks(self, agent_idx):
-        self.kernel_astar[agent_idx].show_blocks()
-
-    def reset_goal(self, goal, agent_idx):
-        self.kernel_astar[agent_idx].set_goal(goal)
-        self.goals[agent_idx] = goal
-
-    def reset_block(self, blocks):
-        for n in range(self.robot_num):
-            self.kernel_astar[n].clean_obstacle()
-            for n_block in range(len(self.block_info[n])):
-                if self.block_info[n][n_block]:
-                    self.kernel_astar[n].add_obstacle(int(blocks[n_block][0]),
-                                                      int(blocks[n_block][1]),
-                                                      int(blocks[n_block][2]),
-                                                      int(blocks[n_block][3]),
-                                                      int(blocks[n_block][4]),
-                                                      int(blocks[n_block][5]),
-                                                      int(blocks[n_block][6]),
-                                                      int(blocks[n_block][7]))
-
-    def update_plan(self, x, y, angle, robot_idx):
-        self.kernel_astar[robot_idx].update_pos.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
-        self.kernel_astar[robot_idx].update_pos(
-            ctypes.c_double(x),
-            ctypes.c_double(y),
-            ctypes.c_double(angle))
-        self.kernel_astar[robot_idx].path_plan()
-        self.kernel_astar[robot_idx].get_robot_vx.restype = ctypes.c_double
-        self.kernel_astar[robot_idx].get_robot_vy.restype = ctypes.c_double
-        self.kernel_astar[robot_idx].get_robot_angular.restype = ctypes.c_double
-        vx = self.kernel_astar[robot_idx].get_robot_vx()
-        vy = self.kernel_astar[robot_idx].get_robot_vy()
-        vr = self.kernel_astar[robot_idx].get_robot_angular()
-        is_Nav = self.kernel_astar[robot_idx].isNav()
-
-        return vx, vy, vr, is_Nav
 
 
 class Engine(object):
@@ -181,7 +110,16 @@ class Engine(object):
                 break
         return self.act_feedback
 
+    def cal_blocks(self):
+        self.blocks = []
+        for n in range(self.robot_num):
+            wheels = check_points_wheel(self.state.robots[n])
+            self.blocks.append((wheels[0]).tolist() + (wheels[6]).tolist()
+                               + (wheels[7]).tolist() + (wheels[1]).tolist())
+
     def orders_to_acts(self, orders):  # 将指令转化为底层动作
+        if self.route_plan:
+            self.cal_blocks()
         # turn orders to acts
         self.orders_text = ['' for n in range(self.robot_num)]
         for n in range(self.robot_num):
@@ -232,19 +170,40 @@ class Engine(object):
                     self.acts[n].rotate_speed = -self.state.robots[n].rotate_speed_max
                 self.acts[n].dir_relate_to_map = False
             elif self.route_plan is not None:  # 如果使用路径规划
-                if not self.state.frame % orders.set[n].freq_update_goal:
-                    goal = [int(orders.set[n].x), int(orders.set[n].y)]
-                    self.route_plan.reset_goal(goal, n)
-                vx, vy, vr, is_Nav = self.route_plan.update_plan(self.state.robots[n].x,
-                                                                 self.state.robots[n].y,
-                                                                 self.state.robots[n].angle)
-
-                self.acts[n].x_speed = vy
-                self.acts[n].y_speed = vx
-                self.acts[n].rotate_speed = vr * 0.005
-                self.acts[n].dir_relate_to_map = orders[n].dir_relate_to_map
-            else:
-                print('Fail to transform orders to actions')
+                if not orders.set[n].stop:
+                    if not self.state.frame % orders.set[n].freq_update_goal:
+                        re_plan = True
+                        goal = [int(orders.set[n].x), int(orders.set[n].y)]
+                        self.route_plan.reset_goal(goal, n)
+                    else:
+                        re_plan = False
+                    vx, vy, vr, is_Nav = self.route_plan.update_plan(self.state.robots[n].x,
+                                                                     self.state.robots[n].y,
+                                                                     self.state.robots[n].angle,
+                                                                     n,
+                                                                     blocks=self.blocks,
+                                                                     re_plan=re_plan)
+                    self.acts[n].x_speed = vx
+                    self.acts[n].y_speed = vy
+                    self.acts[n].rotate_speed = vr
+                    # 限速：
+                    if self.acts[n].x_speed >= self.state.robots[n].speed_max:
+                        self.acts[n].x_speed = self.state.robots[n].speed_max
+                    if self.acts[n].x_speed <= -self.state.robots[n].speed_max:
+                        self.acts[n].x_speed = -self.state.robots[n].speed_max
+                    if self.acts[n].y_speed >= self.state.robots[n].speed_max:
+                        self.acts[n].y_speed = self.state.robots[n].speed_max
+                    if self.acts[n].y_speed <= -self.state.robots[n].speed_max:
+                        self.acts[n].y_speed = -self.state.robots[n].speed_max
+                    if self.acts[n].rotate_speed > self.state.robots[n].rotate_speed_max:
+                        self.acts[n].rotate_speed = self.state.robots[n].rotate_speed_max
+                    if self.acts[n].rotate_speed < -self.state.robots[n].rotate_speed_max:
+                        self.acts[n].rotate_speed = -self.state.robots[n].rotate_speed_max
+                    self.acts[n].dir_relate_to_map = orders.set[n].dir_relate_to_map
+                else:
+                    self.acts[n].x_speed = self.acts[n].y_speed = self.acts[n].rotate_speed = 0
+            # else:
+            #     print('Fail to transform orders to actions')
 
             # rotate yaw
             m = orders.set[n].shoot_target_enemy

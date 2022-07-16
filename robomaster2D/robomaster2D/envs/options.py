@@ -10,7 +10,7 @@ class Parameters:
 
     superQuiet = True
     show_poses = False
-    do_route_plan = False
+    do_route_plan = True
     buff_mode = False
     rotate_by_route_plan = False
     episode_time = 180
