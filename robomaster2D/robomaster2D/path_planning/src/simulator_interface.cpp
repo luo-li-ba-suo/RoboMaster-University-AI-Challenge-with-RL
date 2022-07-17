@@ -7,15 +7,8 @@ namespace critical_hit_planning
     double pos_x, pos_y, pos_angle;
     double vx = 0, vy = 0, angular = 0, path_angular=0;
     Planning plan;
-    int pos = 0;
     extern "C"
     {
-        void pp(){
-            pos += 1;
-        }
-        void print(){
-            std::cout<<"\n"<<"pos "<<pos<<"\n";
-        }
         void init(bool render = true)
         {
             plan.show_map = render;
@@ -72,15 +65,20 @@ namespace critical_hit_planning
             }
         }
 
+        void add_obstacle(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4)
+        {
+            plan.add_block(x1/5, y1/5, x2/5, y2/5, x3/5, y3/5, x4/5, y4/5);
+        }
+        void clean_obstacle()
+        {
+            plan.clean_block();
+        }
 
-    void add_obstacle(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4)
-    {
-        plan.add_block(x1/5, y1/5, x2/5, y2/5, x3/5, y3/5, x4/5, y4/5);
-    }
-    void clean_obstacle()
-    {
-        plan.clean_block();
-    }
-
+        int** get_block_map()
+        {
+            static int block_map[45][81];
+            plan.get_block_map(block_map);
+            return (int **)block_map;
+        }
     }
 }

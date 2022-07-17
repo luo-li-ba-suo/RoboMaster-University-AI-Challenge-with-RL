@@ -241,4 +241,9 @@ namespace critical_hit_planning
         cv::imshow("plan_debug", icra_map_);
         if(cv::waitKey(1)==1) show_map = false;
     }
+
+    void Planning::get_block_map(int (*out_map)[81])
+    {
+        IcraMap_.get_block_map(out_map);
+    }
 } // namespace critical_hit_planning

@@ -30,6 +30,10 @@ namespace critical_hit_planning
         void add_block(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4);
         void set_map();
         bool show_map = true;
+
+        // Added by Kideng
+        void get_block_map(int (*out_map)[81]);
+
         private:
         cv::Mat icra_map_;
         Map IcraMap_;

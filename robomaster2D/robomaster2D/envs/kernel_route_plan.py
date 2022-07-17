@@ -1,6 +1,8 @@
 import ctypes
 import os
 
+import numpy as np
+
 
 class Route_Plan(object):
     def __init__(self, options):
@@ -52,6 +54,17 @@ class Route_Plan(object):
 
     def reset_goal(self, goal, robot_idx):
         self.goals[robot_idx] = goal
+
+    def get_obstacle_map(self, robot_idx):
+        f = self.kernel_astar[robot_idx].get_block_map
+        f.restype = ctypes.POINTER((ctypes.c_int * 81) * 45)
+        mat = []
+        for i in f().contents:
+            mat.append([])
+            for j in i:
+                j = 0 if j > 200 else 1
+                mat[-1].append(j)
+        return np.array(mat)
 
     def update_plan(self, x, y, angle, robot_idx, blocks=None, re_plan=True):
         success = False

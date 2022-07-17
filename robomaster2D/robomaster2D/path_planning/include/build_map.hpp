@@ -69,6 +69,18 @@ namespace critical_hit_planning
             int npt[] = {4};
             cv::fillPoly(map_img_, ppt, npt, 1, cv::Scalar(0));
         }
+        void get_block_map(int (*out_map)[81]) const
+        {
+            cv::Mat map_img_resized;
+            cv::resize(map_img_, map_img_resized, cv::Size(81, 45));
+            for(int i=0;i<map_img_resized.rows;++i)
+            {
+                for(int j=0;j<map_img_resized.cols;++j)
+                {
+                    out_map[i][j] = int(map_img_resized.ptr<uchar>(i)[j]);
+                }
+            }
+        }
         cv::Mat map_img_;
         cv::Mat map_img_original;
         cv::Mat costmap_;
