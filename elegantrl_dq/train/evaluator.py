@@ -101,14 +101,14 @@ class Evaluator:
                 '''save record in logger'''
                 train_infos = {'Epoch': self.epoch,
                                str(self.agent_id) + '_MaxR': self.r_max,
-                               str(self.agent_id) + '_avgR': log_tuple[3],
+                               'avgR': log_tuple[3],
                                str(self.agent_id) + '_avgR_eval': r_avg,
                                str(self.agent_id) + '_stdR_eval': r_std,
                                str(self.agent_id) + '_avgS_eval': s_avg,
                                str(self.agent_id) + '_stdS_eval': s_std,
-                               str(self.agent_id) + '_objC': log_tuple[0],
-                               str(self.agent_id) + '_objA': log_tuple[1],
-                               str(self.agent_id) + '_logprob': log_tuple[2]}
+                               'objC': log_tuple[0],
+                               'objA': log_tuple[1],
+                               'log-prob': log_tuple[2]}
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
             self.epoch += 1
