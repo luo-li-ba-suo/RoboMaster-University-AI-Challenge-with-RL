@@ -1,4 +1,5 @@
 import ctypes
+import os
 
 
 class Route_Plan(object):
@@ -12,14 +13,16 @@ class Route_Plan(object):
         if options.red_agents_path == 'src.agents.handcrafted_enemy':
             for i in range(options.robot_r_num):
                 self.robot_ids.append(i)
-                self.kernel_astar[i] = ll(f"../path_planning/cmake-build-debug/libicra_planning_{i}.so")
+                self.kernel_astar[i] = ll(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                       f"../path_planning/cmake-build-debug/libicra_planning.so"))
                 self.kernel_astar[i].init(False)
         if options.blue_agents_path == 'src.agents.handcrafted_enemy':
             for i in range(options.robot_b_num):
                 self.robot_ids.append(i + options.robot_r_num)
                 self.kernel_astar[i + options.robot_r_num] = \
-                    ll(f"../path_planning/cmake-build-debug/libicra_planning_{i + options.robot_r_num}.so")
-                self.kernel_astar[i + options.robot_r_num].init(True)
+                    ll(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                    f"../path_planning/cmake-build-debug/libicra_planning.so"))
+                self.kernel_astar[i + options.robot_r_num].init(False)
         buff_red = [True, True, False, False, True, True] if options.buff_mode else []
         buff_blue = [False, False, True, True, True, True] if options.buff_mode else []
         block_robot = [True] * self.robot_num
@@ -43,6 +46,7 @@ class Route_Plan(object):
         self.is_navs = [False] * self.robot_num
 
         self.frame = 0
+
     def show_blocks(self, agent_idx):
         self.kernel_astar[agent_idx].show_blocks()
 
@@ -50,34 +54,45 @@ class Route_Plan(object):
         self.goals[robot_idx] = goal
 
     def update_plan(self, x, y, angle, robot_idx, blocks=None, re_plan=True):
-        self.kernel_astar[robot_idx].clean_obstacle()
-        self.kernel_astar[robot_idx].set_goal(self.goals[robot_idx][0], self.goals[robot_idx][1])
-        if blocks is not None:
-            for n_block in range(len(self.block_info[robot_idx])):
-                if self.block_info[robot_idx][n_block]:
-                    self.kernel_astar[robot_idx].add_obstacle(int(blocks[n_block][0]),
-                                                              int(blocks[n_block][1]),
-                                                              int(blocks[n_block][2]),
-                                                              int(blocks[n_block][3]),
-                                                              int(blocks[n_block][4]),
-                                                              int(blocks[n_block][5]),
-                                                              int(blocks[n_block][6]),
-                                                              int(blocks[n_block][7]))
-        self.kernel_astar[robot_idx].update_pos.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
-        self.kernel_astar[robot_idx].update_pos(
-            ctypes.c_double(x),
-            ctypes.c_double(y),
-            ctypes.c_double(angle))
-        if re_plan:
-            self.kernel_astar[robot_idx].path_plan()
-        self.kernel_astar[robot_idx].get_robot_vx.restype = ctypes.c_double
-        self.kernel_astar[robot_idx].get_robot_vy.restype = ctypes.c_double
-        self.kernel_astar[robot_idx].get_robot_angular.restype = ctypes.c_double
-        vx = self.kernel_astar[robot_idx].get_robot_vx() * 20
-        vy = self.kernel_astar[robot_idx].get_robot_vy() * 20
-        vr = self.kernel_astar[robot_idx].get_robot_angular() * 0.05
+        success = False
+        vx = vy = vr = is_Nav = None
+        while not success:
+            try:
+                self.kernel_astar[robot_idx].clean_obstacle()
+                self.kernel_astar[robot_idx].set_goal(self.goals[robot_idx][0], self.goals[robot_idx][1])
+                if blocks is not None:
+                    for n_block in range(len(self.block_info[robot_idx])):
+                        if self.block_info[robot_idx][n_block]:
+                            self.kernel_astar[robot_idx].add_obstacle(int(blocks[n_block][0]),
+                                                                      int(blocks[n_block][1]),
+                                                                      int(blocks[n_block][2]),
+                                                                      int(blocks[n_block][3]),
+                                                                      int(blocks[n_block][4]),
+                                                                      int(blocks[n_block][5]),
+                                                                      int(blocks[n_block][6]),
+                                                                      int(blocks[n_block][7]))
+                self.kernel_astar[robot_idx].update_pos.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
+                self.kernel_astar[robot_idx].update_pos(
+                    ctypes.c_double(x),
+                    ctypes.c_double(y),
+                    ctypes.c_double(angle))
+                if re_plan:
+                    self.kernel_astar[robot_idx].path_plan()
+                self.kernel_astar[robot_idx].get_robot_vx.restype = ctypes.c_double
+                self.kernel_astar[robot_idx].get_robot_vy.restype = ctypes.c_double
+                self.kernel_astar[robot_idx].get_robot_angular.restype = ctypes.c_double
+                vx = self.kernel_astar[robot_idx].get_robot_vx() * 20
+                vy = self.kernel_astar[robot_idx].get_robot_vy() * 20
+                vr = self.kernel_astar[robot_idx].get_robot_angular() * 0.05
 
-        is_Nav = self.kernel_astar[robot_idx].isNav()
+                is_Nav = self.kernel_astar[robot_idx].isNav()
+                success = True
+            except BaseException as e:
+                print("RoutePlanningRuined")
+                print(e)
+                ll = ctypes.cdll.LoadLibrary
+                self.kernel_astar[robot_idx] = ll(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                       f"../path_planning/cmake-build-debug/libicra_planning.so"))
         return vx, vy, vr, is_Nav
 
 

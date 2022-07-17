@@ -38,7 +38,6 @@ class VecEnvironments:
         self.env_num = env_num
         print(f"\n{env_num} envs launched \n")
         self.if_multi_processing = True
-        self.agent_conns, self.env_conns = zip(*[mp.Pipe() for _ in range(env_num)])
         self.envs = [PreprocessEnv(env_name, if_print=True if env_id == 0 else False) for env_id in range(env_num)]
         self.state_dim = self.envs[0].state_dim
         self.action_dim = self.envs[0].action_dim
@@ -48,10 +47,13 @@ class VecEnvironments:
         self.env_name = self.envs[0].env_name
         self.args = self.envs[0].env.args
         self.max_step = self.envs[0].max_step
-        for index in range(env_num):
-            process = mp.Process(target=self.run, args=(index,))
-            process.start()
-            self.env_conns[index].close()
+
+        if env_num > 1:
+            self.agent_conns, self.env_conns = zip(*[mp.Pipe() for _ in range(env_num)])
+            for index in range(env_num):
+                process = mp.Process(target=self.run, args=(index,))
+                process.start()
+                self.env_conns[index].close()
 
     def run(self, index):
         np.random.seed(index)
@@ -76,36 +78,59 @@ class VecEnvironments:
                 raise NotImplementedError
 
     def render(self, index=0):
-        self.agent_conns[index].send(("render", None))
+        if self.env_num > 1:
+            self.agent_conns[index].send(("render", None))
+        else:
+            self.envs[index].render()
 
     def display_characters(self, characters, index=0):
-        self.agent_conns[index].send(("display_characters", characters))
+        if self.env_num > 1:
+            self.agent_conns[index].send(("display_characters", characters))
+        else:
+            self.envs[index].env.display_characters(characters)
 
     def reset(self):
-        [agent_conn.send(("reset", None)) for agent_conn in self.agent_conns]
-        curr_states = [agent_conn.recv() for agent_conn in self.agent_conns]
+        if self.env_num > 1:
+            [agent_conn.send(("reset", None)) for agent_conn in self.agent_conns]
+            curr_states = [agent_conn.recv() for agent_conn in self.agent_conns]
+        else:
+            curr_states = [self.envs[0].reset()]
         return np.array(curr_states)
 
     def step(self, actions):
-        [agent_conn.send(("step", action)) for agent_conn, action in zip(self.agent_conns, actions)]
-        states, rewards, dones, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
-        states = list(states)
-        for env_id in range(self.env_num):
-            if dones[env_id]:
-                self.agent_conns[env_id].send(("reset", None))
-                states[env_id] = self.agent_conns[env_id].recv()
+        if self.env_num > 1:
+            [agent_conn.send(("step", action)) for agent_conn, action in zip(self.agent_conns, actions)]
+            states, rewards, dones, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
+            states = list(states)
+            for env_id in range(self.env_num):
+                if dones[env_id]:
+                    self.agent_conns[env_id].send(("reset", None))
+                    states[env_id] = self.agent_conns[env_id].recv()
+        else:
+            states, rewards, dones, infos = self.envs[0].step(actions[0])
+            states, rewards, dones, infos = [states], [rewards], [dones], [infos]
+            if dones:
+                states = [self.envs[0].reset()]
         return np.array(states), np.array(rewards), dones, infos
 
     def get_trainer_ids(self):
-        [agent_conn.send(("get_trainer_ids", None)) for agent_conn in self.agent_conns]
-        return [agent_conn.recv() for agent_conn in self.agent_conns]
+        if self.env_num > 1:
+            [agent_conn.send(("get_trainer_ids", None)) for agent_conn in self.agent_conns]
+            return [agent_conn.recv() for agent_conn in self.agent_conns]
+        else:
+            return [self.envs[0].env.trainer_ids]
 
     def get_tester_ids(self):
-        [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
-        return [agent_conn.recv() for agent_conn in self.agent_conns]
+        if self.env_num > 1:
+            [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
+            return [agent_conn.recv() for agent_conn in self.agent_conns]
+        else:
+            return [self.envs[0].env.nn_enemy_ids]
 
     def stop(self):
-        [agent_conn.send(("stop", None)) for agent_conn in self.agent_conns]
+        if self.env_num > 1:
+            [agent_conn.send(("stop", None)) for agent_conn in self.agent_conns]
+        del self.envs
 
 
 def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):

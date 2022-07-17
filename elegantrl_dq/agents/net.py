@@ -162,7 +162,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
         result = self.forward(state)
         stochastic_action = a_prob = deterministic_action = None
         if stochastic is 0 and deterministic is 0:
-            stochastic_action, a_prob = self.get_stochastic_action(result)
+            stochastic_action = a_prob = None
         else:
             if stochastic:
                 result_stochastic = result[0:stochastic]

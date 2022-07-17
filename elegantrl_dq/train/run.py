@@ -69,8 +69,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'Add Low Barrier'
-        self.wandb_name = 'ppo_AddLowBarrier_seed=' + str(self.random_seed)
+        self.wandb_notes = 'AStarEnemy'
+        self.wandb_name = 'ppo_AStarEnemy_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -269,7 +269,7 @@ def train_and_evaluate(args):
             trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
-            if time.time() - start_explore > 50:
+            if time.time() - start_explore > 45:
                 env.stop()
                 break
             start_update_net = time.time()

@@ -390,9 +390,12 @@ class MultiEnvDiscretePPO(AgentPPO):
             deterministic_num = sum([len(l) for l in last_testers_envs])
             trainer_actions, actions_prob, _ = self.select_action(states_concatenate, self.act,
                                                                   stochastic_num, 0)
-            _, _, tester_actions = self.select_action(
-                states_concatenate[stochastic_num:stochastic_num + deterministic_num], self.enemy_act,
-                0, deterministic_num)
+            if deterministic_num == 0:
+                tester_actions = None
+            else:
+                _, _, tester_actions = self.select_action(
+                    states_concatenate[stochastic_num:stochastic_num + deterministic_num], self.enemy_act,
+                    0, deterministic_num)
             trainer_i = tester_i = 0
             for env_id in range(env.env_num):
                 for trainer_id in last_trainers_envs[env_id]:
@@ -466,7 +469,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         actions, noises, deterministic_actions = act.get_action(states, stochastic,
                                                                 deterministic)  # plan to be get_action_a_noise
 
-        if isinstance(actions, list):  # 如果是Multi-Discrete
+        if actions is not None:  # 如果是Multi-Discrete
             actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
             noises = [noise.view(*action_dim).detach().cpu().numpy() for noise in noises]
         if deterministic_actions is not None:

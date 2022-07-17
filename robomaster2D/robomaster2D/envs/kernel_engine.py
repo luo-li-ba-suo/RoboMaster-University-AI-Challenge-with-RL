@@ -202,8 +202,8 @@ class Engine(object):
                     self.acts[n].dir_relate_to_map = orders.set[n].dir_relate_to_map
                 else:
                     self.acts[n].x_speed = self.acts[n].y_speed = self.acts[n].rotate_speed = 0
-            # else:
-            #     print('Fail to transform orders to actions')
+            else:
+                print('Fail to transform orders to actions')
 
             # rotate yaw
             m = orders.set[n].shoot_target_enemy
