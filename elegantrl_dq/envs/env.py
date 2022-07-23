@@ -109,7 +109,7 @@ class VecEnvironments:
         else:
             states, rewards, dones, infos = self.envs[0].step(actions[0])
             states, rewards, dones, infos = [states], [rewards], [dones], [infos]
-            if dones:
+            if dones[0]:
                 states = [self.envs[0].reset()]
         return np.array(states), np.array(rewards), dones, infos
 
