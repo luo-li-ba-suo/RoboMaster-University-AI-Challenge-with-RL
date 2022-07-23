@@ -92,9 +92,15 @@ class Engine(object):
         self.points_for_render = [[] for _ in range(self.robot_num)]
         self.render_inited = True
 
+    def reset(self):
+        if self.route_plan:
+            self.route_plan.update_blocks(self.cal_blocks())
+            for robot_id in self.route_plan.robot_ids_need_map:
+                self.state.robots[robot_id].local_map = self.route_plan.get_obstacle_map(robot_id,
+                                                                                         self.state.robots[
+                                                                                             robot_id].center)
+
     def tick(self, orders):
-        # if not self.state.frame % 30 and self.route_plan:  # 150ms更新一次路径规划的障碍物分布
-        #     self.route_plan.reset_block(self.state.blocks)
         self.orders_to_acts(orders)
         self.freeze_step()
         self.move_robot()
@@ -108,20 +114,25 @@ class Engine(object):
                 i += 1
             if i >= len(self.state.bullets):
                 break
+        if self.route_plan:
+            self.route_plan.update_blocks(self.cal_blocks())
+            for robot_id in self.route_plan.robot_ids_need_map:
+                self.state.robots[robot_id].local_map = self.route_plan.get_obstacle_map(robot_id,
+                                                                                         self.state.robots[
+                                                                                             robot_id].center)
         return self.act_feedback
 
     def cal_blocks(self):
-        self.blocks = []
+        blocks = []
         for n in range(self.robot_num):
             wheels = check_points_wheel(self.state.robots[n])
-            self.blocks.append((wheels[0]).tolist() + (wheels[6]).tolist()
-                               + (wheels[7]).tolist() + (wheels[1]).tolist())
+            blocks.append((wheels[0]).tolist() + (wheels[6]).tolist()
+                          + (wheels[7]).tolist() + (wheels[1]).tolist())
+        return blocks
 
     def orders_to_acts(self, orders):  # 将指令转化为底层动作
-        if self.route_plan:
-            self.cal_blocks()
         # turn orders to acts
-        self.orders_text = ['' for n in range(self.robot_num)]
+        self.orders_text = ['' for _ in range(self.robot_num)]
         for n in range(self.robot_num):
             if self.render_inited:
                 self.orders_text[n] += str(orders.set[n].x)
@@ -171,18 +182,12 @@ class Engine(object):
                 self.acts[n].dir_relate_to_map = False
             elif self.route_plan is not None:  # 如果使用路径规划
                 if not orders.set[n].stop:
-                    if not self.state.frame % orders.set[n].freq_update_goal:
-                        re_plan = True
-                        goal = [int(orders.set[n].x), int(orders.set[n].y)]
-                        self.route_plan.reset_goal(goal, n)
-                    else:
-                        re_plan = False
-                    vx, vy, vr, is_Nav = self.route_plan.update_plan(self.state.robots[n].x,
-                                                                     self.state.robots[n].y,
-                                                                     self.state.robots[n].angle,
-                                                                     n,
-                                                                     blocks=self.blocks,
-                                                                     re_plan=re_plan)
+                    goal = [int(orders.set[n].x), int(orders.set[n].y)]
+                    self.route_plan.reset_goal(goal, n)
+                    vx, vy, vr, _, _ = self.route_plan.update_plan(self.state.robots[n].x,
+                                                                    self.state.robots[n].y,
+                                                                    self.state.robots[n].angle,
+                                                                    robot_idx=n)
                     self.acts[n].x_speed = vx
                     self.acts[n].y_speed = vy
                     self.acts[n].rotate_speed = vr

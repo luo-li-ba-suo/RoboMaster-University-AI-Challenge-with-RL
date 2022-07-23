@@ -39,7 +39,7 @@ class Parameters:
     render_per_frame = 600
     action_type = 'MultiDiscrete'
     local_map_unit = 10
-    local_map_size = 28
+    local_map_size = 25
 
     # 有关hp
     start_hp = [100, 100, 100, 100]

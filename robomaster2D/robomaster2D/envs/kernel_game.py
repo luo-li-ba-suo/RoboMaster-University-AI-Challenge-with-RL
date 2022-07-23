@@ -346,6 +346,7 @@ class Simulator(object):
             robot.reset_episode()
         # 启动摄像头、雷达
         self.run_camera_lidar()
+        self.module_engine.reset()
         return self.state
 
     def step(self, actions):  # 执行多智能体动作

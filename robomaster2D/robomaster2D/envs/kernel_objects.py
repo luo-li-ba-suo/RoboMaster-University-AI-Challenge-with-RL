@@ -174,6 +174,10 @@ class Robot(object):
         self.aimed_enemy = None  # 存放瞄准的敌人index
         self.heat = 0  # 枪口热度
         self.hp = hp  # 血量 0~2000
+
+        # 局部观测
+        self.local_map = None
+
         self.no_dying = no_dying
         self.reward_state = [0, 0]
         # self.can_shoot = 1  # 决策频率高于出弹最高频率（10Hz）
