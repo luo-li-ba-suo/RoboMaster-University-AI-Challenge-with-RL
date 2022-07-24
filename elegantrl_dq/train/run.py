@@ -24,6 +24,8 @@ class Configs:
         self.env_config = None
 
         '''Arguments for training (off-policy)'''
+        self.if_use_cnn = True
+        self.if_use_rnn = False
         self.learning_rate = 1e-4
         self.soft_update_tau = 2 ** -8  # 2 ** -8 ~= 5e-3
         self.train_actor_step = 0
@@ -189,6 +191,8 @@ def train_and_evaluate(args):
         wandb_run = None
     '''training arguments'''
     net_dim = args.config.net_dim
+    if_use_cnn = args.config.if_use_cnn
+    if_use_rnn = args.config.if_use_rnn
     # max_memo = args.config.max_memo
     break_step = args.config.break_step
     batch_size = args.config.batch_size
@@ -226,7 +230,7 @@ def train_and_evaluate(args):
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
-               env=env, self_play=self_play,
+               env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation)
 
     buffer_len = target_step + max_step
@@ -242,11 +246,12 @@ def train_and_evaluate(args):
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
                               save_interval=save_interval, if_train=if_train,
-                              fix_enemy_policy=fix_evaluation_enemy_policy)  # build Evaluator
+                              fix_enemy_policy=fix_evaluation_enemy_policy, if_use_cnn=if_use_cnn)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                                  action_dim=action_dim,
-                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
+                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
+                                                 if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
     else:
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)

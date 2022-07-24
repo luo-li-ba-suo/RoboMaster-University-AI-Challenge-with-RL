@@ -7,9 +7,10 @@ from elegantrl_dq.agents.net import *
 
 class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train,
-                 fix_enemy_policy=False):
+                 fix_enemy_policy=False, if_use_cnn=False):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
+        self.if_use_cnn = if_use_cnn
 
         self.cwd = cwd  # constant
         self.device = device
@@ -47,7 +48,7 @@ class Evaluator:
             eval_times = self.eval_times1
             for _ in range(self.eval_times1):
                 reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                   self.enemy_act)
+                                                                                   self.enemy_act, if_use_cnn=self.if_use_cnn)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
                     if 'reward_' + key in infos_dict:
@@ -66,7 +67,7 @@ class Evaluator:
                 eval_times += self.eval_times2 - self.eval_times1
                 for _ in range(self.eval_times2 - self.eval_times1):
                     reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                       self.enemy_act)
+                                                                                       self.enemy_act, if_use_cnn=self.if_use_cnn)
                     rewards_steps_list.append((reward, step))
                     for key in reward_dict:
                         infos_dict['reward_' + key].append(reward_dict[key])
@@ -226,7 +227,7 @@ class AsyncEvaluator:
         self.evaluator_conn.send((steps, logging_tuple))
 
 
-def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int):
+def get_episode_return_and_step(env, act, device, enemy_act=None, if_use_cnn=False) -> (float, int):
     episode_return = 0.0  # sum of rewards in an episode
     info_dict = None
     episode_step = 0
@@ -236,15 +237,21 @@ def get_episode_return_and_step(env, act, device, enemy_act=None) -> (float, int
     state = env.reset()
     trainer_ids_in_the_start = env.env.trainer_ids.copy()
 
+    s_tensor_2D = None
+
     for episode_step in range(max_step):
         a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
         for i in range(env.env.simulator.state.robot_num):
             if i in env.env.trainer_ids:
-                s_tensor = torch.as_tensor((state[i],), device=device)
-                a_tensor[i] = act(s_tensor)
+                s_tensor = torch.as_tensor((state[i][0],), device=device)
+                if if_use_cnn:
+                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
+                a_tensor[i] = act(s_tensor, s_tensor_2D)
             elif i in env.env.nn_enemy_ids:
-                s_tensor = torch.as_tensor((state[i],), device=device)
-                a_tensor[i] = enemy_act(s_tensor)
+                s_tensor = torch.as_tensor((state[i][0],), device=device)
+                if if_use_cnn:
+                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
+                a_tensor[i] = enemy_act(s_tensor, s_tensor_2D)
         # if if_discrete:
         #     a_tensor = a_tensor.argmax(dim=1)
         #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside

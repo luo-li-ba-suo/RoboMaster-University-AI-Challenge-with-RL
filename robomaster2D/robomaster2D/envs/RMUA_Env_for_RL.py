@@ -362,7 +362,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             # 相对角度
             observation.append((self.simulator.state.relative_angle[robot_index, i]) / 180)
 
-        return [np.array(observation), [self.simulator.state.robots[robot_index].local_map]]
+        return [np.array(observation).astype(np.float32), self.simulator.state.robots[robot_index].local_map.astype(np.float32)]
 
     def get_observations(self):
         self.calculate_public_observation()

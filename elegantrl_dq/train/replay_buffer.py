@@ -84,7 +84,8 @@ class ReplayBuffer:
 
 
 class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env):
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_2D_dim=25,
+                 state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
             raise NotImplementedError
@@ -94,27 +95,43 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                           for trainers in self.total_trainers_envs]
         self.buf_state = [{trainer: np.empty((max_len, state_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
+        self.buf_state_2D = [{trainer: np.empty((max_len, 1, state_2D_dim, state_2D_dim), dtype=np.float32) for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
+        self.buf_state_rnn = [{trainer: np.empty((max_len, state_rnn_dim), dtype=np.float32) for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
         self.tail_idx = [{trainer: 0 for trainer in trainers}
                           for trainers in self.total_trainers_envs]
+        self.if_use_cnn = if_use_cnn
+        self.if_use_rnn = if_use_rnn
 
     def extend_buffer_from_list(self, trajectory_list):
         step_num = 0
         states_ary = []
         others_ary = []
+        states_2D_ary = []
+        states_rnn_ary = []
         for env_id in range(self.env_num):
             states_ary.append({})
             others_ary.append({})
+            if self.if_use_cnn:
+                states_2D_ary.append({})
+            if self.if_use_rnn:
+                states_rnn_ary.append({})
             for n in self.total_trainers_envs[env_id]:
                 if n in trajectory_list[env_id]:
                     state_ary = np.array([item[0] for item in trajectory_list[env_id][n]], dtype=np.float32)
                     states_ary[-1][n] = state_ary
                     step_num += state_ary.shape[0]
-                    other_ary = np.array([item[1] for item in trajectory_list[env_id][n]], dtype=np.float32)
+                    other_ary = np.array([item[-1] for item in trajectory_list[env_id][n]], dtype=np.float32)
                     others_ary[-1][n] = other_ary
-        self.extend_buffer(states_ary, others_ary)
+                    if self.if_use_cnn:
+                        states_2D_ary[-1][n] = np.array([item[1] for item in trajectory_list[env_id][n]], dtype=np.float32)
+                    if self.if_use_rnn:
+                        states_rnn_ary[-1][n] = np.array([item[2] for item in trajectory_list[env_id][n]], dtype=np.float32)
+        self.extend_buffer(states_ary, others_ary, states_2D_ary, states_rnn_ary)
         return step_num
 
-    def extend_buffer(self, states, others):  # CPU array to CPU array
+    def extend_buffer(self, states, others, states_2D=None, states_rnn=None):  # CPU array to CPU array
         for env_id in range(self.env_num):
             for n in self.total_trainers_envs[env_id]:
                 if states[env_id][n].any():
@@ -124,6 +141,10 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                     self.tail_idx[env_id][n] = size
                     self.buf_state[env_id][n][0:size] = state
                     self.buf_other[env_id][n][0:size] = other
+                    if self.if_use_cnn:
+                        self.buf_state_2D[env_id][n][0:size] = states_2D[env_id][n]
+                    if self.if_use_rnn:
+                        self.buf_state_rnn[env_id][n][0:size] = states_rnn[env_id][n]
 
     def update_now_len(self):
         self.now_len = np.sum([[tail[key] for key in tail] for tail in self.tail_idx])
@@ -139,6 +160,8 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
         action = [{} for _ in range(self.env_num)]
         action_noise = [{} for _ in range(self.env_num)]
         state = [{} for _ in range(self.env_num)]
+        state_2D = [{} for _ in range(self.env_num)]
+        state_rnn = [{} for _ in range(self.env_num)]
         for env_id in range(self.env_num):
             for trainer in self.total_trainers_envs[env_id]:
                 tail_idx = self.tail_idx[env_id][trainer]
@@ -149,4 +172,9 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                 action[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2:2 + self.action_dim], device=self.device)
                 action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2 + self.action_dim:], device=self.device)
                 state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
-        return reward, mask, action, action_noise, state
+                if self.if_use_cnn:
+                    state_2D[env_id][trainer] = torch.as_tensor(self.buf_state_2D[env_id][trainer][0:tail_idx], device=self.device)
+                if self.if_use_rnn:
+                    state_rnn[env_id][trainer] = torch.as_tensor(self.buf_state_rnn[env_id][trainer][0:tail_idx],
+                                                                device=self.device)
+        return reward, mask, action, action_noise, state, state_2D, state_rnn

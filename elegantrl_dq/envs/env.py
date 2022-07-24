@@ -21,12 +21,12 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
     def reset_type(self) -> list:
         states = self.env.reset()
         self.reward_dict = self.env.rewards
-        return [np.array(state).astype(np.float32) for state in states]
+        return [np.array(state) for state in states]
 
     def step_type(self, actions) -> (list, float, bool, dict):
         states, rewards, done, info = self.env.step(actions)
         self.reward_dict = self.env.rewards
-        return [np.array(state).astype(np.float32) for state in states], \
+        return [np.array(state) for state in states], \
                [np.array(reward).astype(np.float32) for reward in rewards], done, info
 
     def display_characters(self, characters):

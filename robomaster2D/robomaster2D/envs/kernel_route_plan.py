@@ -85,10 +85,10 @@ class Route_Plan(object):
             for j in i:
                 j = 0 if j > 240 else 1
                 mat[-1].append(j)
-        global_map = np.ones((45 + self.local_map_size // 2 * 2, 81 + self.local_map_size // 2 * 2))
-        global_map[self.local_map_size // 2:45 + self.local_map_size // 2,
+        global_map = np.ones((1, 45 + self.local_map_size // 2 * 2, 81 + self.local_map_size // 2 * 2))
+        global_map[0, self.local_map_size // 2:45 + self.local_map_size // 2,
         self.local_map_size // 2:81 + self.local_map_size // 2] = mat
-        local_map = global_map[robot_y:robot_y + self.local_map_size, robot_x:robot_x + self.local_map_size]
+        local_map = global_map[:, robot_y:robot_y + self.local_map_size, robot_x:robot_x + self.local_map_size]
         return local_map
 
     def update_blocks(self, blocks):
