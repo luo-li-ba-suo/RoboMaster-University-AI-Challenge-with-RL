@@ -145,12 +145,15 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.action_dim = action_dim
         self.Multi_Discrete = True
         self.if_use_cnn = if_use_cnn
-        self.cnn_out_dim = 400
+        self.cnn_out_dim = 64
         self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 8, 3),
-                                          nn.Conv2d(8, 16, 3, stride=2),
-                                          nn.Conv2d(16, 16, 3, stride=2),
+        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
                                           nn.ReLU(),
+                                          nn.Conv2d(16, 32, 3, stride=2),
+                                          nn.ReLU(),
+                                          nn.Conv2d(32, 64, 3, stride=2),
+                                          nn.ReLU(),
+                                          nn.AdaptiveMaxPool2d(1),
                                           nn.Flatten()) if if_use_cnn else None
         self.rnn = None
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
@@ -235,6 +238,113 @@ class CriticAdv(nn.Module):
 
     def forward(self, state):
         return self.net(state)  # V value
+
+
+# actor与critic网络共享特征提取的主干
+class DiscretePPO(nn.Module):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
+        super().__init__()
+        self.action_dim = action_dim  # 默认为多维动作空间
+
+        self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+
+        self.if_use_cnn = if_use_cnn
+        self.cnn_out_dim = 64
+        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+                                          nn.ReLU(),
+                                          nn.Conv2d(16, 32, 3, stride=2),
+                                          nn.ReLU(),
+                                          nn.Conv2d(32, 64, 3, stride=2),
+                                          nn.ReLU(),
+                                          nn.AdaptiveMaxPool2d(1),
+                                          nn.Flatten()) if if_use_cnn else None
+
+        self.rnn = None
+
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+                                                         nn.Linear(mid_dim, action_d)) for action_d in action_dim])
+        for net in self.action_nets:
+            layer_norm(net[-1], std=0.01)
+        self.forward = self.actor
+        # critic
+        self.value_net = nn.Linear(mid_dim, 1)
+        layer_norm(self.value_net, std=0.5)
+
+        self.soft_max = nn.Softmax(dim=-1)
+        self.Categorical = torch.distributions.Categorical
+
+    def actor(self, state, state_2D=None, rnn_state=None):
+        hidden = self.state_1D_net(state)
+        if self.if_use_cnn:
+            CNN_out = self.state_2D_net(state_2D)
+            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
+        else:
+            hidden = self.hidden_net(hidden)
+        return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
+
+    def critic(self, state, state_2D=None, rnn_state=None):
+        hidden = self.state_1D_net(state)
+        if self.if_use_cnn:
+            CNN_out = self.state_2D_net(state_2D)
+            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
+        else:
+            hidden = self.hidden_net(hidden)
+        return self.value_net(hidden)
+
+    def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
+        result = self.actor(state, state_2D, rnn_state)
+        a_prob = []
+        action = []
+        n = 0
+        for action_dim_ in self.action_dim:
+            a_prob_ = self.soft_max(result[:, n:n + action_dim_])
+            a_prob.append(a_prob_)
+            n += action_dim_
+            samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
+            action_ = samples_2d.reshape(result.size(0))
+            action.append(action_)
+        return action, a_prob
+
+    def get_deterministic_action(self, state, state_2D=None, rnn_state=None):
+        result = self.actor(state, state_2D, rnn_state)
+        n = 0
+        action = []
+        for action_dim_ in self.action_dim:
+            action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
+            n += action_dim_
+        return action
+
+    def get_logprob_entropy(self, state, action, state_2D=None, state_rnn=None):
+        result = self.actor(state, state_2D, state_rnn)
+        a_prob = []
+        dist_prob = []
+        dist_entropy = []
+        n = 0
+        for i, action_dim_ in enumerate(self.action_dim):
+            a_prob_ = self.soft_max(result[:, n:n + action_dim_])
+            a_prob.append(a_prob_)
+            dist = self.Categorical(a_prob_)
+            dist_prob.append(dist.log_prob(action[:, i].long()))
+            dist_entropy.append(dist.entropy().mean())
+            n += action_dim_
+        return sum(dist_prob), sum(dist_entropy) / len(dist_entropy)
+
+    def get_old_logprob(self, action, a_prob):
+        n = 0
+        dist_log_prob = []
+        for i, action_dim_ in enumerate(self.action_dim):
+            # try:
+            dist_log_prob.append(self.Categorical(a_prob[:, n: n + action_dim_]).log_prob(action[:, i].long()))
+            # except ValueError as _:
+            #     for i, prob in enumerate(a_prob[:, n: n + action_dim_]):
+            #         try:
+            #             _ = self.Categorical(prob)
+            #         except ValueError as e:
+            #             print(e)
+            #             print(i, ' : ', a_prob[i])
+            n += action_dim_
+        return sum(dist_log_prob)
 
 
 def layer_norm(layer, std=1.0, bias_const=1e-6):

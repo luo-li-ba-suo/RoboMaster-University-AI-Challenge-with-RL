@@ -21,12 +21,12 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
     def reset_type(self) -> list:
         states = self.env.reset()
         self.reward_dict = self.env.rewards
-        return [np.array(state) for state in states]
+        return [np.array(state, dtype=object) for state in states]
 
     def step_type(self, actions) -> (list, float, bool, dict):
         states, rewards, done, info = self.env.step(actions)
         self.reward_dict = self.env.rewards
-        return [np.array(state) for state in states], \
+        return [np.array(state, dtype=object) for state in states], \
                [np.array(reward).astype(np.float32) for reward in rewards], done, info
 
     def display_characters(self, characters):
@@ -95,7 +95,7 @@ class VecEnvironments:
             curr_states = [agent_conn.recv() for agent_conn in self.agent_conns]
         else:
             curr_states = [self.envs[0].reset()]
-        return np.array(curr_states)
+        return np.array(curr_states, dtype=object)
 
     def step(self, actions):
         if self.env_num > 1:
@@ -111,7 +111,7 @@ class VecEnvironments:
             states, rewards, dones, infos = [states], [rewards], [dones], [infos]
             if dones[0]:
                 states = [self.envs[0].reset()]
-        return np.array(states), np.array(rewards), dones, infos
+        return np.array(states, dtype=object), np.array(rewards), dones, infos
 
     def get_trainer_ids(self):
         if self.env_num > 1:

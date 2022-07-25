@@ -7,10 +7,11 @@ from elegantrl_dq.agents.net import *
 
 class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train,
-                 fix_enemy_policy=False, if_use_cnn=False):
+                 fix_enemy_policy=False, if_use_cnn=False, if_share_network=False):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
         self.if_use_cnn = if_use_cnn
+        self.if_share_network = if_share_network
 
         self.cwd = cwd  # constant
         self.device = device
@@ -95,7 +96,8 @@ class Evaluator:
                 act_save_path = f'{self.cwd}/actor_step:' + str(steps) + '.pth'
                 torch.save(act.state_dict(), act_save_path)
                 act_save_path = f'{self.cwd}/critic_step:' + str(steps) + '.pth'
-                torch.save(cri.state_dict(), act_save_path)
+                if not self.if_share_network:
+                    torch.save(cri.state_dict(), act_save_path)
 
             if logger:
                 log_tuple[1] = abs(log_tuple[1])
@@ -130,7 +132,23 @@ class Evaluator:
                   f"\n| new red_win_rate:{infos_dict['red_win']:.2f}".ljust(30, " ") + "|",
                   f"\n| new red_fail_rate:{infos_dict['red_fail']:.2f}".ljust(30, " ") + "|",
                   "\n---------------------------------".ljust(30, "-"))
-
+        else:
+            if logger:
+                log_tuple[1] = abs(log_tuple[1])
+                '''save record in logger'''
+                train_infos = {'Epoch': self.epoch,
+                               'avgR': log_tuple[3],
+                               'objC': log_tuple[0],
+                               'objA': log_tuple[1],
+                               'log-prob': log_tuple[2]}
+                logger.log(train_infos, step=steps)
+            self.epoch += 1
+            print(f"---Agent {self.agent_id:<2} Steps:{steps:8.2e}".ljust(30, "-"),
+                  f"\n| r_avg:{log_tuple[3]:8.2f}".ljust(30, " ") + "|",
+                  f"\n| critic loss: {log_tuple[0]:8.4f}".ljust(30, " ") + "|",
+                  f"\n| actor loss: {log_tuple[1]:8.4f}".ljust(30, " ") + "|",
+                  f"\n| logprob: {log_tuple[2]:8.4f}".ljust(30, " ") + "|",
+                  "\n---------------------------------".ljust(30, "-"))
     @staticmethod
     def get_r_avg_std_s_avg_std(rewards_steps_list):
         rewards_steps_ary = np.array(rewards_steps_list)

@@ -26,6 +26,7 @@ class Configs:
         '''Arguments for training (off-policy)'''
         self.if_use_cnn = True
         self.if_use_rnn = False
+        self.if_share_network = True
         self.learning_rate = 1e-4
         self.soft_update_tau = 2 ** -8  # 2 ** -8 ~= 5e-3
         self.train_actor_step = 0
@@ -71,8 +72,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'AStarEnemy'
-        self.wandb_name = 'ppo_AStarEnemy_seed=' + str(self.random_seed)
+        self.wandb_notes = 'Actor and Critic Share Network'
+        self.wandb_name = 'ppo_ShareNet_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -193,6 +194,7 @@ def train_and_evaluate(args):
     net_dim = args.config.net_dim
     if_use_cnn = args.config.if_use_cnn
     if_use_rnn = args.config.if_use_rnn
+    if_share_network = args.config.if_share_network
     # max_memo = args.config.max_memo
     break_step = args.config.break_step
     batch_size = args.config.batch_size
@@ -231,7 +233,8 @@ def train_and_evaluate(args):
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
                env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
-               enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation)
+               enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
+               if_share_network=if_share_network)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -246,7 +249,8 @@ def train_and_evaluate(args):
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
                               save_interval=save_interval, if_train=if_train,
-                              fix_enemy_policy=fix_evaluation_enemy_policy, if_use_cnn=if_use_cnn)  # build Evaluator
+                              fix_enemy_policy=fix_evaluation_enemy_policy,
+                              if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                                  action_dim=action_dim,

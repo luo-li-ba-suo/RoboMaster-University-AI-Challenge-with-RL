@@ -19,6 +19,7 @@ class AgentPPO:
         self.criterion = None
         self.act = self.enemy_act = self.act_optimizer = None
         self.cri = self.cri_optimizer = self.cri_target = None
+        self.if_share_network = False
 
         self.if_use_rnn = False
         self.if_use_cnn = False
@@ -62,7 +63,8 @@ class AgentPPO:
     def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
         buffer.update_now_len()
         buf_len = buffer.now_len
-        buf_state, buf_action, buf_r_sum, buf_logprob, buf_advantage, buf_state_2D, buf_state_rnn = self.prepare_buffer(buffer)
+        buf_state, buf_action, buf_r_sum, buf_logprob, buf_advantage, buf_state_2D, buf_state_rnn = self.prepare_buffer(
+            buffer)
         buffer.empty_buffer()
 
         update_policy_net = int(buf_len / batch_size) * repeat_times_policy  # 策略更新只利用一次数据
@@ -87,21 +89,28 @@ class AgentPPO:
             logprob = buf_logprob[indices]
             advantage = buf_advantage[indices]
 
-            if update_policy_net > 0:
-                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_2D=state_2D, state_rnn=state_rnn)  # it is obj_actor
+            if update_policy_net > 0 or self.if_share_network:
+                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_2D=state_2D,
+                                                                        state_rnn=state_rnn)  # it is obj_actor
                 ratio = (new_logprob - logprob.detach()).exp()
                 surrogate1 = advantage * ratio
                 surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                 obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
                 obj_actor = obj_surrogate + obj_entropy * self.lambda_entropy
-                if if_train_actor:
+                if if_train_actor and not self.if_share_network:
                     self.optim_update(self.act_optimizer, obj_actor)
                 update_policy_net -= 1
-
-            value = self.cri(state).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
+            if self.if_use_cnn:
+                value = self.cri(state, state_2D).squeeze(1)
+            else:
+                value = self.cri(state).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
             obj_critic = self.criterion(value, r_sum) / (r_sum.std() + 1e-6)
-            self.optim_update(self.cri_optimizer, obj_critic)
-            self.soft_update(self.cri_target, self.cri, soft_update_tau) if self.cri_target is not self.cri else None
+            if self.if_share_network:
+                self.optim_update(self.act_optimizer, obj_actor + obj_critic)
+            else:
+                self.optim_update(self.cri_optimizer, obj_critic)
+                self.soft_update(self.cri_target, self.cri,
+                                 soft_update_tau) if self.cri_target is not self.cri else None
 
         return obj_critic.item(), obj_actor.item(), logprob.mean().item()  # logging_tuple
 
@@ -188,18 +197,22 @@ class AgentPPO:
         if if_save:
             if self.act is not None:
                 torch.save(self.act.state_dict(), act_save_path)
-            if self.cri is not None:
+            if self.cri is not None and not self.if_share_network:
                 torch.save(self.cri.state_dict(), cri_save_path)
         elif (self.act is not None) and os.path.exists(act_save_path):
             load_torch_file(self.act, act_save_path)
-            print("Loaded act:", cwd)
+            if self.if_share_network:
+                print("Loaded act and critic:", cwd)
+            else:
+                print("Loaded act:", cwd)
         else:
             print("Act FileNotFound when load_model: {}".format(cwd))
-        if (self.cri is not None) and os.path.exists(cri_save_path):
-            load_torch_file(self.cri, cri_save_path)
-            print("Loaded cri:", cwd)
-        else:
-            print("Critic FileNotFound when load_model: {}".format(cwd))
+        if not self.if_share_network:
+            if (self.cri is not None) and os.path.exists(cri_save_path):
+                load_torch_file(self.cri, cri_save_path)
+                print("Loaded cri:", cwd)
+            else:
+                print("Critic FileNotFound when load_model: {}".format(cwd))
 
     def load_enemy_model(self, cwd):
         """load model files for enemy
@@ -214,9 +227,12 @@ class AgentPPO:
             network.load_state_dict(network_dict)
 
         assert (self.enemy_act is not None) and os.path.exists(
-            act_save_path), "Act FileNotFound when load model for enemy"
+            act_save_path), "Enemy Act FileNotFound when load model"
         load_torch_file(self.enemy_act, act_save_path)
-        print("Loaded act:", cwd, " for enemy")
+        if self.if_share_network:
+            print("Loaded enemy  act and critic:", cwd)
+        else:
+            print("Loaded enemy act:", cwd)
 
 
 class AgentDiscretePPO(AgentPPO):
@@ -328,36 +344,49 @@ class MultiEnvDiscretePPO(AgentPPO):
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False,
              env=None, if_build_enemy_act=False, self_play=True, enemy_policy_share_memory=False,
-             if_use_cnn=False, if_use_rnn=False):
+             if_use_cnn=False, if_use_rnn=False, if_share_network=True, if_new_proc_eval=False):
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
-        self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(self.device)
-        if self_play:
+        if if_share_network:
+            self.act = DiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(
+                self.device)
+            self.cri = self.act.critic
+        else:
+            self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn,
+                                                  if_use_rnn=if_use_rnn).to(self.device)
+            self.cri = CriticAdv(net_dim, state_dim).to(self.device)
+        if self_play or if_build_enemy_act:
             self.enemy_act = deepcopy(self.act)
-        elif if_build_enemy_act:
-            self.enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
-        self.cri = CriticAdv(net_dim, state_dim).to(self.device)
+
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
-        self.act.share_memory()
-        if self.enemy_act and enemy_policy_share_memory:
-            self.enemy_act.share_memory()
-        self.cri.share_memory()
-        # self.models用于传入新进程里的evaluation
-        self.models = {'act': self.act,
-                       'enemy_act': self.enemy_act,
-                       'cri': self.cri,
-                       'net_dim': net_dim,
-                       'state_dim': state_dim,
-                       'action_dim': action_dim,
-                       'if_build_enemy_act': self_play or if_build_enemy_act}
+
+        if if_new_proc_eval:
+            self.act.share_memory()
+            if not if_share_network:
+                self.cri.share_memory()
+            if self.enemy_act and enemy_policy_share_memory:
+                self.enemy_act.share_memory()
+
+            # self.models用于传入新进程里的evaluation
+            self.models = {'act': self.act,
+                           'enemy_act': self.enemy_act,
+                           'cri': self.cri,
+                           'net_dim': net_dim,
+                           'state_dim': state_dim,
+                           'action_dim': action_dim,
+                           'if_build_enemy_act': self_play or if_build_enemy_act}
+        else:
+            self.models = None
 
         self.criterion = torch.nn.SmoothL1Loss()
         self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
-        self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
+        if not if_share_network:
+            self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
 
         self.if_use_cnn = if_use_cnn
         self.if_use_rnn = if_use_rnn
+        self.if_share_network = if_share_network
         self.rnn_dim = None
         self.rnn_state = np.nan
 
@@ -373,8 +402,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                                 for env_num, last_trainers in enumerate(self.total_trainers_envs)]
         else:
             self.last_states = [[{trainer_id: self.state[env_num][trainer_id][0]
-                                 for trainer_id in last_trainers}
-                                for env_num, last_trainers in enumerate(self.total_trainers_envs)],
+                                  for trainer_id in last_trainers}
+                                 for env_num, last_trainers in enumerate(self.total_trainers_envs)],
                                 [{trainer_id: self.state[env_num][trainer_id][1]
                                   for trainer_id in last_trainers}
                                  for env_num, last_trainers in enumerate(self.total_trainers_envs)]]
@@ -419,7 +448,7 @@ class MultiEnvDiscretePPO(AgentPPO):
 
             # states_trainers: [num_env*num_trainer, state_dim] or
             #                  [state_num_of_categories, num_env*num_trainer, state_dim]
-            trainer_actions, actions_prob = self.select_stochastic_action(np.array(states_trainers))
+            trainer_actions, actions_prob = self.select_stochastic_action(np.array(states_trainers, dtype=object))
 
             # 获取测试者的状态与动作
             last_testers_envs = np.array(env.get_tester_ids())
@@ -439,7 +468,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                                 states_testers[1].append(states_envs[env_id][tester_id][1])
                     if self.if_use_rnn:
                         states_testers.append(self.rnn_state)  # rnn隐藏状态
-                tester_actions = self.select_deterministic_action(np.array(states_testers))
+                tester_actions = self.select_deterministic_action(np.array(states_testers, dtype=object))
             else:
                 tester_actions = None
 
@@ -472,7 +501,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                             if not self.if_use_rnn and not self.if_use_cnn:
                                 self.trajectory_list_rest[env_id][n].append((states_trainers[trainer_i], other))
                             elif self.if_use_cnn and not self.if_use_rnn:
-                                self.trajectory_list_rest[env_id][n].append((states_trainers[0][trainer_i], states_trainers[1][trainer_i], other))
+                                self.trajectory_list_rest[env_id][n].append(
+                                    (states_trainers[0][trainer_i], states_trainers[1][trainer_i], other))
                             else:
                                 raise NotImplementedError
                             trajectory_list[env_id][n] += self.trajectory_list_rest[env_id][n]
@@ -493,7 +523,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                         if not self.if_use_rnn and not self.if_use_cnn:
                             trajectory_list[env_id][n].append((states_trainers[trainer_i], other))
                         elif self.if_use_cnn and not self.if_use_rnn:
-                            trajectory_list[env_id][n].append((states_trainers[0][trainer_i], states_trainers[1][trainer_i], other))
+                            trajectory_list[env_id][n].append(
+                                (states_trainers[0][trainer_i], states_trainers[1][trainer_i], other))
                         else:
                             raise NotImplementedError
                         step += 1
@@ -594,16 +625,19 @@ class MultiEnvDiscretePPO(AgentPPO):
                 for trainer in self.total_trainers_envs[env_id]:
                     if trainer in state_samples[env_id]:
                         data_len = len(state_samples[env_id][trainer])
-                        value = self.cri_target(state_samples[env_id][trainer])
+                        value = self.cri_target(state_samples[env_id][trainer], state_2D_samples[env_id][trainer], None)
                         logprob = self.act.get_old_logprob(action_samples[env_id][trainer],
                                                            a_noise_samples[env_id][trainer])
                         if not self.if_use_cnn:
                             last_state = torch.as_tensor((self.last_states[env_id][trainer],),
                                                          dtype=torch.float32, device=self.device)
+                            rest_r_sum = self.cri(last_state).detach()
                         else:
                             last_state = torch.as_tensor((self.last_states[0][env_id][trainer],),
                                                          dtype=torch.float32, device=self.device)
-                        rest_r_sum = self.cri(last_state).detach()
+                            last_state_2D = torch.as_tensor((self.last_states[1][env_id][trainer],),
+                                                            dtype=torch.float32, device=self.device)
+                            rest_r_sum = self.cri(last_state, last_state_2D).detach()
                         r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][trainer],
                                                                mask_samples[env_id][trainer], value, rest_r_sum)
                         states.append(state_samples[env_id][trainer])

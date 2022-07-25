@@ -17,8 +17,8 @@ def demo_discrete_action():
     args.config.net_dim = 128
     args.config.gamma = 0.98
     args.config.batch_size = 256
-    args.config.repeat_times = 16
-    args.config.repeat_times_policy = 5
+    args.config.repeat_times = 8
+    args.config.repeat_times_policy = 8
     args.config.target_step = 4096
     args.config.learning_rate = 1e-4
     args.config.if_per_or_gae = True
@@ -30,23 +30,24 @@ def demo_discrete_action():
     args.config.eval_times1 = 20
     args.config.eval_times2 = 30
 
+    args.config.if_use_cnn = True
+    args.config.if_share_network = True
+
     args.config.if_print_time = True
     args.config.if_train = True
-    args.config.self_play = True
-    # args.config.cwd = '2022-07-13_10-02-20'
+    args.config.self_play = False
+    # args.config.cwd = '2022-07-24_16-44-21'
     # args.config.enemy_cwd = 'init_model'
-
+    args.agent = MultiEnvDiscretePPO()
     if args.config.if_multi_processing and args.config.if_train:
-        args.agent = MultiEnvDiscretePPO()
         args.env = VecEnvironments(env_name, args.config.num_envs)
     else:
-        args.agent = AgentDiscretePPO()
-        args.env = PreprocessEnv(env_name)  # 表示训练所有trainer中的第一个，其他trainer会一起共享模型
+        args.env = VecEnvironments(env_name, 1)
     if not args.config.if_train:
         args.config.eval_gap = 0
         args.env_eval = PreprocessEnv(env_name)
     elif not args.config.new_processing_for_evaluation:
-        args.config.eval_gap = 60 * 3
+        args.config.eval_gap = 60 * 5
         args.env_eval = PreprocessEnv(env_name)
     args.agent.cri_target = False
     '''train and evaluate'''
