@@ -148,6 +148,7 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards_episode = [{} for _ in range(self.robot_num)]
         self.last_dist_matrix = None
         self.simulator.reset()
+        self.last_time_alive_robots = [True for _ in range(self.robot_num)]
         for robot in self.simulator.state.robots:
             for key in robot.robot_info_text:
                 if '总分' in key:
@@ -186,21 +187,13 @@ class RMUA_Multi_agent_Env(gym.Env):
 
     def step(self, actions):
         done, info = self.simulator.step(self.decode_actions(actions))  # 只给其中一个传动作
-        r = self.compute_reward()
-        # 记录每个机器人每回合的奖励：
-        if done and self.do_render:
-            for n in self.trainer_ids:
-                self.rewards_record[n].append(sum(self.rewards_episode[n].values()))
-                if len(self.rewards_record[n]) > 500:  # 如果超过500条记录就均匀减半
-                    self.rewards_record[n] = self.rewards_record[n][::2]
+
         self.robots_being_killed = []
         for i, robot in enumerate(self.simulator.state.robots):
             if robot.hp <= 0 < self.last_time_alive_robots[i]:
                 self.last_time_alive_robots[i] = False
                 self.robots_being_killed.append(i)
-        for i, trainer in enumerate(self.trainer_ids):
-            if self.if_trainer_dead(trainer):
-                del self.trainer_ids[i]
+
         if done:
             info_dicts = {'win_rate': self.simulator.state.r_win_record.get_win_rate(),
                           'draw_rate': self.simulator.state.r_win_record.get_draw_rate(),
@@ -208,6 +201,19 @@ class RMUA_Multi_agent_Env(gym.Env):
         else:
             info_dicts = {'robots_being_killed_': self.robots_being_killed}
         info_dicts.update(info)
+
+        r = self.compute_reward()
+        # 记录每个机器人每回合的奖励：
+        if done and self.do_render:
+            for n in self.trainer_ids:
+                self.rewards_record[n].append(sum(self.rewards_episode[n].values()))
+                if len(self.rewards_record[n]) > 500:  # 如果超过500条记录就均匀减半
+                    self.rewards_record[n] = self.rewards_record[n][::2]
+        # trainer死亡的时刻还应该计算一次奖励，所以要先计算奖励后删除trainer:
+        for i, trainer in enumerate(self.trainer_ids):
+            if self.if_trainer_dead(trainer):
+                del self.trainer_ids[i]
+
         return self.get_observations(), r, done, info_dicts
 
     def compute_reward(self):
@@ -266,11 +272,16 @@ class RMUA_Multi_agent_Env(gym.Env):
             # self.rewards[n]['no_move'] = -1 if robot.vx == 0 and robot.vy == 0 else 0
             '''击杀对方奖励'''
             enemy_all_defeated = True
+            enemy_defeated = False
             for j, enemy_id in enumerate(robot.enemy):
+                if enemy_id in self.robots_being_killed:
+                    enemy_defeated = True
                 if self.simulator.state.robots[enemy_id].hp > 0:
                     enemy_all_defeated = False
             if enemy_all_defeated:
-                self.rewards[n]['K.O.'] = 300
+                self.rewards[n]['K.O.'] = 200
+            elif enemy_defeated:
+                self.rewards[n]['K.O.'] = 100
             else:
                 self.rewards[n]['K.O.'] = 0
                 # '''引导：进攻模式'''
