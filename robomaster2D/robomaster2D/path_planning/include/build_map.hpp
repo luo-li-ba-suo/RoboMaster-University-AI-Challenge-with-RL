@@ -44,6 +44,7 @@ namespace critical_hit_planning
          cached_distances_(NULL)
         {
         }
+        ~Map();
         void set_map_param(double inflation_radius, double inscribed_radius, double resolution)
         {
             inflation_radius_ = inflation_radius;

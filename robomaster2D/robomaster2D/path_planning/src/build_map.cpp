@@ -83,7 +83,21 @@ namespace critical_hit_planning
 
 		// based on the inflation radius... compute distance and cost caches
 		// 如果膨胀半径变化
-		cached_costs_ = new unsigned char *[cell_inflation_radius_ + 2];
+        if(cached_costs_!=nullptr){
+            for (unsigned int i = 0; i <= cell_inflation_radius_ + 1; ++i) {
+                delete []cached_costs_[i];
+            }
+            delete []cached_costs_;
+        }
+
+        if(cached_distances_!=nullptr){
+            for (unsigned int i = 0; i <= cell_inflation_radius_ + 1; ++i) {
+                delete []cached_distances_[i];
+            }
+            delete []cached_distances_;
+        }
+
+        cached_costs_ = new unsigned char *[cell_inflation_radius_ + 2];
 		cached_distances_ = new double *[cell_inflation_radius_ + 2];
 
 		for (unsigned int i = 0; i <= cell_inflation_radius_ + 1; ++i) {
@@ -127,4 +141,21 @@ namespace critical_hit_planning
 			inflation_cells_[distance].push_back(CellData(index, mx, my, src_x, src_y));
 		}
 	}
+
+    Map::~Map() {
+        delete [] seen_;
+        if(cached_costs_!=nullptr){
+            for (unsigned int i = 0; i <= cell_inflation_radius_ + 1; ++i) {
+                delete []cached_costs_[i];
+            }
+            delete []cached_costs_;
+        }
+
+        if(cached_distances_!=nullptr){
+            for (unsigned int i = 0; i <= cell_inflation_radius_ + 1; ++i) {
+                delete []cached_distances_[i];
+            }
+            delete []cached_distances_;
+        }
+    }
 }
