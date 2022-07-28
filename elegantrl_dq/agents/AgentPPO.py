@@ -188,7 +188,9 @@ class AgentPPO:
         :bool if_save: save model or load model
         """
         act_save_path = '{}/actor.pth'.format(cwd)
+        act_optimizer_save_path = '{}/actor_optimizer.pth'.format(cwd)
         cri_save_path = '{}/critic.pth'.format(cwd)
+        cri_optimizer_save_path = '{}/critic_optimizer.pth'.format(cwd)
 
         def load_torch_file(network, save_path):
             network_dict = torch.load(save_path, map_location=lambda storage, loc: storage)
@@ -201,6 +203,8 @@ class AgentPPO:
                 torch.save(self.cri.state_dict(), cri_save_path)
         elif (self.act is not None) and os.path.exists(act_save_path):
             load_torch_file(self.act, act_save_path)
+            if os.path.exists(act_optimizer_save_path):
+                load_torch_file(self.act_optimizer, act_optimizer_save_path)
             if self.if_share_network:
                 print("Loaded act and critic:", cwd)
             else:
@@ -210,6 +214,8 @@ class AgentPPO:
         if not self.if_share_network:
             if (self.cri is not None) and os.path.exists(cri_save_path):
                 load_torch_file(self.cri, cri_save_path)
+                if os.path.exists(cri_optimizer_save_path):
+                    load_torch_file(self.cri_optimizer, cri_optimizer_save_path)
                 print("Loaded cri:", cwd)
             else:
                 print("Critic FileNotFound when load_model: {}".format(cwd))

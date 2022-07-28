@@ -33,7 +33,7 @@ class Evaluator:
         self.enemy_act = None
         self.fix_enemy_policy = fix_enemy_policy
 
-    def evaluate_save(self, act, cri, steps=0, log_tuple=None, logger=None, enemy_act=None):
+    def evaluate_save(self, act, cri, act_optimizer=None, critic_optimizer=None, steps=0, log_tuple=None, logger=None, enemy_act=None):
         if self.enemy_act is None and enemy_act:
             self.enemy_act = deepcopy(enemy_act)
         elif not self.fix_enemy_policy:
@@ -98,7 +98,15 @@ class Evaluator:
                 act_save_path = f'{self.cwd}/critic_step:' + str(steps) + '.pth'
                 if not self.if_share_network:
                     torch.save(cri.state_dict(), act_save_path)
-
+            act_save_path = f'{self.cwd}/actor.pth'
+            act_optimizer_save_path = f'{self.cwd}/actor_optimizer.pth'
+            torch.save(act.state_dict(), act_save_path)
+            torch.save(act_optimizer.state_dict(), act_optimizer_save_path)
+            if not self.if_share_network:
+                cri_save_path = f'{self.cwd}/critic.pth'
+                cri_optimizer_save_path = f'{self.cwd}/critic_optimizer.pth'
+                torch.save(cri.state_dict(), cri_save_path)
+                torch.save(critic_optimizer.state_dict(), cri_optimizer_save_path)
             if logger:
                 log_tuple[1] = abs(log_tuple[1])
                 '''save record in logger'''
