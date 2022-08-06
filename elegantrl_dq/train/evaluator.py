@@ -6,12 +6,13 @@ from elegantrl_dq.agents.net import *
 
 
 class Evaluator:
-    def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train,
+    def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train, gamma,
                  fix_enemy_policy=False, if_use_cnn=False, if_share_network=False):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
         self.if_use_cnn = if_use_cnn
         self.if_share_network = if_share_network
+        self.gamma = gamma
 
         self.cwd = cwd  # constant
         self.device = device
@@ -33,7 +34,8 @@ class Evaluator:
         self.enemy_act = None
         self.fix_enemy_policy = fix_enemy_policy
 
-    def evaluate_save(self, act, cri, act_optimizer=None, critic_optimizer=None, steps=0, log_tuple=None, logger=None, enemy_act=None):
+    def evaluate_save(self, act, cri, act_optimizer=None, critic_optimizer=None, steps=0, log_tuple=None, logger=None,
+                      enemy_act=None):
         if self.enemy_act is None and enemy_act:
             self.enemy_act = deepcopy(enemy_act)
         elif not self.fix_enemy_policy:
@@ -42,14 +44,20 @@ class Evaluator:
             log_tuple = [0, 0, 0, 0]
 
         if time.time() - self.eval_time > self.eval_gap:
+            discounted_returns = []
             self.eval_time = time.time()
             rewards_steps_list = []
             infos_dict = {}
             self.env.display_characters("正在评估...")
             eval_times = self.eval_times1
             for _ in range(self.eval_times1):
-                reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                   self.enemy_act, if_use_cnn=self.if_use_cnn)
+                reward, discounted_return, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act,
+                                                                                                      self.device,
+                                                                                                      self.gamma,
+                                                                                                      self.enemy_act,
+
+                                                                                                      if_use_cnn=self.if_use_cnn)
+                discounted_returns.append(discounted_return)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
                     if 'reward_' + key in infos_dict:
@@ -67,9 +75,14 @@ class Evaluator:
             if r_avg > self.r_max and self.if_train:  # evaluate actor twice to save CPU Usage and keep precision
                 eval_times += self.eval_times2 - self.eval_times1
                 for _ in range(self.eval_times2 - self.eval_times1):
-                    reward, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act, self.device,
-                                                                                       self.enemy_act, if_use_cnn=self.if_use_cnn)
+                    reward, discounted_return, step, reward_dict, info_dict = get_episode_return_and_step(self.env, act,
+                                                                                                          self.device,
+                                                                                                          self.gamma,
+                                                                                                          self.enemy_act,
+
+                                                                                                          if_use_cnn=self.if_use_cnn)
                     rewards_steps_list.append((reward, step))
+                    discounted_returns.append(discounted_return)
                     for key in reward_dict:
                         infos_dict['reward_' + key].append(reward_dict[key])
                     for key in info_dict:
@@ -98,28 +111,32 @@ class Evaluator:
                 act_save_path = f'{self.cwd}/critic_step:' + str(steps) + '.pth'
                 if not self.if_share_network:
                     torch.save(cri.state_dict(), act_save_path)
-            act_save_path = f'{self.cwd}/actor.pth'
-            act_optimizer_save_path = f'{self.cwd}/actor_optimizer.pth'
-            torch.save(act.state_dict(), act_save_path)
-            torch.save(act_optimizer.state_dict(), act_optimizer_save_path)
-            if not self.if_share_network:
-                cri_save_path = f'{self.cwd}/critic.pth'
-                cri_optimizer_save_path = f'{self.cwd}/critic_optimizer.pth'
-                torch.save(cri.state_dict(), cri_save_path)
-                torch.save(critic_optimizer.state_dict(), cri_optimizer_save_path)
+            if self.if_train:
+                act_save_path = f'{self.cwd}/actor.pth'
+                act_optimizer_save_path = f'{self.cwd}/actor_optimizer.pth'
+                torch.save(act.state_dict(), act_save_path)
+                torch.save(act_optimizer.state_dict(), act_optimizer_save_path)
+                if not self.if_share_network:
+                    cri_save_path = f'{self.cwd}/critic.pth'
+                    cri_optimizer_save_path = f'{self.cwd}/critic_optimizer.pth'
+                    torch.save(cri.state_dict(), cri_save_path)
+                    torch.save(critic_optimizer.state_dict(), cri_optimizer_save_path)
+            discounted_returns = np.mean(discounted_returns)
             if logger:
                 log_tuple[1] = abs(log_tuple[1])
                 '''save record in logger'''
                 train_infos = {'Epoch': self.epoch,
                                str(self.agent_id) + '_MaxR': self.r_max,
                                'avgR': log_tuple[3],
+                               'avgReturn': discounted_returns,
                                str(self.agent_id) + '_avgR_eval': r_avg,
                                str(self.agent_id) + '_stdR_eval': r_std,
                                str(self.agent_id) + '_avgS_eval': s_avg,
                                str(self.agent_id) + '_stdS_eval': s_std,
                                'objC': log_tuple[0],
                                'objA': log_tuple[1],
-                               'log-prob': log_tuple[2]}
+                               'log-prob': log_tuple[2],
+                               'win_rate_training': log_tuple[4]}
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
             self.epoch += 1
@@ -127,6 +144,7 @@ class Evaluator:
                   f"\n| Evaluated {eval_times} times".ljust(30, " ") + "|",
                   f"\n| cost time:{time.time() - self.eval_time:8.2f} s".ljust(30, " ") + "|",
                   f"\n| r_avg:{log_tuple[3]:8.2f}".ljust(30, " ") + "|",
+                  f"\n| eval_return_avg:{discounted_returns:8.2f}".ljust(30, " ") + "|",
                   f"\n| eval_r_avg:{r_avg:8.2f}".ljust(30, " ") + "|",
                   f"\n| eval_r_max:{self.r_max:8.2f}".ljust(30, " ") + "|",
                   f"\n| eval_r_std:{r_std:8.2f}".ljust(30, " ") + "|",
@@ -148,7 +166,8 @@ class Evaluator:
                                'avgR': log_tuple[3],
                                'objC': log_tuple[0],
                                'objA': log_tuple[1],
-                               'log-prob': log_tuple[2]}
+                               'log-prob': log_tuple[2],
+                               'win_rate_training': log_tuple[4]}
                 logger.log(train_infos, step=steps)
             self.epoch += 1
             print(f"---Agent {self.agent_id:<2} Steps:{steps:8.2e}".ljust(30, "-"),
@@ -156,7 +175,9 @@ class Evaluator:
                   f"\n| critic loss: {log_tuple[0]:8.4f}".ljust(30, " ") + "|",
                   f"\n| actor loss: {log_tuple[1]:8.4f}".ljust(30, " ") + "|",
                   f"\n| logprob: {log_tuple[2]:8.4f}".ljust(30, " ") + "|",
+                  f"\n| win_rate: {log_tuple[4]:8.4f}".ljust(30, " ") + "|",
                   "\n---------------------------------".ljust(30, "-"))
+
     @staticmethod
     def get_r_avg_std_s_avg_std(rewards_steps_list):
         rewards_steps_ary = np.array(rewards_steps_list)
@@ -253,8 +274,9 @@ class AsyncEvaluator:
         self.evaluator_conn.send((steps, logging_tuple))
 
 
-def get_episode_return_and_step(env, act, device, enemy_act=None, if_use_cnn=False) -> (float, int):
+def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False):
     episode_return = 0.0  # sum of rewards in an episode
+    episode_discounted_return = 0.0  # sum of rewards in an episode
     info_dict = None
     episode_step = 0
     max_step = env.max_step
@@ -293,6 +315,7 @@ def get_episode_return_and_step(env, act, device, enemy_act=None, if_use_cnn=Fal
                     actions[i] = action
         state, rewards, done, info_dict = env.step(actions)
         episode_return += np.mean(rewards)
+        episode_discounted_return += gamma ** episode_step * np.mean(rewards)
         if done:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
@@ -300,4 +323,4 @@ def get_episode_return_and_step(env, act, device, enemy_act=None, if_use_cnn=Fal
     mean_reward_dict = {}
     for key in rewards_dict[0]:
         mean_reward_dict[key] = np.mean([r[key] for r in rewards_dict])
-    return episode_return, episode_step, mean_reward_dict, info_dict
+    return episode_return, episode_discounted_return, episode_step, mean_reward_dict, info_dict
