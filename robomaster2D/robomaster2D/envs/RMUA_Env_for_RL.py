@@ -138,16 +138,20 @@ class RMUA_Multi_agent_Env(gym.Env):
                                  gym.spaces.MultiDiscrete(actions[0])]
 
     def reset(self):
+        self.simulator.reset()
+
         self.trainer_ids = []
+        self.nn_enemy_ids = []
         for agent in self.simulator.agents:
             if agent.name == 'rl_trainer':
                 self.trainer_ids += agent.robot_ids
+            if agent.name == 'nn_enemy':
+                self.nn_enemy_ids += agent.robot_ids
         if self.do_render and self.reward_text is None:
             self.reward_text = {}
         self.rewards = [{} for _ in range(self.robot_num)]
         self.rewards_episode = [{} for _ in range(self.robot_num)]
         self.last_dist_matrix = None
-        self.simulator.reset()
         self.last_time_alive_robots = [True for _ in range(self.robot_num)]
         for robot in self.simulator.state.robots:
             for key in robot.robot_info_text:
