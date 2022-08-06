@@ -215,8 +215,11 @@ class RMUA_Multi_agent_Env(gym.Env):
                     self.rewards_record[n] = self.rewards_record[n][::2]
         # trainer死亡的时刻还应该计算一次奖励，所以要先计算奖励后删除trainer:
         for i, trainer in enumerate(self.trainer_ids):
-            if self.if_trainer_dead(trainer):
+            if self.if_robot_dead(trainer):
                 del self.trainer_ids[i]
+        for i, nn_enemy in enumerate(self.nn_enemy_ids):
+            if self.if_robot_dead(nn_enemy):
+                del self.nn_enemy_ids[i]
 
         return self.get_observations(), r, done, info_dicts
 
