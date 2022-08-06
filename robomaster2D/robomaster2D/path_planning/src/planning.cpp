@@ -6,7 +6,7 @@ namespace critical_hit_planning
     {
         nav_state_ = false;
         find_path_flag_ = false;
-        IcraMap_.read_map_param("./icra2020.pgm");
+        IcraMap_.read_map_param("./block_map.pgm");
         set_map();
     }
 
@@ -245,5 +245,15 @@ namespace critical_hit_planning
     void Planning::get_block_map(int (*out_map)[81])
     {
         IcraMap_.get_block_map(out_map);
+    }
+
+    void Planning::load_map(bool if_block_map) {
+        if(if_block_map){
+            IcraMap_.read_map_param("./block_map.pgm");
+            set_map();
+        } else{
+            IcraMap_.read_map_param("./no_block_map.pgm");
+            set_map();
+        }
     }
 } // namespace critical_hit_planning

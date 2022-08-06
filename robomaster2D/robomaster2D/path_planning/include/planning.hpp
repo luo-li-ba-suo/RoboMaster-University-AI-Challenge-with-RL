@@ -19,6 +19,7 @@ namespace critical_hit_planning
         double current_angle=0;
         Planning();
         ~Planning();
+        void load_map(bool if_block_map);
         void show_visualization(double pos_x, double pos_y, double pos_angle);
         void set_goal(double goal_x, double goal_y);
         void reset_nav();

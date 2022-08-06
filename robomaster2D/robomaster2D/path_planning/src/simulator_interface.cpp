@@ -9,9 +9,10 @@ namespace critical_hit_planning
     Planning plan;
     extern "C"
     {
-        void init(bool render = true)
+        void init(bool render = true, bool block_map = false)
         {
             plan.show_map = render;
+            plan.load_map(block_map);
             std::cout << std::endl;
             std::cout << "|****************HITSZ Critical HIT**************|" << std::endl;
             std::cout << "|*******RMUA 2021 SIMULATOR Path Planning********|" << std::endl;
