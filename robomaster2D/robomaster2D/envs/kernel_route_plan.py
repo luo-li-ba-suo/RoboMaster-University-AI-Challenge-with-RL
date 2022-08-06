@@ -24,7 +24,8 @@ class Route_Plan(object):
         ll = ctypes.cdll.LoadLibrary
         self.kernel_astar = ll(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                             f"../path_planning/cmake-build-debug/libicra_planning.so"))
-        self.kernel_astar.init(False)
+        self.if_block_map = options.enable_blocks
+        self.kernel_astar.init(False, self.if_block_map)
 
         buff_red = [True, True, False, False, True, True] if options.buff_mode else []
         buff_blue = [False, False, True, True, True, True] if options.buff_mode else []
@@ -144,6 +145,7 @@ class Route_Plan(object):
                 ll = ctypes.cdll.LoadLibrary
                 self.kernel_astar = ll(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                     f"../path_planning/cmake-build-debug/libicra_planning.so"))
+                self.kernel_astar.init(False, self.if_block_map)
         return vx, vy, vr, is_Nav, local_map
 
 
