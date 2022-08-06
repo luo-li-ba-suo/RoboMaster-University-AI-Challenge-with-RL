@@ -146,17 +146,21 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.Multi_Discrete = True
         self.if_use_cnn = if_use_cnn
         self.cnn_out_dim = 64
-        self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
-                                          nn.ReLU(),
-                                          nn.Conv2d(16, 32, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.Conv2d(32, 64, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.AdaptiveMaxPool2d(1),
-                                          nn.Flatten()) if if_use_cnn else None
+        if if_use_cnn:
+            self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+            self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+                                              nn.ReLU(),
+                                              nn.Conv2d(16, 32, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.Conv2d(32, 64, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.AdaptiveMaxPool2d(1),
+                                              nn.Flatten())
+            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        else:
+            self.main_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU(),
+                                          nn.Linear(mid_dim, mid_dim), nn.ReLU())
         self.rnn = None
-        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
@@ -165,12 +169,13 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.Categorical = torch.distributions.Categorical
 
     def forward(self, state, state_2D=None, rnn_state=None):
-        hidden = self.state_1D_net(state)
+
         if self.if_use_cnn:
+            hidden = self.state_1D_net(state)
             CNN_out = self.state_2D_net(state_2D)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
-            hidden = self.hidden_net(hidden)
+            hidden = self.main_net(state)
         return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
 
     def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
