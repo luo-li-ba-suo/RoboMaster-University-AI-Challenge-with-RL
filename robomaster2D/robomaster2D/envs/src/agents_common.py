@@ -12,6 +12,7 @@ class Base_Agent(object):
         self.robot_ids = [(i + self.robot_red_num if _id else i) for i in range(self.num_robots)]
         self.enemy_ids = [(i if _id else i + self.robot_red_num) for i in range(self.enemy_num)]
         self.action_type = options.action_type
+        self.nn_controlled = False
         self.orders = Orders_set(self.num_robots)
         if self.action_type == 'Hybrid':
             self.actions = {'Continuous': {'x': [-2, 2], 'y': [-2, 2], 'rotate': [-2, 2]},

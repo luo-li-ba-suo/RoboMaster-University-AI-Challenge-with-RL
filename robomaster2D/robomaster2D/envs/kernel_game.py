@@ -10,46 +10,10 @@ from robomaster2D.envs.kernel_map import Map
 from robomaster2D.envs.kernel_engine import Engine
 from robomaster2D.envs.kernel_objects import Robot
 from robomaster2D.envs.kernel_referee import Referee
-from robomaster2D.envs.src.agents.human_agent import Orders_set, My_Agent
+from robomaster2D.envs.src.agents_common import Orders_set
+from robomaster2D.envs.src.kernel_agents import AgentsAllocator
 from itertools import combinations
-import importlib
-import traceback
-import sys
 import time
-
-
-def loadAgents(args):
-    file_list = [args.red_agents_path, args.blue_agents_path]
-    name_list = [args.red_agents_name, args.blue_agents_name]
-    agents = [None, None]
-    load_errs = [[], []]
-    print(f"path is {file_list}")
-    for i, agent_file_path in enumerate(file_list):
-        agent_file_path = 'robomaster2D.envs.' + agent_file_path
-        agent_temp = None
-        print(f"path is {agent_file_path}")
-
-        try:
-            my_module = importlib.import_module(agent_file_path)
-            agent_temp = my_module.My_Agent(i, args)
-        except (NameError, ImportError, IOError):
-            print('Error: The team "' + agent_file_path + '" could not be loaded! ', file=sys.stderr)
-            traceback.print_exc()
-            pass
-        except BaseException as e:
-            print(e)
-            pass
-
-        # if student's agent does not exist, use random agent.
-        if agent_temp is not None:
-            agents[i] = agent_temp
-            if not args.superQuiet:
-                print('Agent {} team {} agent {} loaded'.format(i, name_list[i], file_list[i]))
-        else:
-            agents[i] = My_Agent(i, args)
-            load_errs[i].append('[Error] Agent {} team {} agent {} cannot be loaded \n, load human agent instead.' \
-                                .format(i, name_list[i], ".".join((file_list[i]).split(".")[-2:])))
-    return agents, load_errs
 
 
 class Alarm20hz(object):
@@ -316,7 +280,8 @@ class Simulator(object):
         self.module_engine = Engine(self.state, self.module_referee, options, self.map)  # the controller
         self.orders = Orders_set((options.robot_r_num + options.robot_b_num))
         self.combination_robot_id = list(combinations(range(self.state.robot_num), 2))
-        self.agents, _ = loadAgents(options)
+        self.agents_allocator = AgentsAllocator(options)
+        self.agents = self.agents_allocator.get_agents()
         self.render_inited = False
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
                          self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
@@ -335,6 +300,8 @@ class Simulator(object):
         self.render_inited = True
 
     def reset(self):
+        self.agents = self.agents_allocator.get_agents()
+
         self.step_num = 0
         if self.parameters.random_start_pos:
             self.parameters.random_set_start_pos(self.map.goal_positions)
@@ -346,7 +313,7 @@ class Simulator(object):
             robot.reset_episode()
         # 启动摄像头、雷达
         self.run_camera_lidar()
-        self.module_engine.reset()
+        self.module_engine.reset(self.agents)
         return self.state
 
     def step(self, actions):  # 执行多智能体动作

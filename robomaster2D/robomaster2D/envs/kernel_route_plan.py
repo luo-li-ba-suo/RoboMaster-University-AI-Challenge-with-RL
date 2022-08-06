@@ -46,14 +46,6 @@ class Route_Plan(object):
                            [False, False, True, True, True, True, True, True, False, True],
                            [False, False, True, True, True, True, True, True, True, False]]
         '''
-        agents_need_map = ['src.agents.rl_trainer', 'src.agents.nn_enemy']
-        self.robot_ids_need_map = []
-        if options.red_agents_path in agents_need_map:
-            for n in range(options.robot_r_num):
-                self.robot_ids_need_map.append(n)
-        if options.blue_agents_path in agents_need_map:
-            for n in range(options.robot_b_num):
-                self.robot_ids_need_map.append(n + options.robot_r_num)
         self.local_map_size = options.local_map_size
 
     def reset_goal(self, goal, robot_idx):

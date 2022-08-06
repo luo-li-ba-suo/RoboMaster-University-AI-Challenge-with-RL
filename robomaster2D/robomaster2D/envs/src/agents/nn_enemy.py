@@ -15,6 +15,7 @@ class My_Agent(Base_Agent):
     def __init__(self, _id, options):
         super().__init__(_id, options)
         self.name = 'nn_enemy'
+        self.nn_controlled = True
 
     def decode_actions(self, game_state, actions):  # 根据动作编码，解码产生动作
         self.orders.reset()

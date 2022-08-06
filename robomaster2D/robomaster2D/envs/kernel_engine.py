@@ -72,7 +72,7 @@ class Engine(object):
             self.intercept4 = (b[0] + b[1]) / 2 - (b[3] + b[2]) / 2 - (b[1] - b[0]) / 1.414214
 
         self.impact_part_id2str = {0: 'behind', 1: 'front', 2: 'left', 3: 'right', 'not_armor': 'not armor'}
-
+        self.robot_ids_need_map = []
         for _ in range(self.robot_num):
             self.acts.append(Acts())
             self.act_feedback = Act_feedback(state)
@@ -92,10 +92,14 @@ class Engine(object):
         self.points_for_render = [[] for _ in range(self.robot_num)]
         self.render_inited = True
 
-    def reset(self):
+    def reset(self, agents):
         if self.route_plan:
+            self.robot_ids_need_map = []
+            for agent in agents:
+                if agent.nn_controlled:
+                    self.robot_ids_need_map += agent.robot_ids
             self.route_plan.update_blocks(self.cal_blocks())
-            for robot_id in self.route_plan.robot_ids_need_map:
+            for robot_id in self.robot_ids_need_map:
                 self.state.robots[robot_id].local_map = self.route_plan.get_obstacle_map(robot_id,
                                                                                          self.state.robots[
                                                                                              robot_id].center)
@@ -116,7 +120,7 @@ class Engine(object):
                 break
         if self.route_plan:
             self.route_plan.update_blocks(self.cal_blocks())
-            for robot_id in self.route_plan.robot_ids_need_map:
+            for robot_id in self.robot_ids_need_map:
                 self.state.robots[robot_id].local_map = self.route_plan.get_obstacle_map(robot_id,
                                                                                          self.state.robots[
                                                                                              robot_id].center)
