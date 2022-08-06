@@ -357,28 +357,46 @@ class RMUA_Multi_agent_Env(gym.Env):
         # 友方信息
         if robot.friend is not None:
             for i, state in enumerate(self.obs_set[robot.friend]):
-                observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[robot.friend][i])
+                if self.simulator.state.robots[robot.friend].hp <= 0:
+                    observation.append(0.0)
+                else:
+                    observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[robot.friend][i])
         # 敵方信息
         for enemy_id in robot.enemy:
             for i, state in enumerate(self.obs_set[enemy_id]):
-                observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[enemy_id][i])
+                if self.simulator.state.robots[enemy_id].hp <= 0:
+                    observation.append(0.0)
+                else:
+                    observation.append(eval('self.simulator.state.' + state) / self.obs_set_scale[enemy_id][i])
         # 额外部分
         observation += self.public_observation
         # 相對距离
         # 友方
         if robot.friend is not None:
-            observation.append(self.simulator.state.dist_matrix[robot_index][robot.friend] / 853568)
-            observation.append(self.simulator.state.x_dist_matrix[robot_index][robot.friend] / 808)
-            observation.append(self.simulator.state.y_dist_matrix[robot_index][robot.friend] / 448)
-            # 相对角度
-            observation.append((self.simulator.state.relative_angle[robot_index, robot.friend]) / 180)
+            if self.simulator.state.robots[robot.friend].hp <= 0:
+                observation.append(0.0)
+                observation.append(0.0)
+                observation.append(0.0)
+                observation.append(0.0)
+            else:
+                observation.append(self.simulator.state.dist_matrix[robot_index][robot.friend] / 853568)
+                observation.append(self.simulator.state.x_dist_matrix[robot_index][robot.friend] / 808)
+                observation.append(self.simulator.state.y_dist_matrix[robot_index][robot.friend] / 448)
+                # 相对角度
+                observation.append((self.simulator.state.relative_angle[robot_index, robot.friend]) / 180)
         # 敵方
         for i in robot.enemy:
-            observation.append(self.simulator.state.dist_matrix[robot_index][i] / 853568)
-            observation.append(self.simulator.state.x_dist_matrix[robot_index][i] / 808)
-            observation.append(self.simulator.state.y_dist_matrix[robot_index][i] / 448)
-            # 相对角度
-            observation.append((self.simulator.state.relative_angle[robot_index, i]) / 180)
+            if self.simulator.state.robots[i].hp <= 0:
+                observation.append(0.0)
+                observation.append(0.0)
+                observation.append(0.0)
+                observation.append(0.0)
+            else:
+                observation.append(self.simulator.state.dist_matrix[robot_index][i] / 853568)
+                observation.append(self.simulator.state.x_dist_matrix[robot_index][i] / 808)
+                observation.append(self.simulator.state.y_dist_matrix[robot_index][i] / 448)
+                # 相对角度
+                observation.append((self.simulator.state.relative_angle[robot_index, i]) / 180)
 
         return [np.array(observation).astype(np.float32), self.simulator.state.robots[robot_index].local_map.astype(np.float32)]
 
