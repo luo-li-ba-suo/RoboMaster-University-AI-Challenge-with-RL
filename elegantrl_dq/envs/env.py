@@ -111,7 +111,7 @@ class VecEnvironments:
             states, rewards, dones, infos = [states], [rewards], [dones], [infos]
             if dones[0]:
                 states = [self.envs[0].reset()]
-        return np.array(states, dtype=object), np.array(rewards), dones, infos
+        return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos
 
     def get_trainer_ids(self):
         if self.env_num > 1:

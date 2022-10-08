@@ -58,11 +58,11 @@ class Configs:
         self.if_remove = False  # remove the cwd folder? (True, False, None:ask me)
         self.if_allow_break = True  # allow break training when reach goal (early termination)
 
-        self.save_interval = 50  # save the model per how many times of evaluation
+        self.save_interval = 25  # save the model per how many times of evaluation
 
         '''Arguments for algorithm'''
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0.01  # could be 0.02
+        self.lambda_entropy = 0.02  # could be 0.02
         self.lambda_gae_adv = 0.98
 
         '''Arguments for self play '''
@@ -72,8 +72,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'Actor and Critic Share Network'
-        self.wandb_name = 'ppo_ShareNet_seed=' + str(self.random_seed)
+        self.wandb_notes = 'nn_enemy_update after 55%win'
+        self.wandb_name = 'ppo_nn_enemy_update55%_seed=' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -170,7 +170,7 @@ def train_and_evaluate(args):
 
     if_train = args.config.if_train
     if if_train:
-        os.makedirs(cwd)
+        os.makedirs(cwd, exist_ok=True)
         if if_wandb and not new_processing_for_evaluation:
             import wandb
             '''保存数据'''
@@ -234,7 +234,7 @@ def train_and_evaluate(args):
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
                env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
-               if_share_network=if_share_network)
+               if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -244,7 +244,8 @@ def train_and_evaluate(args):
                                          env_name=env.env_name,
                                          eval_times1=eval_times1, eval_times2=eval_times2,
                                          save_interval=save_interval, configs=configs,
-                                         fix_enemy_policy=fix_evaluation_enemy_policy)
+                                         fix_enemy_policy=fix_evaluation_enemy_policy,
+                                         if_use_cnn=if_use_cnn, if_share_network=True)
     else:
         evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
@@ -278,9 +279,8 @@ def train_and_evaluate(args):
             trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
-            if time.time() - start_explore > 45:
-                env.stop()
-                break
+            # if time.time() - start_explore > 50:
+            #     break
             start_update_net = time.time()
         steps = buffer.extend_buffer_from_list(trajectory_list)
         total_step += steps
@@ -295,14 +295,17 @@ def train_and_evaluate(args):
         logging_tuple += logging_list
         with torch.no_grad():
             if not new_processing_for_evaluation:
-                evaluator.evaluate_save(agent.act, agent.cri, agent.act_optimizer, agent.cri_optimizer, total_step, logging_tuple, wandb_run,
+                evaluator.evaluate_save(agent.act, agent.cri, agent.act_optimizer, agent.cri_optimizer, total_step,
+                                        logging_tuple, wandb_run,
                                         enemy_act=agent.enemy_act)
             else:
                 async_evaluator.update(total_step, logging_tuple)
             if_train = not (total_step >= break_step or os.path.exists(f'{cwd}/stop'))
         if if_print_time:
             print(f'| EvaluateUsedTime: {time.time() - start_evaluate:.0f}s')
+            print(process_info())
     print(f'| **** Training Finished **** | UsedTime: {time.time() - start_training:.0f}s | SavedDir: {cwd}')
+    env.stop()
     if wandb_run:
         wandb_run.finish()
     # os.kill(int(process_info()['pid']), signal.SIGKILL)

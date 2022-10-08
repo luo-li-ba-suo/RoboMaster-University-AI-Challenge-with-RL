@@ -276,7 +276,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             '''过热惩罚'''
             # reward -= 0.005 * robot.hp_loss_from_heat.one_step
             '''no_move惩罚'''
-            # self.rewards[n]['no_move'] = -1 if robot.vx == 0 and robot.vy == 0 else 0
+            self.rewards[n]['no_move'] = -10 if robot.vx == 0 and robot.vy == 0 else 0
             '''击杀对方奖励'''
             enemy_all_defeated = True
             enemy_defeated = False

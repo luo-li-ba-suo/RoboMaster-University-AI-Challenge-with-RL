@@ -3,6 +3,8 @@
 
 ## 下一步计划关键部分：
 计划参考捉迷藏工程
+TODO：在见不到对方之前瞄准
+dead state to zeros
 ### 对障碍物进行建模
 - 构建含障碍物的局部地图
 - critic和actor网络共享CNN主干

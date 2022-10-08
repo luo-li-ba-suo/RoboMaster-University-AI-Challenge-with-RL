@@ -188,14 +188,17 @@ class Evaluator:
 
 class AsyncEvaluator:
     def __init__(self, models, cwd, agent_id, eval_times1, eval_times2, env_name, device, save_interval,
-                 configs, fix_enemy_policy=True):
+                 configs, fix_enemy_policy=True, if_use_cnn=False, if_share_network=False):
         self.configs = configs
         env = PreprocessEnv(env_name)
         self.fix_enemy_policy = fix_enemy_policy
+        self.if_use_cnn = if_use_cnn
+        self.if_share_network = if_share_network
 
         self.device = device
         self.evaluator = Evaluator(cwd, agent_id, eval_times1, eval_times2, 0, env, device, save_interval,
-                                   if_train=True)
+                                   gamma=configs.gamma,
+                                   if_train=True, if_use_cnn=if_use_cnn, if_share_network=if_share_network)
 
         _mp = mp.get_context("spawn")
         self.update_num = _mp.Value("i", 0)
@@ -237,20 +240,37 @@ class AsyncEvaluator:
         else:
             logger = None
         act = models['act']
-        cri = models['cri']
+        act_optimizer = models['act_optimizer']
+        if not self.if_share_network:
+            cri = models['cri']
+            cri_optimizer = models['cri_optimizer']
+        else:
+            cri = None
+            cri_optimizer = None
         enemy_act = models['enemy_act']
         net_dim = models['net_dim']
         state_dim = models['state_dim']
         action_dim = models['action_dim']
         if_build_enemy_act = models['if_build_enemy_act']
-        local_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
-        local_enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device) \
-            if if_build_enemy_act else None
-        local_cri = CriticAdv(net_dim, state_dim).to(self.device)
+        if self.if_share_network:
+            local_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+            local_cri = False
+        else:
+            local_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+            local_cri = CriticAdv(net_dim, state_dim).to(self.device)
+            local_cri.eval()
+
         local_act.eval()
-        local_cri.eval()
+
         if if_build_enemy_act:
-            local_enemy_act.eval()
+            if self.if_share_network:
+                local_enemy_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+                local_enemy_act.eval()
+            else:
+                local_enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+                local_enemy_act.eval()
+        else:
+            local_enemy_act = None
         self.evaluator_conn.close()
         if self.fix_enemy_policy and if_build_enemy_act:
             local_enemy_act.load_state_dict(enemy_act.state_dict())
@@ -262,11 +282,12 @@ class AsyncEvaluator:
                     steps, logging_tuple = self.env_conn.recv()
                 self.update_num.value = 0
             local_act.load_state_dict(act.state_dict())
-            local_cri.load_state_dict(cri.state_dict())
+            if not self.if_share_network:
+                local_cri.load_state_dict(cri.state_dict())
             if if_build_enemy_act and not self.fix_enemy_policy:
                 local_enemy_act.load_state_dict(enemy_act.state_dict())
-
-            self.evaluator.evaluate_save(local_act, local_cri, enemy_act=local_enemy_act, logger=logger,
+            self.evaluator.evaluate_save(local_act, local_cri, act_optimizer=act_optimizer,
+                                         critic_optimizer=cri_optimizer, enemy_act=local_enemy_act, logger=logger,
                                          steps=steps, log_tuple=logging_tuple)
 
     def update(self, steps, logging_tuple):

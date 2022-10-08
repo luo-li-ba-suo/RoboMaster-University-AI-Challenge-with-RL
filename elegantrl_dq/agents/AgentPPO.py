@@ -367,6 +367,12 @@ class MultiEnvDiscretePPO(AgentPPO):
 
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
 
+        self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
+        if not if_share_network:
+            self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
+        else:
+            self.cri_optimizer = None
+
         if if_new_proc_eval:
             self.act.share_memory()
             if not if_share_network:
@@ -378,17 +384,22 @@ class MultiEnvDiscretePPO(AgentPPO):
             self.models = {'act': self.act,
                            'enemy_act': self.enemy_act,
                            'cri': self.cri,
+                           'act_optimizer': self.act_optimizer,
+                           'cri_optimizer': self.cri_optimizer,
                            'net_dim': net_dim,
                            'state_dim': state_dim,
                            'action_dim': action_dim,
                            'if_build_enemy_act': self_play or if_build_enemy_act}
         else:
-            self.models = None
+            self.models = {'act': self.act,
+                           'enemy_act': self.enemy_act,
+                           'act_optimizer': self.act_optimizer,
+                           'net_dim': net_dim,
+                           'state_dim': state_dim,
+                           'action_dim': action_dim,
+                           'if_build_enemy_act': self_play or if_build_enemy_act}
 
         self.criterion = torch.nn.SmoothL1Loss()
-        self.act_optimizer = torch.optim.Adam(self.act.parameters(), lr=learning_rate)
-        if not if_share_network:
-            self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), lr=learning_rate)
 
         self.if_use_cnn = if_use_cnn
         self.if_use_rnn = if_use_rnn
@@ -425,6 +436,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         trajectory_list = [{trainer_id: [] for trainer_id in trainers} for trainers in self.total_trainers_envs]
         logging_list = list()
         episode_rewards = list()
+        win_rate = list()
         episode_reward = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
         env.display_characters("正在采样...")
         # states.size: [env_num, trainer_num, state_size]
@@ -434,7 +446,7 @@ class MultiEnvDiscretePPO(AgentPPO):
 
         while step < target_step:
             # 获取训练者的状态与动作
-            last_trainers_envs = np.array(env.get_trainer_ids())
+            last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
 
             if not self.if_use_cnn and not self.if_use_rnn:
                 states_trainers = []
@@ -496,6 +508,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                     episode_reward[env_id][n] += np.mean(rewards[env_id][i])
                     action_prob = [probs[trainer_i] for probs in actions_prob]
                     if n in info_dict[env_id]['robots_being_killed_'] or done[env_id]:
+                        if done[env_id]:
+                            win_rate.append(info_dict[env_id]['win'])
                         # if n in info_dict[env_id]['robots_being_killed_']:
                         #     # 这一步实际上没用，因为最后一个状态的价值为0;
                         #     self.last_states[env_id][n] = states[env_id][n]
@@ -535,9 +549,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                             raise NotImplementedError
                         step += 1
                     trainer_i += 1
-
         # 更新敌方策略
-        if self.self_play:
+        if self.self_play and np.mean(win_rate) >= 0.55:
             self.update_enemy_policy(step)
 
         self.state = states_envs
@@ -554,6 +567,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         raise NotImplementedError
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
+        logging_list.append(np.mean(win_rate))
         return trajectory_list, logging_list
 
     def select_stochastic_action(self, state):
