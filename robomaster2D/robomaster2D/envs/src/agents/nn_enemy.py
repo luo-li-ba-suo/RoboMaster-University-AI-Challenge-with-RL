@@ -8,7 +8,7 @@ Date: March 4th, 2022
 nn_agent代表用神经网络控制的智能体，不训练
 """
 
-from robomaster2D.envs.src.agents_common import *
+from robomaster2D.envs.src.agents_base import *
 
 
 class My_Agent(Base_Agent):

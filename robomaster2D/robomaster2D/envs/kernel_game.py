@@ -10,7 +10,7 @@ from robomaster2D.envs.kernel_map import Map
 from robomaster2D.envs.kernel_engine import Engine
 from robomaster2D.envs.kernel_objects import Robot
 from robomaster2D.envs.kernel_referee import Referee
-from robomaster2D.envs.src.agents_common import Orders_set
+from robomaster2D.envs.src.agents_base import Orders_set
 from robomaster2D.envs.src.kernel_agents import AgentsAllocator
 from itertools import combinations
 import time
