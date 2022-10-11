@@ -14,7 +14,7 @@ from robomaster2D.envs.src.agents_base import Orders_set
 from robomaster2D.envs.src.kernel_agents import AgentsAllocator
 from itertools import combinations
 import time
-
+import copy
 
 class Alarm20hz(object):
     def __init__(self, frame_num_one_second):
@@ -101,12 +101,13 @@ class State(object):  # 总状态
         self.lidar_num = options.lidar_num
         self.camera_vision = None  # 摄像头能看到的车
         self.relative_angle = None  # 相對角度
-        self.dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                            range(self.robot_num)]  # 距離矩陣
-        self.x_dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                              range(self.robot_num)]  # 距離矩陣
-        self.y_dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                              range(self.robot_num)]  # 距離矩陣
+        self.dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.delta_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.last_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.x_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.y_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.robots_killed_this_step = []
+        self.robots_survival_status = [True for _ in range(self.robot_num)]
         self.goals = None
         self.buff_mode = options.buff_mode
 
@@ -134,8 +135,13 @@ class State(object):  # 总状态
         self.buff = None
         self.done = False  # 比赛是否结束
         self.camera_vision = np.zeros((self.robot_num, self.robot_num), dtype='int8')
-        self.lidar_detect = np.zeros((self.robot_num, self.lidar_num), dtype='float64')
-        self.relative_angle = np.zeros((self.robot_num, self.robot_num), dtype='float64')
+        self.lidar_detect = np.zeros((self.robot_num, self.lidar_num))
+        self.relative_angle = np.zeros((self.robot_num, self.robot_num))
+        self.dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.delta_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.last_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.x_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.y_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
         # 20hz的闹钟
         self.alarm20hz = Alarm20hz(self.frame_num_one_second)
 
@@ -165,6 +171,11 @@ class State(object):  # 总状态
             if not self.time % 60:
                 if self.buff_mode:
                     self.random_buff_info()
+
+    def step(self):
+        # 更新state信息
+        self.delta_dist_matrix = self.dist_matrix - self.last_dist_matrix
+        self.last_dist_matrix = copy.deepcopy(self.dist_matrix)
 
     def finish_tick(self):
         # 更新hp
@@ -335,12 +346,19 @@ class Simulator(object):
                 self.state.wait_for_user_input = True
         if self.render_inited:
             self.render()
+
+        self.state.robots_killed_this_step = []
+        for i, robot in enumerate(self.state.robots):
+            if robot.hp <= 0 < self.state.robots_survival_status[i]:
+                self.state.robots_survival_status[i] = False
+                self.state.robots_killed_this_step.append(i)
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
             if self.state.step == self.parameters.episode_step:
                 done = True
         # 结算比赛结果
         info = {}
+        info['robots_being_killed_'] = self.state.robots_killed_this_step
         blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
                                   for n in range(self.parameters.robot_b_num)]).all()
         red_all_dead = np.array([self.state.robots[n].hp <= 0
@@ -377,6 +395,8 @@ class Simulator(object):
                 info['win'] = 0
                 info['fail'] = 0
                 self.state.r_win_record.draw()
+            info['win_rate'] = self.state.r_win_record.get_win_rate()
+            info['draw_rate'] = self.state.r_win_record.get_draw_rate()
         return done, info
 
     #
@@ -443,7 +463,7 @@ class Simulator(object):
             self.render_frame = 0
         self.render_frame += 1
 
-    def run_camera_lidar(self):
+    def run_camera_lidar(self, reset=True):
         for n in range(self.state.robot_num):
             for i in range(self.state.robot_num - 1):
                 x, y = np.array(self.state.robots[n - i - 1].center) - np.array(self.state.robots[n].center)
@@ -475,3 +495,5 @@ class Simulator(object):
             for angle_idx in range(self.state.lidar_num):
                 angle = 2 * np.pi / self.state.lidar_num * angle_idx
                 # TODO: 計算雷達距離
+        if reset:
+            self.state.last_dist_matrix = copy.deepcopy(self.state.dist_matrix)

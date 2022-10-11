@@ -71,7 +71,7 @@ class VecEnvironments:
             elif request == "get_trainer_ids":
                 self.env_conns[index].send(self.envs[index].env.trainer_ids)
             elif request == "get_tester_ids":
-                self.env_conns[index].send(self.envs[index].env.nn_enemy_ids)
+                self.env_conns[index].send(self.envs[index].env.tester_ids)
             elif request == "stop":
                 break
             else:
@@ -125,7 +125,7 @@ class VecEnvironments:
             [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
             return [agent_conn.recv() for agent_conn in self.agent_conns]
         else:
-            return [self.envs[0].env.nn_enemy_ids]
+            return [self.envs[0].env.tester_ids]
 
     def stop(self):
         if self.env_num > 1:

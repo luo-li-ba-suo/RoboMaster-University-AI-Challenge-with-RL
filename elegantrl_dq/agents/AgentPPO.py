@@ -282,7 +282,7 @@ class AgentDiscretePPO(AgentPPO):
                     as_int.append(a_int)
                     as_prob.append(a_prob)
                     actions_for_env[i] = a_int
-                elif i in env.env.nn_enemy_ids:
+                elif i in env.env.tester_ids:
                     actions_for_env[i] = self.select_enemy_action(states[i])
             self.last_alive_trainers = env.env.trainer_ids
             next_states, rewards, done, info_dict = env.step(actions_for_env)

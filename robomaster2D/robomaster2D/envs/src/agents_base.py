@@ -21,14 +21,37 @@ class Base_Agent(object):
             self.actions = {'x': 3, 'y': 3, 'rotate': 3, 'shoot': 2}
             if self.enemy_num > 1:
                 self.actions.update({'shoot_target': 2})
-        self.state = {'x': [0, 808],
-                      'y': [0, 448],
-                      'hp': [0, 100],
-                      'angle': [-180, 180],
-                      # 'bullet': [0, 500],
-                      'vx': [-10, 10],
-                      'vy': [-10, 10]
-                      }
+        self.individual_obs_range = {'x': [0, 808],
+                                     'y': [0, 448],
+                                     'hp': [0, 100],
+                                     'angle': [-180, 180],
+                                     # 'bullet': [0, 500],
+                                     'vx': [-10, 10],
+                                     'vy': [-10, 10]
+                                     }
+
+    def get_robot_ids(self):
+        return self.robot_ids
+
+    def get_individual_obs_space(self, idx):
+        obs_low = []
+        obs_high = []
+        assert idx in self.robot_ids, "current idx does not exit"
+
+        for s in self.individual_obs_range:
+            obs_low.append(self.individual_obs_range[s][0])
+            obs_high.append(self.individual_obs_range[s][1])
+        return obs_low, obs_high
+
+    def get_individual_obs(self, idx, game_state):
+        observations = []
+        for i, s in enumerate(self.individual_obs_range):
+            if game_state.robots_survival_status[idx] or idx in game_state.robots_killed_this_step:
+                observations.append(eval('game_state.robots[' + str(idx) + '].' + s) / self.individual_obs_range[s][1])
+            else:
+                observations.append(0.0)
+            game_state.robots[idx].robot_info_text[s] = observations[-1]
+        return observations
 
 
 class Orders(object):  # 指令

@@ -316,7 +316,7 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
                 if if_use_cnn:
                     s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
                 a_tensor[i] = act(s_tensor, s_tensor_2D)
-            elif i in env.env.nn_enemy_ids:
+            elif i in env.env.tester_ids:
                 s_tensor = torch.as_tensor((state[i][0],), device=device)
                 if if_use_cnn:
                     s_tensor_2D = torch.as_tensor((state[i][1],), device=device)

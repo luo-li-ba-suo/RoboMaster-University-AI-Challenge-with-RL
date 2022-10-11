@@ -11,7 +11,7 @@ def demo_discrete_action():
     args.config.if_multi_processing = True
     args.config.new_processing_for_evaluation = False
     args.config.num_envs = 8
-    args.config.if_wandb = True
+    args.config.if_wandb = False
 
     args.config.reward_scale = 2 ** -1
     args.config.net_dim = 128
