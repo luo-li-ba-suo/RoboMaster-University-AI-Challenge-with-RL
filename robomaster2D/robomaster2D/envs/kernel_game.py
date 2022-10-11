@@ -142,6 +142,7 @@ class State(object):  # 总状态
         self.last_dist_matrix = np.zeros((self.robot_num, self.robot_num))
         self.x_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
         self.y_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.robots_survival_status = [True for _ in range(self.robot_num)]
         # 20hz的闹钟
         self.alarm20hz = Alarm20hz(self.frame_num_one_second)
 
