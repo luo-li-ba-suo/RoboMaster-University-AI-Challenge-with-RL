@@ -79,7 +79,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                                    'buff6_': [0, 5]
                                    }
         else:
-            self.public_obs_set = {'time': [0, 180]}
+            self.public_obs_set = {}
         for n in range(1, self.simulator.state.robot_num):
             self.public_obs_set.update({'dist_' + str(n) + '_': [0, 924],
                                         'x_dist_' + str(n) + '_': [0, 808],

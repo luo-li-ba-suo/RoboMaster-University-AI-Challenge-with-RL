@@ -265,8 +265,10 @@ class DiscretePPO(nn.Module):
                                           nn.Flatten()) if if_use_cnn else None
 
         self.rnn = None
-
-        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        if if_use_cnn:
+            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        else:
+            self.hidden_net = nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU())
         self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:

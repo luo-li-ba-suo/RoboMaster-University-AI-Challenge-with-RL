@@ -312,14 +312,14 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
         a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
         for i in range(env.env.simulator.state.robot_num):
             if i in env.env.trainer_ids:
-                s_tensor = torch.as_tensor((state[i][0],), device=device)
+                s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
+                    s_tensor_2D = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
                 a_tensor[i] = act(s_tensor, s_tensor_2D)
             elif i in env.env.tester_ids:
-                s_tensor = torch.as_tensor((state[i][0],), device=device)
+                s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
+                    s_tensor_2D = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
                 a_tensor[i] = enemy_act(s_tensor, s_tensor_2D)
         # if if_discrete:
         #     a_tensor = a_tensor.argmax(dim=1)
