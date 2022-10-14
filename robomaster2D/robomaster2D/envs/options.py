@@ -39,7 +39,7 @@ class Parameters:
     render_per_frame = 600
     action_type = 'MultiDiscrete'
     local_map_unit = 10
-    local_map_size = 25
+    local_map_size = 50
 
     # 有关hp
     start_hp = [100, 100, 100, 100]
@@ -54,7 +54,7 @@ class Parameters:
     lidar_num = 8
 
     # 有关交互界面
-    do_plot = [True, False, False, False]
+    do_plot = [True, True, False, False]
     energySaving_mode = False
 
     highFrameRate_mode = True

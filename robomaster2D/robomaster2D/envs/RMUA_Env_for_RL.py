@@ -55,6 +55,7 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards_episode = [{} for _ in range(self.robot_num)]
         self.rewards_record = [[] for _ in range(self.robot_num)]
 
+        self.observation_matrix_shape = [1, args.local_map_size, args.local_map_size]
         # flags
         self.cal_public_obs_already = False
 

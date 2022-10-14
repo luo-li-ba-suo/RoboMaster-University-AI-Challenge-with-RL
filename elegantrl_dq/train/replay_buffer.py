@@ -84,7 +84,7 @@ class ReplayBuffer:
 
 
 class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_2D_dim=25,
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_matrix_shape=[1,25,25],
                  state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
@@ -95,7 +95,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                           for trainers in self.total_trainers_envs]
         self.buf_state = [{trainer: np.empty((max_len, state_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
-        self.buf_state_2D = [{trainer: np.empty((max_len, 1, state_2D_dim, state_2D_dim), dtype=np.float32) for trainer in trainers}
+        self.buf_state_matrix = [{trainer: np.empty((max_len, state_matrix_shape[0], state_matrix_shape[1], state_matrix_shape[2]), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
         self.buf_state_rnn = [{trainer: np.empty((max_len, state_rnn_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
@@ -175,7 +175,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                 action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3 + self.action_dim:], device=self.device)
                 state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
                 if self.if_use_cnn:
-                    state_2D[env_id][trainer] = torch.as_tensor(self.buf_state_2D[env_id][trainer][0:tail_idx], device=self.device)
+                    state_2D[env_id][trainer] = torch.as_tensor(self.buf_state_matrix[env_id][trainer][0:tail_idx], device=self.device)
                 if self.if_use_rnn:
                     state_rnn[env_id][trainer] = torch.as_tensor(self.buf_state_rnn[env_id][trainer][0:tail_idx],
                                                                  device=self.device)

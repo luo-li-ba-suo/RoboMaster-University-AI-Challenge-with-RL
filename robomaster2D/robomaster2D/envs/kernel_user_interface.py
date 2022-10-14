@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pygame
 from robomaster2D.envs.src.buttons import Buttons
 import os
-
+import cv2
 try:
     os.chdir('./robomaster2D/robomaster2D/envs')
 except BaseException:
@@ -202,7 +202,7 @@ class User_Interface(object):
         self.single_input = options.single_input
 
         # 图表
-        self.update_figure_interval = 100
+        self.update_figure_interval = 5
         self.figures_to_show = []
         self.do_plot = options.do_plot
 
@@ -448,8 +448,20 @@ class User_Interface(object):
                     figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
                     plt.close()
                     self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+                # 画局部地图
+                local_map = self.state.robots[i].local_map
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[0] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+
+
         for i, figure in enumerate(self.figures_to_show):
-            self.screen.blit(figure, (20 + 268*i, self.map.map_width + 20))
+            if i < 3:
+                self.screen.blit(figure, (20 + 268*i, self.map.map_width + 20))
+            else:
+                self.screen.blit(figure, (20 + 268 * (i-3), self.map.map_width + 230))
 
     def bar(self, ys, labels):  # 传入n组数据，xs，ys分别为横纵数据集，labels为x,y标签集
         n = len(ys)

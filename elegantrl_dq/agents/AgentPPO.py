@@ -355,13 +355,13 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.remove_rest_trajectory = True
 
         self.state_dim = None
-        self.state2D_dim = None
+        self.state_matrix_shape = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False,
              env=None, if_build_enemy_act=False, self_play=True, enemy_policy_share_memory=False,
-             if_use_cnn=False, if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, state2D_dim=[1,25,25]):
+             if_use_cnn=False, if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, state_matrix_shape=[1,25,25]):
         self.state_dim = state_dim
-        self.state2D_dim = state2D_dim
+        self.state_matrix_shape = state_matrix_shape
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
@@ -463,8 +463,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                 last_trainers_envs_size += len(last_trainers)
             states_trainers = {'vector': np.zeros((last_trainers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
-                states_trainers['matrix'] = np.zeros((last_trainers_envs_size, self.state2D_dim[0], self.state2D_dim[1],
-                                                      self.state2D_dim[2]))
+                states_trainers['matrix'] = np.zeros((last_trainers_envs_size, self.state_matrix_shape[0], self.state_matrix_shape[1],
+                                                      self.state_matrix_shape[2]))
             trainer_i = 0
             for env_id in range(env.env_num):
                 for trainer_id in last_trainers_envs[env_id]:

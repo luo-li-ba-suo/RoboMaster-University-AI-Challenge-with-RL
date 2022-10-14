@@ -226,6 +226,7 @@ def train_and_evaluate(args):
         env_eval.render()
     max_step = env.max_step
     state_dim = env.state_dim
+    state_matrix_shape = env.state_matrix_shape
     action_dim = env.action_dim
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
@@ -234,7 +235,8 @@ def train_and_evaluate(args):
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
                env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
-               if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation)
+               if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
+               state_matrix_shape=state_matrix_shape)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -254,7 +256,7 @@ def train_and_evaluate(args):
                               if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
-                                                 action_dim=action_dim,
+                                                 action_dim=action_dim, state_matrix_shape=state_matrix_shape,
                                                  if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
                                                  if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
     else:
