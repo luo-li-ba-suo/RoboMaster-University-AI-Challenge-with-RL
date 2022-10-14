@@ -330,6 +330,7 @@ class Simulator(object):
 
     def step(self, actions):  # 执行多智能体动作
         done = False
+        pseudo_done = False
         if self.render_inited:
             self.step_feedback_UI()
         # 判断游戏是否暂停或等待用户输入指令
@@ -356,16 +357,19 @@ class Simulator(object):
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
             if self.state.step == self.parameters.episode_step:
+                pseudo_done = True
                 done = True
         # 结算比赛结果
         info = {}
         info['robots_being_killed_'] = self.state.robots_killed_this_step
+        # info['robots_survival_status'] = self.state.robots_survival_status
         blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
                                   for n in range(self.parameters.robot_b_num)]).all()
         red_all_dead = np.array([self.state.robots[n].hp <= 0
                                  for n in range(self.parameters.robot_r_num)]).all()
         if blue_all_dead or red_all_dead:
             done = True
+            pseudo_done = False
         if done:
             # 首先判断是否有一方全部阵亡
             if blue_all_dead and not red_all_dead:
@@ -398,6 +402,7 @@ class Simulator(object):
                 self.state.r_win_record.draw()
             info['win_rate'] = self.state.r_win_record.get_win_rate()
             info['draw_rate'] = self.state.r_win_record.get_draw_rate()
+        info['pseudo_done'] = pseudo_done
         return done, info
 
     #

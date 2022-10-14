@@ -188,13 +188,14 @@ class RMUA_Multi_agent_Env(gym.Env):
                 self.rewards_record[n].append(sum(self.rewards_episode[n].values()))
                 if len(self.rewards_record[n]) > 500:  # 如果超过500条记录就均匀减半
                     self.rewards_record[n] = self.rewards_record[n][::2]
+        obs = self.get_observations()  # 在删除当前死亡的机器人之前最后一次返回其观测向量
         # trainer死亡的时刻还应该计算一次奖励，所以要先计算奖励后删除trainer:
         for i in info['robots_being_killed_']:
             if i in self.trainer_ids:
                 self.trainer_ids.remove(i)
             elif i in self.tester_ids:
                 self.tester_ids.remove(i)
-        return self.get_observations(), r, done, info
+        return obs, r, done, info
 
     def compute_reward(self):
         rewards = []

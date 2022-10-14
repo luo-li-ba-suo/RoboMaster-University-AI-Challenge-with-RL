@@ -72,8 +72,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'nn_enemy_update after 55%win'
-        self.wandb_name = 'ppo_nn_enemy_update55%_seed=' + str(self.random_seed)
+        self.wandb_notes = 'new env'
+        self.wandb_name = 'new_env' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 

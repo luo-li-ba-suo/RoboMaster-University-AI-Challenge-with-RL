@@ -20,7 +20,7 @@ class ReplayBuffer:
         self.tuple = None
         self.np_torch = torch
 
-        self.other_dim = 1 + 1 + self.action_dim + action_dim
+        self.other_dim = 1 + 2 + self.action_dim + action_dim
         # other = (reward, mask, action, a_noise) for continuous action
         # other = (reward, mask, a_int, a_prob) for discrete action
         self.buf_other = np.empty((max_len, self.other_dim), dtype=np.float32)
@@ -157,6 +157,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
     def sample_all(self):
         reward = [{} for _ in range(self.env_num)]
         mask = [{} for _ in range(self.env_num)]
+        pseudo_mask = [{} for _ in range(self.env_num)]
         action = [{} for _ in range(self.env_num)]
         action_noise = [{} for _ in range(self.env_num)]
         state = [{} for _ in range(self.env_num)]
@@ -169,12 +170,13 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                 buf_state = self.buf_state[env_id][trainer]
                 reward[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 0], device=self.device)
                 mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 1], device=self.device)
-                action[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2:2 + self.action_dim], device=self.device)
-                action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2 + self.action_dim:], device=self.device)
+                pseudo_mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2], device=self.device)
+                action[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3:3 + self.action_dim], device=self.device)
+                action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3 + self.action_dim:], device=self.device)
                 state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
                 if self.if_use_cnn:
                     state_2D[env_id][trainer] = torch.as_tensor(self.buf_state_2D[env_id][trainer][0:tail_idx], device=self.device)
                 if self.if_use_rnn:
                     state_rnn[env_id][trainer] = torch.as_tensor(self.buf_state_rnn[env_id][trainer][0:tail_idx],
-                                                                device=self.device)
-        return reward, mask, action, action_noise, state, state_2D, state_rnn
+                                                                 device=self.device)
+        return reward, mask, pseudo_mask, action, action_noise, state, state_2D, state_rnn

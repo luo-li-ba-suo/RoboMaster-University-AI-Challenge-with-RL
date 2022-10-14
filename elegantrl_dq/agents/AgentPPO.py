@@ -141,16 +141,22 @@ class AgentPPO:
         return buf_r_sum, buf_advantage
 
     @staticmethod
-    def get_reward_sum_gae(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
+    def get_reward_sum_gae(self, buf_len, buf_reward, buf_mask, buf_pseudo_mask, buf_value, next_state_value) -> (torch.Tensor, torch.Tensor):
         buf_r_sum = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # old policy value
         buf_advantage = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # advantage value
 
-        pre_advantage = rest_r_sum  # advantage value of previous step
+        pre_advantage = rest_r_sum = next_state_value[-1]  # advantage value of previous step
+        index = -2
         for i in range(buf_len - 1, -1, -1):
             buf_r_sum[i] = buf_reward[i] + buf_mask[i] * rest_r_sum
+            if buf_pseudo_mask[i] > 0:
+                buf_r_sum[i] += buf_pseudo_mask[i] * next_state_value[index]
             rest_r_sum = buf_r_sum[i]
 
-            buf_advantage[i] = buf_reward[i] + buf_mask[i] * (pre_advantage - buf_value[i])  # fix a bug here
+            buf_advantage[i] = buf_reward[i] + buf_mask[i] * pre_advantage - buf_value[i]  # fix a bug here
+            if buf_pseudo_mask[i] > 0:
+                buf_advantage[i] += buf_pseudo_mask[i] * next_state_value[index]
+                index -= 1
             pre_advantage = buf_value[i] + buf_advantage[i] * self.lambda_gae_adv
         buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
         return buf_r_sum, buf_advantage
@@ -417,18 +423,6 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.env_num = env.env_num
         self.state = env.reset()
         self.total_trainers_envs = env.get_trainer_ids()
-        # 给last_state填充初始状态，这样可以避免循环结束时缺乏某些死亡智能体的最终状态;尽管他们的最后状态价值为0
-        if not self.if_use_cnn:
-            self.last_states = [{trainer_id: self.state[env_num][trainer_id][0]
-                                 for trainer_id in last_trainers}
-                                for env_num, last_trainers in enumerate(self.total_trainers_envs)]
-        else:
-            self.last_states = [[{trainer_id: self.state[env_num][trainer_id][0]
-                                  for trainer_id in last_trainers}
-                                 for env_num, last_trainers in enumerate(self.total_trainers_envs)],
-                                [{trainer_id: self.state[env_num][trainer_id][1]
-                                  for trainer_id in last_trainers}
-                                 for env_num, last_trainers in enumerate(self.total_trainers_envs)]]
         if self.if_complete_episode:
             self.trajectory_list_rest = [{trainer_id: [] for trainer_id in trainers} for trainers in
                                          self.total_trainers_envs]
@@ -449,15 +443,27 @@ class MultiEnvDiscretePPO(AgentPPO):
         step = 0
         last_trainers_envs = None
 
+        self.last_states = {'vector': [{trainer_id: [] for trainer_id in last_trainers}
+                                          for last_trainers in self.total_trainers_envs],
+                            'matrix': None}
+        if self.if_use_cnn:
+            self.last_states['matrix'] = [{trainer_id: [] for trainer_id in last_trainers}
+                                          for last_trainers in self.total_trainers_envs]
+        end_states = {'vector': [{trainer_id: None for trainer_id in last_trainers}
+                                          for last_trainers in self.total_trainers_envs],
+                            'matrix': None}
+        if self.if_use_cnn:
+            end_states['matrix'] = [{trainer_id: None for trainer_id in last_trainers}
+                                          for last_trainers in self.total_trainers_envs]
         while step < target_step:
             # 获取训练者的状态与动作
             last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
             last_trainers_envs_size = 0
             for last_trainers in last_trainers_envs:
                 last_trainers_envs_size += len(last_trainers)
-            states_trainers = {'vector': np.zeros((last_trainers_envs_size, self.state_dim)), 'matrix':None}
+            states_trainers = {'vector': np.zeros((last_trainers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
-                states_trainers['matrix'] = np.zeros((last_trainers_envs.size, self.state2D_dim[0], self.state2D_dim[1],
+                states_trainers['matrix'] = np.zeros((last_trainers_envs_size, self.state2D_dim[0], self.state2D_dim[1],
                                                       self.state2D_dim[2]))
             trainer_i = 0
             for env_id in range(env.env_num):
@@ -512,13 +518,19 @@ class MultiEnvDiscretePPO(AgentPPO):
                     if n in info_dict[env_id]['robots_being_killed_'] or done[env_id]:
                         if done[env_id]:
                             win_rate.append(info_dict[env_id]['win'])
-                        # if n in info_dict[env_id]['robots_being_killed_']:
-                        #     # 这一步实际上没用，因为最后一个状态的价值为0;
-                        #     self.last_states[env_id][n] = states[env_id][n]
-                        other = (rewards[env_id][i] * reward_scale, 0.0,
+                        mask = 0.0
+                        if info_dict[env_id]['pseudo_done']:
+                            mask = gamma
+                            self.last_states['vector'][env_id][n].append(states_envs[env_id][n][0])
+                            if self.if_use_cnn:
+                                self.last_states['matrix'][env_id][n].append(states_envs[env_id][n][1])
+                        other = (rewards[env_id][i] * reward_scale, 0.0, mask,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob))
                         episode_rewards.append(episode_reward[env_id][n])
                         episode_reward[env_id][n] = 0
+                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                        if self.if_use_cnn:
+                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
                         if self.if_complete_episode:
                             if not self.if_use_rnn and not self.if_use_cnn:
                                 self.trajectory_list_rest[env_id][n].append((states_trainers['vector'][trainer_i], other))
@@ -531,7 +543,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                             step += len(self.trajectory_list_rest[env_id][n])
                             self.trajectory_list_rest[env_id][n] = []
                     else:
-                        other = (rewards[env_id][i] * reward_scale, gamma,
+                        other = (rewards[env_id][i] * reward_scale, gamma, 0.0,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob))
                         if self.if_complete_episode:
                             if not self.if_use_rnn and not self.if_use_cnn:
@@ -554,19 +566,19 @@ class MultiEnvDiscretePPO(AgentPPO):
         # 更新敌方策略
         if self.self_play and np.mean(win_rate) >= 0.55:
             self.update_enemy_policy(step)
-
+        if not self.if_complete_episode:
+            for env_id in range(env.env_num):
+                for n in last_trainers_envs[env_id]:
+                    end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                    if self.if_use_cnn:
+                        end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
         self.state = states_envs
         for env_id in range(env.env_num):
-            # 在last_trainers_envs中可能缺失了中途死亡的智能体
-            for n in last_trainers_envs[env_id]:
-                if states_envs[env_id][n].shape:  # TODO:为什么会出现bug？
-                    if not self.if_use_rnn and not self.if_use_cnn:
-                        self.last_states[env_id][n] = states_envs[env_id][n][0]
-                    elif self.if_use_cnn and not self.if_use_rnn:
-                        self.last_states[0][env_id][n] = states_envs[env_id][n][0]
-                        self.last_states[1][env_id][n] = states_envs[env_id][n][1]
-                    else:
-                        raise NotImplementedError
+            # 将最后一个状态单独存起来
+            for n in end_states['vector'][env_id]:
+                self.last_states['vector'][env_id][n].append(end_states['vector'][env_id][n])
+                if self.if_use_cnn:
+                    self.last_states['matrix'][env_id][n].append(end_states['matrix'][env_id][n])
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         logging_list.append(np.mean(win_rate))
@@ -628,7 +640,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             r_sums = []
             logprobs = []
             advantages = []
-            reward_samples, mask_samples, action_samples, a_noise_samples, state_samples, state_2D_samples, state_rnn_samples = buffer.sample_all()
+            reward_samples, mask_samples, pseudo_mask_samples, action_samples, a_noise_samples, state_samples, state_2D_samples, state_rnn_samples = buffer.sample_all()
             for env_id in range(self.env_num):
                 for trainer in self.total_trainers_envs[env_id]:
                     if trainer in state_samples[env_id]:
@@ -639,18 +651,19 @@ class MultiEnvDiscretePPO(AgentPPO):
                             value = self.cri_target(state_samples[env_id][trainer])
                         logprob = self.act.get_old_logprob(action_samples[env_id][trainer],
                                                            a_noise_samples[env_id][trainer])
+                        last_state = torch.as_tensor(np.array(self.last_states['vector'][env_id][trainer]),
+                                                     dtype=torch.float32, device=self.device)
                         if not self.if_use_cnn:
-                            last_state = torch.as_tensor(self.last_states[env_id][trainer][np.newaxis, :],
-                                                         dtype=torch.float32, device=self.device)
                             rest_r_sum = self.cri(last_state).detach()
                         else:
-                            last_state = torch.as_tensor(self.last_states[0][env_id][trainer][np.newaxis, :],
-                                                         dtype=torch.float32, device=self.device)
-                            last_state_2D = torch.as_tensor(self.last_states[1][env_id][trainer][np.newaxis, :],
+                            last_state_2D = torch.as_tensor(np.array(self.last_states['matrix'][env_id][trainer]),
                                                             dtype=torch.float32, device=self.device)
                             rest_r_sum = self.cri(last_state, last_state_2D).detach()
+                        value = value.squeeze(-1)
+                        rest_r_sum = rest_r_sum.squeeze(-1)
                         r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][trainer],
-                                                               mask_samples[env_id][trainer], value, rest_r_sum)
+                                                               mask_samples[env_id][trainer],
+                                                               pseudo_mask_samples[env_id][trainer], value, rest_r_sum)
                         states.append(state_samples[env_id][trainer])
                         if self.if_use_cnn:
                             states_2D.append(state_2D_samples[env_id][trainer])
