@@ -142,7 +142,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                     self.buf_state[env_id][n][0:size] = state
                     self.buf_other[env_id][n][0:size] = other
                     if self.if_use_cnn:
-                        self.buf_state_2D[env_id][n][0:size] = states_2D[env_id][n]
+                        self.buf_state_matrix[env_id][n][0:size] = states_2D[env_id][n]
                     if self.if_use_rnn:
                         self.buf_state_rnn[env_id][n][0:size] = states_rnn[env_id][n]
 
