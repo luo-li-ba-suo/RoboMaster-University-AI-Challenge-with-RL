@@ -148,7 +148,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.cnn_out_dim = 64
         if if_use_cnn:
             self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-            self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+            self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
@@ -172,7 +172,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
         if self.if_use_cnn:
             hidden = self.state_1D_net(state)
-            CNN_out = self.state_2D_net(state_2D)
+            CNN_out = self.state_matrix_net(state_2D)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.main_net(state)
@@ -234,19 +234,39 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False):
         super().__init__()
-        self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU(),
-                                 nn.Linear(mid_dim, mid_dim), nn.Hardswish(),
-                                 nn.Linear(mid_dim, 1))
-        layer_norm(self.net[-1], std=0.5)  # output layer for V value
+        self.if_use_cnn = if_use_cnn
+        self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        self.cnn_out_dim = 64
+        self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+                                              nn.ReLU(),
+                                              nn.Conv2d(16, 32, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.Conv2d(32, 64, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.AdaptiveMaxPool2d(1),
+                                              nn.Flatten()) if if_use_cnn else None
+        if if_use_cnn:
+            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU(),
+                                            nn.Linear(mid_dim, 1))
+        else:
+            self.hidden_net = nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+                                            nn.Linear(mid_dim, 1))
+        layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
-    def forward(self, state):
-        return self.net(state)  # V value
+    def forward(self, state, state_2D=None):
+        hidden = self.net(state)
+        if self.if_use_cnn:
+            CNN_out = self.state_matrix_net(state_2D)
+            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
+        else:
+            hidden = self.hidden_net(hidden)
+        return hidden
 
 
 # actor与critic网络共享特征提取的主干
-class DiscretePPO(nn.Module):
+class DiscretePPOShareNet(nn.Module):
     def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
         super().__init__()
         self.action_dim = action_dim  # 默认为多维动作空间
@@ -255,7 +275,7 @@ class DiscretePPO(nn.Module):
 
         self.if_use_cnn = if_use_cnn
         self.cnn_out_dim = 64
-        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+        self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
                                           nn.ReLU(),
                                           nn.Conv2d(16, 32, 3, stride=2),
                                           nn.ReLU(),
@@ -284,7 +304,7 @@ class DiscretePPO(nn.Module):
     def actor(self, state, state_2D=None, rnn_state=None):
         hidden = self.state_1D_net(state)
         if self.if_use_cnn:
-            CNN_out = self.state_2D_net(state_2D)
+            CNN_out = self.state_matrix_net(state_2D)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)
@@ -293,7 +313,7 @@ class DiscretePPO(nn.Module):
     def critic(self, state, state_2D=None, rnn_state=None):
         hidden = self.state_1D_net(state)
         if self.if_use_cnn:
-            CNN_out = self.state_2D_net(state_2D)
+            CNN_out = self.state_matrix_net(state_2D)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)

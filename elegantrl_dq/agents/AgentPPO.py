@@ -88,6 +88,7 @@ class AgentPPO:
             r_sum = buf_r_sum[indices]
             logprob = buf_logprob[indices]
             advantage = buf_advantage[indices]
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-5)
 
             if update_policy_net > 0 or self.if_share_network:
                 new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_2D=state_2D,
@@ -162,18 +163,20 @@ class AgentPPO:
         return buf_r_sum, buf_advantage
 
     @staticmethod
-    def get_reward_sum_gae_fixed(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
+    def get_reward_sum_gae_td_lambda(self, buf_len, buf_reward, buf_mask, buf_pseudo_mask, buf_value, next_state_value) -> (torch.Tensor, torch.Tensor):
         buf_r_sum = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # old policy value
         buf_advantage = torch.empty(buf_len, dtype=torch.float32, device=self.device)  # advantage value
 
-        pre_advantage = rest_r_sum  # advantage value of previous step
+        pre_advantage = next_state_value[-1]  # advantage value of previous step
+        index = -2
         for i in range(buf_len - 1, -1, -1):
-            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * rest_r_sum
-            rest_r_sum = buf_r_sum[i]
-
-            buf_advantage[i] = buf_reward[i] + buf_mask[i] * pre_advantage - buf_value[i]  # fix a bug here
+            buf_r_sum[i] = buf_reward[i] + buf_mask[i] * pre_advantage
+            if buf_pseudo_mask[i] > 0:
+                buf_r_sum[i] += buf_pseudo_mask[i] * next_state_value[index]
+                index -= 1
+            buf_advantage[i] = buf_r_sum[i] - buf_value[i]
             pre_advantage = buf_value[i] + buf_advantage[i] * self.lambda_gae_adv
-        buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
+        # buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
         return buf_r_sum, buf_advantage
 
     @staticmethod
@@ -364,9 +367,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.state_matrix_shape = state_matrix_shape
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
+        self.get_reward_sum = self.get_reward_sum_gae_td_lambda if if_use_gae else self.get_reward_sum_raw
         if if_share_network:
-            self.act = DiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(
+            self.act = DiscretePPOShareNet(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(
                 self.device)
             self.cri = self.act.critic
         else:

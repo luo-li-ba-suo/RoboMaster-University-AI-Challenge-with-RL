@@ -55,7 +55,6 @@ class Evaluator:
                                                                                                       self.device,
                                                                                                       self.gamma,
                                                                                                       self.enemy_act,
-
                                                                                                       if_use_cnn=self.if_use_cnn)
                 discounted_returns.append(discounted_return)
                 rewards_steps_list.append((reward, step))
@@ -253,7 +252,7 @@ class AsyncEvaluator:
         action_dim = models['action_dim']
         if_build_enemy_act = models['if_build_enemy_act']
         if self.if_share_network:
-            local_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+            local_act = DiscretePPOShareNet(net_dim, state_dim, action_dim).to(self.device)
             local_cri = False
         else:
             local_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -264,7 +263,7 @@ class AsyncEvaluator:
 
         if if_build_enemy_act:
             if self.if_share_network:
-                local_enemy_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+                local_enemy_act = DiscretePPOShareNet(net_dim, state_dim, action_dim).to(self.device)
                 local_enemy_act.eval()
             else:
                 local_enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -306,7 +305,7 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
     state = env.reset()
     trainer_ids_in_the_start = env.env.trainer_ids.copy()
 
-    s_tensor_2D = None
+    s_tensor_matrix = None
 
     for episode_step in range(max_step):
         a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
@@ -314,13 +313,13 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
             if i in env.env.trainer_ids:
                 s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
-                a_tensor[i] = act(s_tensor, s_tensor_2D)
+                    s_tensor_matrix = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
+                a_tensor[i] = act(s_tensor, s_tensor_matrix)
             elif i in env.env.tester_ids:
                 s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
-                a_tensor[i] = enemy_act(s_tensor, s_tensor_2D)
+                    s_tensor_matrix = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
+                a_tensor[i] = enemy_act(s_tensor, s_tensor_matrix)
         # if if_discrete:
         #     a_tensor = a_tensor.argmax(dim=1)
         #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
