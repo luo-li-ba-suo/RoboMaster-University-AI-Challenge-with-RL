@@ -47,7 +47,7 @@ class Route_Plan(object):
                            [False, False, True, True, True, True, True, True, False, True],
                            [False, False, True, True, True, True, True, True, True, False]]
         '''
-        self.local_map_size = options.local_map_size
+        self.local_map_size = options.obstacle_map_size
 
     def reset_goal(self, goal, robot_idx):
         self.goals[robot_idx] = goal

@@ -140,7 +140,7 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_matrix_channel=5, if_use_rnn=False):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
@@ -148,7 +148,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.cnn_out_dim = 64
         if if_use_cnn:
             self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-            self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+            self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
@@ -234,12 +234,12 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim, if_use_cnn=False):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_matrix_channel=5):
         super().__init__()
         self.if_use_cnn = if_use_cnn
         self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
         self.cnn_out_dim = 64
-        self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+        self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
@@ -267,7 +267,7 @@ class CriticAdv(nn.Module):
 
 # actor与critic网络共享特征提取的主干
 class DiscretePPOShareNet(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False, state_matrix_channel=5):
         super().__init__()
         self.action_dim = action_dim  # 默认为多维动作空间
 
@@ -275,7 +275,7 @@ class DiscretePPOShareNet(nn.Module):
 
         self.if_use_cnn = if_use_cnn
         self.cnn_out_dim = 64
-        self.state_matrix_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+        self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
                                           nn.ReLU(),
                                           nn.Conv2d(16, 32, 3, stride=2),
                                           nn.ReLU(),

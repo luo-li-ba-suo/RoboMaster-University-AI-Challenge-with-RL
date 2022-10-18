@@ -87,12 +87,16 @@ class Engine(object):
         '''自瞄'''
         self.theta = np.rad2deg(np.arctan(45 / 60))
 
+        '''初始化障碍物地图'''
+        self.map.obstacle_map_init()
+
     def init_render(self):
         self.orders_text = ['' for _ in range(self.robot_num)]
         self.points_for_render = [[] for _ in range(self.robot_num)]
         self.render_inited = True
 
     def reset(self, agents):
+        self.map.update_obstacle_map(self.state.robots)
         if self.route_plan:
             self.robot_ids_need_map = []
             for agent in agents:
@@ -118,6 +122,7 @@ class Engine(object):
                 i += 1
             if i >= len(self.state.bullets):
                 break
+        self.map.update_obstacle_map(self.state.robots)
         if self.route_plan:
             self.route_plan.update_blocks(self.cal_blocks())
             for robot_id in self.robot_ids_need_map:

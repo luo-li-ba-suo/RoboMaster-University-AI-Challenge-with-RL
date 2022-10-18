@@ -10,7 +10,7 @@ class Parameters:
 
     superQuiet = True
     show_poses = False
-    do_route_plan = True
+    do_route_plan = False
     buff_mode = False
     rotate_by_route_plan = False
     episode_time = 180
@@ -38,8 +38,8 @@ class Parameters:
     episodes = 100000
     render_per_frame = 600
     action_type = 'MultiDiscrete'
-    local_map_unit = 10
-    local_map_size = 50
+    obstacle_map_unit = 8
+    obstacle_map_size = 50
 
     # 有关hp
     start_hp = [100, 100, 100, 100]
