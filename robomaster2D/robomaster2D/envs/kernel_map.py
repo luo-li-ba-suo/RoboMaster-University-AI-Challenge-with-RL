@@ -18,10 +18,14 @@ def random_buff_info():  # 随机分配buff位置，第二列表示是否被使�
 
 class Map(object):
     def __init__(self, options):
+        # 有关障碍物地图：
         self.obstacle_map = None
+        self.obstacle_map_original = None
         self.obstacle_map_unit = options.obstacle_map_unit
         self.obstacle_map_size = options.obstacle_map_size
         self.robot_num = options.robot_r_num + options.robot_b_num
+        self.death_idx = []
+
         self.map_length = 808
         self.map_width = 448
         self.start_areas = np.array([[[708.0, 808.0, 0.0, 100.0],  ###red start area
@@ -93,61 +97,76 @@ class Map(object):
         return pointy
 
     def obstacle_map_init(self, expand=0):
-        # 5个通道：地图障碍物占位/每个机器人占位
-        self.obstacle_map = np.zeros((5, self.map_width // self.obstacle_map_unit + self.obstacle_map_size,
-                                      self.map_length // self.obstacle_map_unit + self.obstacle_map_size), dtype=int)
-        self.obstacle_map[0, :, 0:self.obstacle_map_size // 2] = 1
-        self.obstacle_map[0, :, self.map_length // self.obstacle_map_unit + self.obstacle_map_size // 2:
-                                self.map_length // self.obstacle_map_unit + self.obstacle_map_size] = 1
-        self.obstacle_map[0, 0:self.obstacle_map_size // 2, :] = 1
-        self.obstacle_map[0, self.map_width // self.obstacle_map_unit + self.obstacle_map_size // 2:
-                             self.map_width // self.obstacle_map_unit + self.obstacle_map_size, :] = 1
-        for i, barrier in enumerate(self.barriers):
-            barrier = np.around(barrier / self.obstacle_map_unit)
-            if i == 4:
-                p1, p2, p3, p4 = np.array([(barrier[0] + barrier[1]) / 2, barrier[2]]), \
-                                 np.array([barrier[0], (barrier[2] + barrier[3]) / 2]), \
-                                 np.array([barrier[1], (barrier[2] + barrier[3]) / 2]), \
-                                 np.array([(barrier[0] + barrier[1]) / 2, barrier[3]])
-                self.fill_map_with_rectangle(0, np.array([p1, p2, p3, p4]), pre_clear=False)
-                continue
-            xmin = int(self.map_x_convert(barrier[0], expand) + self.obstacle_map_size / 2 - expand)
-            xmax = int(self.map_x_convert(barrier[1], expand) + self.obstacle_map_size / 2 + expand)
-            ymin = int(self.map_y_convert(barrier[2], expand) + self.obstacle_map_size / 2 - expand)
-            ymax = int(self.map_y_convert(barrier[3], expand) + self.obstacle_map_size / 2 + expand)
-            self.obstacle_map[0, ymin:ymax, xmin:xmax] = 1
+        self.death_idx = []
+        if self.obstacle_map_original is None:
+            # 6个通道：两种地图障碍物占位/每个机器人占位
+            self.obstacle_map = np.zeros((2 + self.robot_num,
+                                          self.map_width // self.obstacle_map_unit + self.obstacle_map_size,
+                                          self.map_length // self.obstacle_map_unit + self.obstacle_map_size), dtype=int)
+            self.obstacle_map[0, :, 0:self.obstacle_map_size // 2] = 1
+            self.obstacle_map[0, :, self.map_length // self.obstacle_map_unit + self.obstacle_map_size // 2:
+                                    self.map_length // self.obstacle_map_unit + self.obstacle_map_size] = 1
+            self.obstacle_map[0, 0:self.obstacle_map_size // 2, :] = 1
+            self.obstacle_map[0, self.map_width // self.obstacle_map_unit + self.obstacle_map_size // 2:
+                                 self.map_width // self.obstacle_map_unit + self.obstacle_map_size, :] = 1
+            for i, barrier in enumerate(self.barriers):
+                barrier = np.around(barrier / self.obstacle_map_unit)
+                if i == 4:
+                    p1, p2, p3, p4 = np.array([(barrier[0] + barrier[1]) / 2, barrier[2]]), \
+                                     np.array([barrier[0], (barrier[2] + barrier[3]) / 2]), \
+                                     np.array([barrier[1], (barrier[2] + barrier[3]) / 2]), \
+                                     np.array([(barrier[0] + barrier[1]) / 2, barrier[3]])
+                    self.fill_map_with_rectangle(1, np.array([p1, p2, p3, p4]), pre_clear=False)
+                    continue
+                xmin = int(self.map_x_convert(barrier[0], expand) + self.obstacle_map_size / 2 - expand)
+                xmax = int(self.map_x_convert(barrier[1], expand) + self.obstacle_map_size / 2 + expand)
+                ymin = int(self.map_y_convert(barrier[2], expand) + self.obstacle_map_size / 2 - expand)
+                ymax = int(self.map_y_convert(barrier[3], expand) + self.obstacle_map_size / 2 + expand)
+                if i == 1 or i == 7:
+                    self.obstacle_map[1, ymin:ymax, xmin:xmax] = 1
+                else:
+                    self.obstacle_map[0, ymin:ymax, xmin:xmax] = 1
+            self.obstacle_map_original = self.obstacle_map.copy()
+        else:
+            self.obstacle_map = self.obstacle_map_original.copy()
         return self.obstacle_map
 
     def update_obstacle_map(self, robots):
         for i, robot in enumerate(robots):
             points = robot.outlines[[0, 2, 1, 3]]
-            points[:, 0] = robot.outlines[[0, 2, 1, 3]][:, 0] * math.cos(robot.angle) + robot.outlines[[0, 2, 1, 3]][:,
-                                                                                        1] * math.sin(robot.angle)
-            points[:, 1] = robot.outlines[[0, 2, 1, 3]][:, 1] * math.cos(robot.angle) - robot.outlines[[0, 2, 1, 3]][:,
-                                                                                        0] * math.sin(robot.angle)
+            points[:, 0] = robot.outlines[[0, 2, 1, 3]][:, 0] * math.cos(math.radians(90-robot.angle)) + robot.outlines[[0, 2, 1, 3]][:,
+                                                                                        1] * math.sin(math.radians(90-robot.angle))
+            points[:, 1] = robot.outlines[[0, 2, 1, 3]][:, 1] * math.cos(math.radians(90-robot.angle)) - robot.outlines[[0, 2, 1, 3]][:,
+                                                                                        0] * math.sin(math.radians(90-robot.angle))
             points += robot.center
             points = np.around(points / self.obstacle_map_unit)
             if robot.hp <= 0:
-                # 如果机器人死亡，则算作固定障碍物
-                self.fill_map_with_rectangle(0, points)
+                if i not in self.death_idx:
+                    # 如果机器人死亡，则算作固定障碍物;死亡只需添加一次
+                    self.death_idx.append(i)
+                    self.obstacle_map[i+2, ...] = 0
+                    self.fill_map_with_rectangle(0, points, pre_clear=False)
             else:
-                self.fill_map_with_rectangle(i + 1, points)
+                self.fill_map_with_rectangle(i + 2, points)
+        for i, robot in enumerate(robots):
             if robot.friend is None:
-                ids = [-1, robot.id] + robot.enemy
+                ids = [-2, -1, robot.id] + robot.enemy
             else:
-                ids = [-1, robot.id, robot.friend] + robot.enemy
-            ids += np.array(1)
+                ids = [-2, -1, robot.id, robot.friend] + robot.enemy
+            ids += np.array(2)
             x_range_0 = int(np.round(robot.x / self.obstacle_map_unit))
-            x_range_1 = int(np.round(robot.x / self.obstacle_map_unit + self.obstacle_map_size))
+            # 误：x_range_1 = int(np.round(robot.x / self.obstacle_map_unit + self.obstacle_map_size))
+            # 错误原因：np.round奇进偶舍
+            x_range_1 = int(np.round(robot.x / self.obstacle_map_unit) + self.obstacle_map_size)
             y_range_0 = int(np.round(robot.y / self.obstacle_map_unit))
-            y_range_1 = int(np.round(robot.y / self.obstacle_map_unit + self.obstacle_map_size))
+            y_range_1 = int(np.round(robot.y / self.obstacle_map_unit) + self.obstacle_map_size)
 
             robot.local_map = self.obstacle_map[ids, y_range_0:y_range_1, x_range_0:x_range_1]
         return self.obstacle_map
 
     def fill_map_with_rectangle(self, channel, points, pre_clear=True):
         if pre_clear:
-            self.obstacle_map[channel , ...] = 0
+            self.obstacle_map[channel, ...] = 0
         x_left = int(np.round(min(points[:, 0])))
         x_right = int(np.round(max(points[:, 0])))
         y_left = int(np.round(min(points[:, 1])))

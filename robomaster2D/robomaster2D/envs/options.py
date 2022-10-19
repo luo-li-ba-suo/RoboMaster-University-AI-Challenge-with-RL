@@ -39,7 +39,7 @@ class Parameters:
     render_per_frame = 600
     action_type = 'MultiDiscrete'
     obstacle_map_unit = 8
-    obstacle_map_size = 50
+    obstacle_map_size = 100
 
     # 有关hp
     start_hp = [100, 100, 100, 100]

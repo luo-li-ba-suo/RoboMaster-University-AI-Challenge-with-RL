@@ -455,6 +455,31 @@ class User_Interface(object):
                 local_map_ = local_map_.T
                 local_map_ = cv2.resize(local_map_, (220,210))
                 self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[1] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[2] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[3] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[4] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                local_map_[np.where(local_map[5] == 0)] = 255
+                local_map_ = local_map_.T
+                local_map_ = cv2.resize(local_map_, (220,210))
+                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
 
 
         for i, figure in enumerate(self.figures_to_show):

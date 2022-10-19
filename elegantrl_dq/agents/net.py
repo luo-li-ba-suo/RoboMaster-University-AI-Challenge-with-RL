@@ -140,7 +140,7 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_matrix_channel=5, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_matrix_channel=6, if_use_rnn=False):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
@@ -234,7 +234,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_matrix_channel=5):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_matrix_channel=6):
         super().__init__()
         self.if_use_cnn = if_use_cnn
         self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
@@ -267,7 +267,7 @@ class CriticAdv(nn.Module):
 
 # actor与critic网络共享特征提取的主干
 class DiscretePPOShareNet(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False, state_matrix_channel=5):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False, state_matrix_channel=6):
         super().__init__()
         self.action_dim = action_dim  # 默认为多维动作空间
 

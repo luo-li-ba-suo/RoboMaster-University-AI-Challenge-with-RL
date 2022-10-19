@@ -55,7 +55,7 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards_episode = [{} for _ in range(self.robot_num)]
         self.rewards_record = [[] for _ in range(self.robot_num)]
 
-        self.observation_matrix_shape = [1 + self.robot_num, args.obstacle_map_size, args.obstacle_map_size]
+        self.observation_matrix_shape = [2 + self.robot_num, args.obstacle_map_size, args.obstacle_map_size]
         # flags
         self.cal_public_obs_already = False
 
@@ -391,8 +391,8 @@ class RMUA_Multi_agent_Env(gym.Env):
 
 if __name__ == '__main__':
     args = Parameters()
-    args.red_agents_path = 'src.agents.human_agent'
-    args.blue_agents_path = 'src.agents.handcrafted_enemy'
+    args.red_agents_path = ['src.agents.human_agent']
+    args.blue_agents_path = ['src.agents.human_agent']
     args.render_per_frame = 20
     args.episode_step = 0
     args.render = True
