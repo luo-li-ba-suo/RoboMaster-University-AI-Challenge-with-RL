@@ -79,6 +79,11 @@ class Parameters:
     # 有关地图信息：
     enable_blocks = True
 
+    # 有关Astar：
+    Astar_map_x_size = 81
+    Astar_map_y_size = 45
+    Astar_obstacle_expand = 2
+
     def get_dict(self):
         dict_ = {}
         for name in dir(self):

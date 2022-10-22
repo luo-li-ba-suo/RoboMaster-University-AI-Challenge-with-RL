@@ -59,9 +59,11 @@ class Map(object):
                                       [708.0, 808.0, 328.0, 348.0]], dtype='float32')
             # 障碍物类型。场地中有两种不同高度的障碍物，较矮的障碍物只能阻挡机器人前进不能阻挡子弹，标记为1,其他的标记为0
             self.barriers_mode = [0, 1, 0, 0, 1, 0, 0, 1, 0]
+            self.barriers_pose = [0, 0, 0, 0, 1, 0, 0, 0, 0] # 0表示与坐标轴平行;1表示与坐标轴成45度角
         else:
             self.barriers = np.array([])
             self.barriers_mode = []
+            self.barriers_pose = []
         self.goal_positions = [[50, 50], [100, 50], [150, 50], [200, 50], [250, 50], [300, 50],
                                [354, 50], [404, 50], [454, 50], [500, 50], [546, 50], [592, 50],
                                [708, 50], [758, 50],
@@ -81,6 +83,13 @@ class Map(object):
                                [160, 278], [100, 278], [50, 278]
                                ]
         self.max_dis = 1000
+
+        # Astar
+        self.Astar_obstacle_set_init = None
+        self.Astar_obstacle_set_robots = []
+        self.Astar_map_x_size = options.Astar_map_x_size
+        self.Astar_map_y_size = options.Astar_map_y_size
+        self.Astar_obstacle_expand = options.Astar_obstacle_expand
 
     def map_x_convert(self, pointx, expand=1):  # unit指网格化边长，expand指障碍物拓宽
         if pointx < expand:
@@ -122,7 +131,7 @@ class Map(object):
                 xmax = int(self.map_x_convert(barrier[1], expand) + self.obstacle_map_size / 2 + expand)
                 ymin = int(self.map_y_convert(barrier[2], expand) + self.obstacle_map_size / 2 - expand)
                 ymax = int(self.map_y_convert(barrier[3], expand) + self.obstacle_map_size / 2 + expand)
-                if i == 1 or i == 7:
+                if self.barriers_mode[i]:
                     self.obstacle_map[1, ymin:ymax, xmin:xmax] = 1
                 else:
                     self.obstacle_map[0, ymin:ymax, xmin:xmax] = 1
@@ -183,13 +192,167 @@ class Map(object):
                     continue
                 self.obstacle_map[channel, int(y + self.obstacle_map_size / 2), int(x + self.obstacle_map_size / 2)] = 1
 
+    def init_Astar_obstacle_set(self):
+        if self.Astar_obstacle_set_init is None:
+            self.Astar_obstacle_set_init = set()
+            self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init,
+                                            np.array([self.Astar_obstacle_expand, self.Astar_map_x_size-self.Astar_obstacle_expand,
+                                                      self.Astar_obstacle_expand, self.Astar_map_y_size-self.Astar_obstacle_expand]))
+
+            for i, barrier in enumerate(self.barriers):
+                scale = self.Astar_map_x_size / self.map_length
+                barrier *= scale
+                barrier = barrier.astype(np.int32)
+                barrier += [-self.Astar_obstacle_expand, self.Astar_obstacle_expand,
+                            -self.Astar_obstacle_expand, self.Astar_obstacle_expand]
+                if self.barriers_pose[i] == 0:
+                    self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init, barrier)
+                else:
+                    x_left = barrier[0]
+                    x_right = barrier[1]
+                    y_left = barrier[2]
+                    y_right = barrier[3]
+                    i = 0
+                    for x in range(x_left, (x_left + x_right)//2+1):
+                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 + i))
+                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 - i))
+                        i += 1
+                    i = 0
+                    for x in range(x_right, (x_left + x_right)//2, -1):
+                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 + i))
+                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 - i))
+                        i += 1
+
+        return self.Astar_obstacle_set_init
+
+    def update_Astar_obstacle_set_robots(self, robots):
+        self.Astar_obstacle_set_robots = []
+        for robot in robots:
+            obs = set()
+            points = robot.outlines[0:4].copy()
+            points_ = points + [[-20, -20], [20, -20],
+                       [-20, 20], [20, 20]]
+            points[:, 0] = points_[:, 0] * math.cos(math.radians(90 - robot.angle)) + \
+                           points_[:, 1] * math.sin(math.radians(90 - robot.angle))
+            points[:, 1] = points_[:, 1] * math.cos(math.radians(90 - robot.angle)) - \
+                           points_[:, 0] * math.sin(math.radians(90 - robot.angle))
+            points += robot.center
+            scale = self.Astar_map_x_size / self.map_length
+            points = np.around(points * scale)
+            points = points.astype(np.int32)
+            obs.add((points[0, 0], points[0, 1]))
+            obs.add((points[1, 0], points[1, 1]))
+            obs.add((points[2, 0], points[2, 1]))
+            obs.add((points[3, 0], points[3, 1]))
+            if points[0, 0] == points[1, 0]:  # 如果与坐标轴平行
+                for y in range(points[0, 1]+1, points[1, 1], 1 if points[0, 1] < points[1, 1] else -1):
+                    obs.add((points[0, 0], y))
+                    obs.add((points[2, 0], y))
+                for x in range(points[0, 0]+1, points[2, 0], 1 if points[0, 0] < points[2, 0] else -1):
+                    obs.add((x, points[0, 1]))
+                    obs.add((x, points[1, 1]))
+            elif points[0, 1] == points[1, 1]:
+                for x in range(points[0, 0]+1, points[1, 0], 1 if points[0, 0] < points[1, 0] else -1):
+                    obs.add((x, points[0, 1]))
+                    obs.add((x, points[2, 1]))
+                for y in range(points[0, 1]+1, points[2, 1], 1 if points[0, 1] < points[2, 1] else -1):
+                    obs.add((points[0, 0], y))
+                    obs.add((points[1, 0], y))
+            else:
+                obs_unit_last = None
+                for x in range(points[0, 0], points[1, 0] + 1) if points[0, 0] < points[1, 0] \
+                        else range(points[1, 0], points[0, 0] + 1):
+                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[1, 0],
+                                                                            points[0, 1], points[1, 1], x))
+                    if obs_unit_last is not None:
+                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                obs.add((obs_unit[0], y))
+                    obs_unit_last = obs_unit
+                    obs.add(obs_unit)
+                obs_unit_last = None
+                for x in range(points[0, 0], points[2, 0] + 1) if points[0, 0] < points[2, 0] else \
+                            range(points[2, 0], points[0, 0] + 1):
+                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[2, 0],
+                                                                    points[0, 1], points[2, 1], x))
+                    if obs_unit_last is not None:
+                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                obs.add((obs_unit[0], y))
+                    obs_unit_last = obs_unit
+                    obs.add(obs_unit)
+                obs_unit_last = None
+                for x in range(points[2, 0], points[3, 0] + 1) if points[2, 0] < points[3, 0] \
+                        else range(points[3, 0], points[2, 0] + 1):
+                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[2, 0], points[3, 0],
+                                                                    points[2, 1], points[3, 1], x))
+                    if obs_unit_last is not None:
+                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                obs.add((obs_unit[0], y))
+                    obs_unit_last = obs_unit
+                    obs.add(obs_unit)
+                obs_unit_last = None
+                for x in range(points[1, 0], points[3, 0]+1) if points[1, 0] < points[3, 0] \
+                        else range(points[3, 0], points[1, 0]+1):
+                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[1, 0], points[3, 0],
+                                                                    points[1, 1], points[3, 1], x))
+                    if obs_unit_last is not None:
+                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                obs.add((obs_unit[0], y))
+                    obs_unit_last = obs_unit
+                    obs.add(obs_unit)
+            self.Astar_obstacle_set_robots.append(obs)
+
+    @staticmethod
+    def calculate_coo_according_to_two_coo(x1, x2, y1, y2, x3):
+        assert x1 != x2, "calculate_coo_according_to_two_coo error"
+        return int(np.around((y1*(x2-x3)+y2*(x3-x1))/(x2-x1)))
+
+    def get_Astar_obstacle_set(self, robot_idx):
+        assert self.Astar_obstacle_set_init is not None, "Astar_obstacle set Not Initialised"
+        assert self.Astar_obstacle_set_robots is not None, "Astar robots obstacle set Not updated"
+        obs_set = self.Astar_obstacle_set_init.copy()
+        for i in range(self.robot_num):
+            if i != robot_idx:
+                obs_set = obs_set.union(self.Astar_obstacle_set_robots[i])
+        return obs_set
+
+    @staticmethod
+    def Add_Rec_Astar_obstacle_map(obs_map, rec):
+        for i in range(rec[0], rec[1]):
+            obs_map.add((i, rec[2]))
+        for i in range(rec[0], rec[1]):
+            obs_map.add((i, rec[3] - 1))
+
+        for i in range(rec[2], rec[3]):
+            obs_map.add((rec[0], i))
+        for i in range(rec[2], rec[3]):
+            obs_map.add((rec[1] - 1, i))
+
 
 if __name__ == "__main__":
     from robomaster2D.envs.options import Parameters
     from robomaster2D.envs.kernel_objects import Robot
+    from robomaster2D.envs.src import plotting
+    from robomaster2D.envs.kernel_Astar import AStar
 
     options = Parameters()
     map = Map(options)
     bm = map.obstacle_map_init()
-    robots = [Robot(2, 2, x=100, y=100, angle=45)]
+    robots = [Robot(2, 2, x=200, y=100, angle=45),
+              Robot(2, 2, x=540, y=100, angle=0),
+              Robot(2, 2, x=310, y=200, angle=-80),
+              Robot(2, 2, x=550, y=290, angle=90)]
     bm = map.update_obstacle_map(robots)
+
+    s_start = tuple((robots[0].center * map.Astar_map_x_size/808).astype(int))
+    s_goal = (70, 10)
+    astar_map = map.init_Astar_obstacle_set()
+    map.update_Astar_obstacle_set_robots(robots)
+    astar_map = map.get_Astar_obstacle_set(0)
+    plot = plotting.Plotting(s_start, s_goal, astar_map)
+    astar = AStar(s_start, s_goal, "euclidean", astar_map)
+    path, visited = astar.searching()
+    plot.animation(path, visited, "A*")  # animation
