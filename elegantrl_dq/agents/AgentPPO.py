@@ -480,24 +480,23 @@ class MultiEnvDiscretePPO(AgentPPO):
             trainer_actions, actions_prob = self.select_stochastic_action(states_trainers)
 
             # 获取测试者的状态与动作
-            last_testers_envs = np.array(env.get_tester_ids())
-            if last_testers_envs.any():
-                if not self.if_use_cnn and not self.if_use_rnn:
-                    states_testers = []
-                    for env_id in range(env.env_num):
-                        for tester_id in last_testers_envs[env_id]:
-                            states_testers.append(states_envs[env_id][tester_id][0])
-                else:
-                    states_testers = [[]]
+            last_testers_envs = np.array(env.get_tester_ids(), dtype=object)
+            last_testers_envs_size = 0
+            for last_testers in last_testers_envs:
+                last_testers_envs_size += len(last_testers)
+            states_testers = {'vector': np.zeros((last_testers_envs_size, self.state_dim)), 'matrix': None}
+            if self.if_use_cnn:
+                states_testers['matrix'] = np.zeros((last_testers_envs_size, self.state_matrix_shape[0], self.state_matrix_shape[1],
+                                                      self.state_matrix_shape[2]))
+            tester_i = 0
+            for env_id in range(env.env_num):
+                for tester_id in last_testers_envs[env_id]:
+                    states_testers['vector'][tester_i] = states_envs[env_id][tester_id][0]
                     if self.if_use_cnn:
-                        states_testers.append([])
-                        for env_id in range(env.env_num):
-                            for tester_id in last_testers_envs[env_id]:
-                                states_testers[0].append(states_envs[env_id][tester_id][0])
-                                states_testers[1].append(states_envs[env_id][tester_id][1])
-                    if self.if_use_rnn:
-                        states_testers.append(self.rnn_state)  # rnn隐藏状态
-                tester_actions = self.select_deterministic_action(np.array(states_testers, dtype=object))
+                        states_testers['matrix'][tester_i] = states_envs[env_id][tester_id][1]
+                    tester_i += 1
+            if last_testers_envs.any():
+                tester_actions = self.select_deterministic_action(states_testers)
             else:
                 tester_actions = None
 
