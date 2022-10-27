@@ -231,7 +231,7 @@ class Engine(object):
             self.acts[n].shoot = orders.set[n].shoot
             # rotate yaw
             m = orders.set[n].shoot_target_enemy
-            m = self.get_valid_target_index(n, m, auto_rotate=orders.set[n].auto_rotate)
+            m = self.get_valid_target_index(n, m)
             if m is not None:
                 self.acts[n].yaw_speed, enemy_aimed = self.auto_aim(n, m)
                 if enemy_aimed:
