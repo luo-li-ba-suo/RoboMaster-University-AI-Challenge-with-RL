@@ -213,14 +213,14 @@ class RMUA_Multi_agent_Env(gym.Env):
             self.rewards[n]['hit'] = 0
             self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.left.one_step
             self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.right.one_step
-            self.rewards[n]['hit'] += 5 * robot.enemy_hit_record.behind.one_step
-            self.rewards[n]['hit'] += 1 * robot.enemy_hit_record.front.one_step
+            self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.behind.one_step
+            self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.front.one_step
             # '''被敌军击中'''
             self.rewards[n]['hit_by_enemy'] = 0
             self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.left.one_step
             self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.right.one_step
-            self.rewards[n]['hit_by_enemy'] -= 5 * robot.armor_hit_enemy_record.behind.one_step
-            self.rewards[n]['hit_by_enemy'] -= 1 * robot.armor_hit_enemy_record.front.one_step
+            self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.behind.one_step
+            self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.front.one_step
             # '''击中友军'''
             # reward -= 0.005 * robot.teammate_hit_record.left.one_step
             # reward -= 0.005 * robot.teammate_hit_record.right.one_step
