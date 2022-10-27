@@ -90,6 +90,8 @@ class Map(object):
         self.Astar_map_x_size = options.Astar_map_x_size
         self.Astar_map_y_size = options.Astar_map_y_size
         self.Astar_obstacle_expand = options.Astar_obstacle_expand
+        self.bord = np.array([self.Astar_obstacle_expand, self.Astar_map_x_size-self.Astar_obstacle_expand,
+                                                      self.Astar_obstacle_expand, self.Astar_map_y_size-self.Astar_obstacle_expand])
 
     def map_x_convert(self, pointx, expand=1):  # unit指网格化边长，expand指障碍物拓宽
         if pointx < expand:
@@ -195,33 +197,37 @@ class Map(object):
     def init_Astar_obstacle_set(self):
         if self.Astar_obstacle_set_init is None:
             self.Astar_obstacle_set_init = set()
-            self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init,
-                                            np.array([self.Astar_obstacle_expand, self.Astar_map_x_size-self.Astar_obstacle_expand,
-                                                      self.Astar_obstacle_expand, self.Astar_map_y_size-self.Astar_obstacle_expand]))
+            self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init, self.bord)
 
             for i, barrier in enumerate(self.barriers):
                 scale = self.Astar_map_x_size / self.map_length
+                barrier = barrier.copy()
                 barrier *= scale
                 barrier = barrier.astype(np.int32)
                 barrier += [-self.Astar_obstacle_expand, self.Astar_obstacle_expand,
                             -self.Astar_obstacle_expand, self.Astar_obstacle_expand]
                 if self.barriers_pose[i] == 0:
-                    self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init, barrier)
+                    self.Add_Rec_Astar_obstacle_map(self.Astar_obstacle_set_init, barrier, fill=True)
                 else:
                     x_left = barrier[0]
                     x_right = barrier[1]
                     y_left = barrier[2]
                     y_right = barrier[3]
-                    i = 0
-                    for x in range(x_left, (x_left + x_right)//2+1):
-                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 + i))
-                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 - i))
-                        i += 1
-                    i = 0
-                    for x in range(x_right, (x_left + x_right)//2, -1):
-                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 + i))
-                        self.Astar_obstacle_set_init.add((x, (y_left + y_right) // 2 - i))
-                        i += 1
+                    p1, p2, p3, p4 = np.array([(barrier[0] + barrier[1]) / 2, barrier[2]]), \
+                                     np.array([barrier[0], (barrier[2] + barrier[3]) / 2]), \
+                                     np.array([barrier[1], (barrier[2] + barrier[3]) / 2]), \
+                                     np.array([(barrier[0] + barrier[1]) / 2, barrier[3]])
+                    for x in range(x_left, x_right + 1):
+                        for y in range(y_left, y_right + 1):
+                            if (p1[0] - x) * (p2[1] - y) - (p2[0] - x) * (p1[1] - y) > 0:
+                                continue
+                            elif (p3[0] - x) * (p1[1] - y) - (p1[0] - x) * (p3[1] - y) > 0:
+                                continue
+                            elif (p4[0] - x) * (p3[1] - y) - (p3[0] - x) * (p4[1] - y) > 0:
+                                continue
+                            elif (p2[0] - x) * (p4[1] - y) - (p4[0] - x) * (p2[1] - y) > 0:
+                                continue
+                            self.Astar_obstacle_set_init.add((x, y))
 
         return self.Astar_obstacle_set_init
 
@@ -244,65 +250,73 @@ class Map(object):
             obs.add((points[1, 0], points[1, 1]))
             obs.add((points[2, 0], points[2, 1]))
             obs.add((points[3, 0], points[3, 1]))
-            if points[0, 0] == points[1, 0]:  # 如果与坐标轴平行
-                for y in range(points[0, 1]+1, points[1, 1], 1 if points[0, 1] < points[1, 1] else -1):
-                    obs.add((points[0, 0], y))
-                    obs.add((points[2, 0], y))
-                for x in range(points[0, 0]+1, points[2, 0], 1 if points[0, 0] < points[2, 0] else -1):
-                    obs.add((x, points[0, 1]))
-                    obs.add((x, points[1, 1]))
-            elif points[0, 1] == points[1, 1]:
-                for x in range(points[0, 0]+1, points[1, 0], 1 if points[0, 0] < points[1, 0] else -1):
-                    obs.add((x, points[0, 1]))
-                    obs.add((x, points[2, 1]))
-                for y in range(points[0, 1]+1, points[2, 1], 1 if points[0, 1] < points[2, 1] else -1):
-                    obs.add((points[0, 0], y))
-                    obs.add((points[1, 0], y))
+            x_left = int(np.round(min(points[:, 0])))
+            x_right = int(np.round(max(points[:, 0])))
+            y_left = int(np.round(min(points[:, 1])))
+            y_right = int(np.round(max(points[:, 1])))
+            if points[0, 0] == points[1, 0] or points[0, 1] == points[1, 1]:  # 如果与坐标轴平行
+                for x in range(x_left, x_right + 1):
+                    for y in range(y_left, y_right + 1):
+                        obs.add((x, y))
             else:
-                obs_unit_last = None
-                for x in range(points[0, 0], points[1, 0] + 1) if points[0, 0] < points[1, 0] \
-                        else range(points[1, 0], points[0, 0] + 1):
-                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[1, 0],
-                                                                            points[0, 1], points[1, 1], x))
-                    if obs_unit_last is not None:
-                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
-                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
-                                obs.add((obs_unit[0], y))
-                    obs_unit_last = obs_unit
-                    obs.add(obs_unit)
-                obs_unit_last = None
-                for x in range(points[0, 0], points[2, 0] + 1) if points[0, 0] < points[2, 0] else \
-                            range(points[2, 0], points[0, 0] + 1):
-                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[2, 0],
-                                                                    points[0, 1], points[2, 1], x))
-                    if obs_unit_last is not None:
-                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
-                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
-                                obs.add((obs_unit[0], y))
-                    obs_unit_last = obs_unit
-                    obs.add(obs_unit)
-                obs_unit_last = None
-                for x in range(points[2, 0], points[3, 0] + 1) if points[2, 0] < points[3, 0] \
-                        else range(points[3, 0], points[2, 0] + 1):
-                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[2, 0], points[3, 0],
-                                                                    points[2, 1], points[3, 1], x))
-                    if obs_unit_last is not None:
-                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
-                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
-                                obs.add((obs_unit[0], y))
-                    obs_unit_last = obs_unit
-                    obs.add(obs_unit)
-                obs_unit_last = None
-                for x in range(points[1, 0], points[3, 0]+1) if points[1, 0] < points[3, 0] \
-                        else range(points[3, 0], points[1, 0]+1):
-                    obs_unit = (x, self.calculate_coo_according_to_two_coo(points[1, 0], points[3, 0],
-                                                                    points[1, 1], points[3, 1], x))
-                    if obs_unit_last is not None:
-                        if abs(obs_unit[1] - obs_unit_last[1]) > 1:
-                            for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
-                                obs.add((obs_unit[0], y))
-                    obs_unit_last = obs_unit
-                    obs.add(obs_unit)
+                mode0 = False
+                if mode0:
+                    obs_unit_last = None
+                    for x in range(points[0, 0], points[1, 0] + 1) if points[0, 0] < points[1, 0] \
+                            else range(points[1, 0], points[0, 0] + 1):
+                        obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[1, 0],
+                                                                                points[0, 1], points[1, 1], x))
+                        if obs_unit_last is not None:
+                            if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                                for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                    obs.add((obs_unit[0], y))
+                        obs_unit_last = obs_unit
+                        obs.add(obs_unit)
+                    obs_unit_last = None
+                    for x in range(points[0, 0], points[2, 0] + 1) if points[0, 0] < points[2, 0] else \
+                                range(points[2, 0], points[0, 0] + 1):
+                        obs_unit = (x, self.calculate_coo_according_to_two_coo(points[0, 0], points[2, 0],
+                                                                        points[0, 1], points[2, 1], x))
+                        if obs_unit_last is not None:
+                            if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                                for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                    obs.add((obs_unit[0], y))
+                        obs_unit_last = obs_unit
+                        obs.add(obs_unit)
+                    obs_unit_last = None
+                    for x in range(points[2, 0], points[3, 0] + 1) if points[2, 0] < points[3, 0] \
+                            else range(points[3, 0], points[2, 0] + 1):
+                        obs_unit = (x, self.calculate_coo_according_to_two_coo(points[2, 0], points[3, 0],
+                                                                        points[2, 1], points[3, 1], x))
+                        if obs_unit_last is not None:
+                            if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                                for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                    obs.add((obs_unit[0], y))
+                        obs_unit_last = obs_unit
+                        obs.add(obs_unit)
+                    obs_unit_last = None
+                    for x in range(points[1, 0], points[3, 0]+1) if points[1, 0] < points[3, 0] \
+                            else range(points[3, 0], points[1, 0]+1):
+                        obs_unit = (x, self.calculate_coo_according_to_two_coo(points[1, 0], points[3, 0],
+                                                                        points[1, 1], points[3, 1], x))
+                        if obs_unit_last is not None:
+                            if abs(obs_unit[1] - obs_unit_last[1]) > 1:
+                                for y in range(obs_unit[1], obs_unit_last[1], 1 if obs_unit[1] < obs_unit_last[1] else -1):
+                                    obs.add((obs_unit[0], y))
+                        obs_unit_last = obs_unit
+                        obs.add(obs_unit)
+                else:
+                    for x in range(x_left, x_right + 1):
+                        for y in range(y_left, y_right + 1):
+                            if (points[0][0] - x) * (points[1][1] - y) - (points[1][0] - x) * (points[0][1] - y) < 0:
+                                continue
+                            elif (points[2][0] - x) * (points[0][1] - y) - (points[0][0] - x) * (points[2][1] - y) < 0:
+                                continue
+                            elif (points[3][0] - x) * (points[2][1] - y) - (points[2][0] - x) * (points[3][1] - y) < 0:
+                                continue
+                            elif (points[1][0] - x) * (points[3][1] - y) - (points[3][0] - x) * (points[1][1] - y) < 0:
+                                continue
+                            obs.add((x,y))
             self.Astar_obstacle_set_robots.append(obs)
 
     @staticmethod
@@ -320,39 +334,49 @@ class Map(object):
         return obs_set
 
     @staticmethod
-    def Add_Rec_Astar_obstacle_map(obs_map, rec):
-        for i in range(rec[0], rec[1]):
-            obs_map.add((i, rec[2]))
-        for i in range(rec[0], rec[1]):
-            obs_map.add((i, rec[3] - 1))
+    def Add_Rec_Astar_obstacle_map(obs_map, rec, fill=False):
+        if fill:
+            for x in range(rec[0], rec[1]):
+                for y in range(rec[2], rec[3]):
+                    obs_map.add((x, y))
+        else:
+            for i in range(rec[0], rec[1]):
+                obs_map.add((i, rec[2]))
+            for i in range(rec[0], rec[1]):
+                obs_map.add((i, rec[3] - 1))
 
-        for i in range(rec[2], rec[3]):
-            obs_map.add((rec[0], i))
-        for i in range(rec[2], rec[3]):
-            obs_map.add((rec[1] - 1, i))
+            for i in range(rec[2], rec[3]):
+                obs_map.add((rec[0], i))
+            for i in range(rec[2], rec[3]):
+                obs_map.add((rec[1] - 1, i))
 
 
 if __name__ == "__main__":
     from robomaster2D.envs.options import Parameters
     from robomaster2D.envs.kernel_objects import Robot
     from robomaster2D.envs.src import plotting
-    from robomaster2D.envs.kernel_Astar import AStar
+    from robomaster2D.envs.kernel_Astar import AStar, search
+    import time
 
     options = Parameters()
     map = Map(options)
     bm = map.obstacle_map_init()
-    robots = [Robot(2, 2, x=200, y=100, angle=45),
+    robots = [Robot(2, 2, x=70, y=90, angle=45),
               Robot(2, 2, x=540, y=100, angle=0),
-              Robot(2, 2, x=310, y=200, angle=-80),
+              Robot(2, 2, x=310, y=200, angle=-45),
               Robot(2, 2, x=550, y=290, angle=90)]
     bm = map.update_obstacle_map(robots)
 
     s_start = tuple((robots[0].center * map.Astar_map_x_size/808).astype(int))
-    s_goal = (70, 10)
-    astar_map = map.init_Astar_obstacle_set()
+    s_goal = (54, 45-10)
+    obs_set = map.init_Astar_obstacle_set()
     map.update_Astar_obstacle_set_robots(robots)
-    astar_map = map.get_Astar_obstacle_set(0)
-    plot = plotting.Plotting(s_start, s_goal, astar_map)
-    astar = AStar(s_start, s_goal, "euclidean", astar_map)
-    path, visited = astar.searching()
+    obs_set = map.get_Astar_obstacle_set(0)
+    plot = plotting.Plotting(s_start, s_goal, obs_set)
+
+    start_time = time.time()
+    path, visited = search(s_goal, obs_set, s_start, map.bord)
+    print("cost time: ", time.time() - start_time)
+    # while not path:
+    #     s_goal
     plot.animation(path, visited, "A*")  # animation

@@ -14,6 +14,7 @@ class Acts(object):  # 底层动作
         self.shoot_mutiple = False  # 是否连发
         self.dodge_dir = True
         self.dir_relate_to_map = True
+        self.auto_rotate = True
 
 
 class Act_feedback(object):
@@ -99,6 +100,7 @@ class Engine(object):
         if self.route_plan:
             self.robot_ids_need_map = []
             for agent in agents:
+                agent.reset()
                 if agent.nn_controlled:
                     self.robot_ids_need_map += agent.robot_ids
             self.route_plan.update_blocks(self.cal_blocks())
@@ -155,7 +157,15 @@ class Engine(object):
                 # 加速：
                 self.acts[n].x_speed += orders.set[n].x * self.state.robots[n].speed_acceleration
                 self.acts[n].y_speed += orders.set[n].y * self.state.robots[n].speed_acceleration
-                self.acts[n].rotate_speed += orders.set[n].rotate * self.state.robots[n].rotate_acceleration
+                if orders.set[n].rotate_target_mode:
+                    rotate = orders.set[n].rotate - self.state.robots[n].angle
+                    if rotate < -180:
+                        rotate += 360
+                    elif rotate > 180:
+                        rotate -= 360
+                    self.acts[n].rotate_speed = rotate
+                else:
+                    self.acts[n].rotate_speed += orders.set[n].rotate * self.state.robots[n].rotate_acceleration
                 # 因阻力减速:
                 if orders.set[n].x == 0:
                     if self.acts[n].x_speed > 0: self.acts[n].x_speed -= self.state.robots[n].drag_acceleration
@@ -187,7 +197,8 @@ class Engine(object):
                     self.acts[n].rotate_speed = self.state.robots[n].rotate_speed_max
                 if self.acts[n].rotate_speed < -self.state.robots[n].rotate_speed_max:
                     self.acts[n].rotate_speed = -self.state.robots[n].rotate_speed_max
-                self.acts[n].dir_relate_to_map = False
+                self.acts[n].dir_relate_to_map = orders.set[n].dir_relate_to_map
+                self.acts[n].auto_rotate = orders.set[n].auto_rotate
             elif self.route_plan is not None:  # 如果使用路径规划
                 if not orders.set[n].stop:
                     goal = [int(orders.set[n].x), int(orders.set[n].y)]
@@ -217,10 +228,10 @@ class Engine(object):
                     self.acts[n].x_speed = self.acts[n].y_speed = self.acts[n].rotate_speed = 0
             else:
                 print('Fail to transform orders to actions')
-
+            self.acts[n].shoot = orders.set[n].shoot
             # rotate yaw
             m = orders.set[n].shoot_target_enemy
-            m = self.get_valid_target_index(n, m)
+            m = self.get_valid_target_index(n, m, auto_rotate=orders.set[n].auto_rotate)
             if m is not None:
                 self.acts[n].yaw_speed, enemy_aimed = self.auto_aim(n, m)
                 if enemy_aimed:
@@ -230,6 +241,7 @@ class Engine(object):
             else:
                 self.state.robots[n].aimed_enemy = None
                 self.acts[n].yaw_speed = 0
+                self.acts[n].shoot = 0
                 # # 加速：
                 # if orders.set[n].yaw != 0:
                 #     self.acts[n].yaw_speed += orders.set[n].yaw * self.state.robots[n].yaw_acceleration
@@ -243,17 +255,21 @@ class Engine(object):
                 #     self.acts[n].yaw_speed = self.state.robots[n].yaw_rotate_speed_max
                 # if self.acts[n].yaw_speed < -self.state.robots[n].yaw_rotate_speed_max:
                 #     self.acts[n].yaw_speed = -self.state.robots[n].yaw_rotate_speed_max
-            self.acts[n].shoot = orders.set[n].shoot
 
     def move_robot(self):
         for n in range(self.robot_num):
             if self.state.robots[n].hp == 0:
                 continue
             # move gimbal
-            self.rotate_gimbal(n, self.acts[n].yaw_speed)
+            rotate_speed_offset = self.rotate_gimbal(n, self.acts[n].yaw_speed)
             # move chassis
             if self.state.robots[n].freeze_state[1] != 1:  # 禁止移动
                 # rotate chassis
+                if rotate_speed_offset < -180:
+                    rotate_speed_offset += 360
+                elif rotate_speed_offset > 180:
+                    rotate_speed_offset -= 360
+                self.acts[n].rotate_speed += rotate_speed_offset
                 if self.acts[n].rotate_speed:
                     p = self.state.robots[n].angle
                     self.state.robots[n].angle += self.acts[n].rotate_speed
@@ -364,8 +380,16 @@ class Engine(object):
     def rotate_gimbal(self, n, yaw_speed):
         if yaw_speed:
             self.state.robots[n].yaw += self.acts[n].yaw_speed
-            if self.state.robots[n].yaw > 90: self.state.robots[n].yaw = 90
-            if self.state.robots[n].yaw < -90: self.state.robots[n].yaw = -90
+            if self.state.robots[n].yaw > 90:
+                rotate_speed = self.state.robots[n].yaw - 90
+                self.state.robots[n].yaw = 90
+                return rotate_speed
+
+            if self.state.robots[n].yaw < -90:
+                rotate_speed = self.state.robots[n].yaw + 90
+                self.state.robots[n].yaw = -90
+                return rotate_speed
+        return 0
 
     def freeze_step(self):
         for n in range(self.robot_num):

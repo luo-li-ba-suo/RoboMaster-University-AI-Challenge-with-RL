@@ -87,6 +87,7 @@ class WinRateManager(object):
 class State(object):  # 总状态
     def __init__(self, options):
         self.frame_num_one_second = options.frame_num_one_second
+        self.map = None
         self.time = 0  # 比赛剩余时间
         self.frame = 0
         self.step = 0
@@ -288,6 +289,7 @@ class Simulator(object):
         self.parameters = Parameters(options)  # parameters
         self.map = Map(options)  # the map
         self.state = State(options)  # initial state
+        self.state.map = self.map
         self.module_referee = Referee(self.state, self.map, options)  # the referee
         self.module_engine = Engine(self.state, self.module_referee, options, self.map)  # the controller
         self.orders = Orders_set((options.robot_r_num + options.robot_b_num))
@@ -311,8 +313,11 @@ class Simulator(object):
         self.module_engine.init_render()
         self.render_inited = True
 
-    def reset(self):
-        self.agents = self.agents_allocator.get_agents()
+    def reset(self, evaluation=False):
+        if evaluation:
+            self.agents = self.agents_allocator.get_eval_agents()
+        else:
+            self.agents = self.agents_allocator.get_agents()
 
         self.step_num = 0
         if self.parameters.random_start_pos:

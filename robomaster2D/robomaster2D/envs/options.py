@@ -74,7 +74,8 @@ class Parameters:
 
     # 有關訓練
     red_agents_path = ['src.agents.rl_trainer']
-    blue_agents_path = ['src.agents.static_enemy', 'src.agents.handcrafted_enemy']
+    blue_agents_path = ['src.agents.nn_enemy']
+    eval_blue_agents_path = ['src.agents.handcrafted_enemy']
 
     # 有关地图信息：
     enable_blocks = True
@@ -82,7 +83,7 @@ class Parameters:
     # 有关Astar：
     Astar_map_x_size = 81
     Astar_map_y_size = 45
-    Astar_obstacle_expand = 2
+    Astar_obstacle_expand = 3
 
     def get_dict(self):
         dict_ = {}

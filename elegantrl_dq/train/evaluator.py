@@ -302,7 +302,7 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
     max_step = env.max_step
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
-    state = env.reset()
+    state = env.reset(evaluation=True)
     trainer_ids_in_the_start = env.env.trainer_ids.copy()
 
     s_tensor_matrix = None

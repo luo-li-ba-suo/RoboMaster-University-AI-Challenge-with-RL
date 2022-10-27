@@ -53,11 +53,13 @@ class Base_Agent(object):
             game_state.robots[idx].robot_info_text[s] = observations[-1]
         return observations
 
+    def reset(self):
+        pass
 
 class Orders(object):  # 指令
     def __init__(self, x=0, y=0, rotate=0,
                  shoot=0, yaw=0,
-                 do_route_plan=False, dir_relate_to_map=True, swing=False):
+                 do_route_plan=False, dir_relate_to_map=False, swing=False, auto_rotate=False):
         self.x = x  # 启动路径规划时
         self.y = y
         self.rotate = rotate  # -1~1	底盘，-1：左转，0：不动，1：右转	a/d
@@ -69,6 +71,9 @@ class Orders(object):  # 指令
         self.freq_update_goal = 5
         self.dir_relate_to_map = dir_relate_to_map
         self.swing = swing
+
+        self.auto_rotate = auto_rotate
+        self.rotate_target_mode = False
 
 
 class Orders_set(object):

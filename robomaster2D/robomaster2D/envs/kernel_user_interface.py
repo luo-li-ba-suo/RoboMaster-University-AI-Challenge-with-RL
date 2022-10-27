@@ -423,63 +423,63 @@ class User_Interface(object):
     def update_figure(self):
         if not self.state.frame % self.update_figure_interval:
             self.figures_to_show = []
-            # 画柱状图
-            hps = []
-            label_hp = {'x': [], 'y': [], 'color': []}
-            for n in range(self.state.robot_num):
-                hps.append(self.state.robots[n].hp)
-                label_hp['x'].append('blue' + str(n) if self.state.robots[n].owner else 'red' + str(n))
-                label_hp['color'].append('b' if self.state.robots[n].owner else 'r')
-                label_hp['y'] = 'hp'
-            figure = self.bar([hps], [label_hp])
-            plt.yticks([0, 400, 800, 1200, 1600, 2000])
-            figure.canvas.draw()
-            figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
-            plt.close()
-            self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+            # # 画柱状图
+            # hps = []
+            # label_hp = {'x': [], 'y': [], 'color': []}
+            # for n in range(self.state.robot_num):
+            #     hps.append(self.state.robots[n].hp)
+            #     label_hp['x'].append('blue' + str(n) if self.state.robots[n].owner else 'red' + str(n))
+            #     label_hp['color'].append('b' if self.state.robots[n].owner else 'r')
+            #     label_hp['y'] = 'hp'
+            # figure = self.bar([hps], [label_hp])
+            # plt.yticks([0, 400, 800, 1200, 1600, 2000])
+            # figure.canvas.draw()
+            # figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
+            # plt.close()
+            # self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
             # 画折线图
             for i in range(self.state.robot_num):
                 if not self.do_plot[i]: continue
-                for plot_name in self.state.robots[i].robot_info_plot:
-                    figure = plt.figure(figsize=(self.plot_size * 1.2, self.plot_size))
-                    plt.plot(self.state.robots[i].robot_info_plot[plot_name])
-                    plt.title(plot_name)
-                    figure.canvas.draw()
-                    figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
-                    plt.close()
-                    self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+                # for plot_name in self.state.robots[i].robot_info_plot:
+                #     figure = plt.figure(figsize=(self.plot_size * 1.2, self.plot_size))
+                #     plt.plot(self.state.robots[i].robot_info_plot[plot_name])
+                #     plt.title(plot_name)
+                #     figure.canvas.draw()
+                #     figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
+                #     plt.close()
+                #     self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
                 # 画局部地图
-                local_map = self.state.robots[i].local_map
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[0] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[1] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[2] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[3] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[4] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
-                local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
-                local_map_[np.where(local_map[5] == 0)] = 255
-                local_map_ = local_map_.T
-                local_map_ = cv2.resize(local_map_, (220,210))
-                self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map = self.state.robots[i].local_map
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[0] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[1] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[2] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[3] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[4] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[5] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
 
 
         for i, figure in enumerate(self.figures_to_show):

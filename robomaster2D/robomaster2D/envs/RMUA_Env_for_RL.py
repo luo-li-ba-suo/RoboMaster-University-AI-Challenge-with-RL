@@ -129,8 +129,8 @@ class RMUA_Multi_agent_Env(gym.Env):
             self.action_space = [gym.spaces.Box(np.array(actions[1][0]), np.array(actions[1][1])),
                                  gym.spaces.MultiDiscrete(actions[0])]
 
-    def reset(self):
-        self.simulator.reset()
+    def reset(self, evaluation=False):
+        self.simulator.reset(evaluation)
 
         self.trainer_ids = []
         self.tester_ids = []
@@ -392,7 +392,8 @@ class RMUA_Multi_agent_Env(gym.Env):
 if __name__ == '__main__':
     args = Parameters()
     args.red_agents_path = ['src.agents.human_agent']
-    args.blue_agents_path = ['src.agents.human_agent']
+    args.blue_agents_path = ['src.agents.handcrafted_enemy']
+    args.robot_b_num = 2
     args.render_per_frame = 20
     args.episode_step = 0
     args.render = True

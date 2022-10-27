@@ -18,8 +18,8 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         self.reset = self.reset_type
         self.step = self.step_type
 
-    def reset_type(self) -> list:
-        states = self.env.reset()
+    def reset_type(self, evaluation=False) -> list:
+        states = self.env.reset(evaluation)
         self.reward_dict = self.env.rewards
         return [np.array(state, dtype=object) for state in states]
 

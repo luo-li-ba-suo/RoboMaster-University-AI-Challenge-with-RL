@@ -7,6 +7,41 @@ import os
 import sys
 import math
 import heapq
+import numpy as np
+
+
+def search(goal, obs, s_start, bord):
+    ply = 1
+    current_offset = np.array([1,1])
+    diffusion_offset = np.array([[0,-1], [-1,0], [0,1], [1,0]])
+    i = 0
+    s_start_copy = s_start
+    while s_start_copy in obs or not(bord[0] < s_start_copy[0] < bord[1]-1 and bord[2] < s_start_copy[1] < bord[3]-1):
+        s_start_copy = tuple(current_offset+s_start)
+        current_offset += diffusion_offset[i]
+        if np.linalg.norm(current_offset, ord=1) == 2*ply:
+            i += 1
+            if i == 4:
+                i = 0
+                ply += 1
+                current_offset += [1,1]
+        if ply == 11:
+            return [], None
+
+    candidates = np.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
+    path = visited = None
+    for i in range(20):
+        candidates_ = candidates * i
+        for candidate in candidates_:
+            new_goal = tuple(goal + candidate)
+            if new_goal not in obs and bord[0] < new_goal[0] < bord[1]-1 and bord[2] < new_goal[1] < bord[3]-1:
+                astar = AStar(s_start_copy, new_goal, "euclidean", obs)
+                path, visited = astar.searching()
+                if path:
+                    return path, visited
+            if i == 0:
+                break
+    return path, visited
 
 
 class AStar:
@@ -179,7 +214,8 @@ class AStar:
 
         path = [self.s_goal]
         s = self.s_goal
-
+        if s not in PARENT:
+            return []
         while True:
             s = PARENT[s]
             path.append(s)
