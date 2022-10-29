@@ -469,6 +469,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         if self.if_use_cnn:
             end_states['matrix'] = [{trainer_id: None for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs]
+        if self.enemy_act_update_interval == 0:
+            # 貌似没有这么做的必要，因为这个情况下敌人也是trainer
+            self.enemy_act = self.act
         while step < target_step:
             # 获取训练者的状态与动作
             last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
