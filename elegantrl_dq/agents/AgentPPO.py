@@ -23,6 +23,8 @@ class AgentPPO:
 
         self.if_use_rnn = False
         self.if_use_cnn = False
+        
+        self.iteration_num = 0
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,6 +61,11 @@ class AgentPPO:
             state = env.reset() if done else next_state
         self.state = state
         return trajectory_list
+
+    def adjust_learning_rate(self, optimizer, decay_rate=.99, min_lr=1e-5, decay_start_iteration=200):
+        if self.iteration_num > decay_start_iteration:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = max(min_lr, param_group['lr'] * decay_rate)
 
     def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
         buffer.update_now_len()
@@ -112,7 +119,11 @@ class AgentPPO:
                 self.optim_update(self.cri_optimizer, obj_critic)
                 self.soft_update(self.cri_target, self.cri,
                                  soft_update_tau) if self.cri_target is not self.cri else None
-
+        self.iteration_num += 1
+        # # 衰减学习率
+        # self.adjust_learning_rate(self.act_optimizer)
+        # if not self.if_share_network:
+        #     self.adjust_learning_rate(self.cri_optimizer)
         return obj_critic.item(), obj_actor.item(), logprob.mean().item()  # logging_tuple
 
     def prepare_buffer(self, buffer):
