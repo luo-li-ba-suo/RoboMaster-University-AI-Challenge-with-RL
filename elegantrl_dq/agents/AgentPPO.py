@@ -580,7 +580,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                         step += 1
                     trainer_i += 1
         # 更新敌方策略
-        if self.self_play and np.mean(win_rate) >= 0.55:
+        # if self.self_play and np.mean(win_rate) >= 0.55:
+        if self.self_play and self.enemy_act_update_interval > 0:
             self.update_enemy_policy(step)
         if not self.if_complete_episode:
             for env_id in range(env.env_num):
