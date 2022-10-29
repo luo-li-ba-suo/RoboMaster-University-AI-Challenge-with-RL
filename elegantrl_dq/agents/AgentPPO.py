@@ -378,7 +378,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.state_matrix_shape = state_matrix_shape
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.get_reward_sum = self.get_reward_sum_gae_td_lambda if if_use_gae else self.get_reward_sum_raw
+        self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         if if_share_network:
             self.act = DiscretePPOShareNet(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(
                 self.device)
