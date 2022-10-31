@@ -84,7 +84,7 @@ class ReplayBuffer:
 
 
 class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_matrix_shape=[1,25,25],
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_cnn_shape=[1,25,25],
                  state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
@@ -95,7 +95,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                           for trainers in self.total_trainers_envs]
         self.buf_state = [{trainer: np.empty((max_len, state_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
-        self.buf_state_matrix = [{trainer: np.empty((max_len, state_matrix_shape[0], state_matrix_shape[1], state_matrix_shape[2]), dtype=np.float32) for trainer in trainers}
+        self.buf_state_cnn = [{trainer: np.empty((max_len, state_cnn_shape[0], state_cnn_shape[1], state_cnn_shape[2]), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
         self.buf_state_rnn = [{trainer: np.empty((max_len, state_rnn_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
@@ -142,7 +142,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                     self.buf_state[env_id][n][0:size] = state
                     self.buf_other[env_id][n][0:size] = other
                     if self.if_use_cnn:
-                        self.buf_state_matrix[env_id][n][0:size] = states_2D[env_id][n]
+                        self.buf_state_cnn[env_id][n][0:size] = states_2D[env_id][n]
                     if self.if_use_rnn:
                         self.buf_state_rnn[env_id][n][0:size] = states_rnn[env_id][n]
 
@@ -161,7 +161,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
         action = [{} for _ in range(self.env_num)]
         action_noise = [{} for _ in range(self.env_num)]
         state = [{} for _ in range(self.env_num)]
-        state_2D = [{} for _ in range(self.env_num)]
+        state_cnn = [{} for _ in range(self.env_num)]
         state_rnn = [{} for _ in range(self.env_num)]
         for env_id in range(self.env_num):
             for trainer in self.total_trainers_envs[env_id]:
@@ -175,8 +175,95 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                 action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3 + self.action_dim:], device=self.device)
                 state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
                 if self.if_use_cnn:
-                    state_2D[env_id][trainer] = torch.as_tensor(self.buf_state_matrix[env_id][trainer][0:tail_idx], device=self.device)
+                    state_cnn[env_id][trainer] = torch.as_tensor(self.buf_state_cnn[env_id][trainer][0:tail_idx], device=self.device)
                 if self.if_use_rnn:
                     state_rnn[env_id][trainer] = torch.as_tensor(self.buf_state_rnn[env_id][trainer][0:tail_idx],
                                                                  device=self.device)
-        return reward, mask, pseudo_mask, action, action_noise, state, state_2D, state_rnn
+        return reward, mask, pseudo_mask, action, action_noise, state, state_cnn, state_rnn
+
+
+class PlugInReplayBuffer(ReplayBuffer):
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_cnn_shape=[1,25,25],
+                 state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
+        super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
+        if env is None:
+            raise NotImplementedError
+        self.env_num = env.env_num
+        self.total_trainers_envs = env.get_trainer_ids()
+        self.max_len_per_env = max_len//self.env_num*2
+        self.buf_other = [{trainer: np.empty((self.max_len_per_env, self.other_dim), dtype=np.float32)
+                           for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
+        self.buf_state = [{trainer: np.empty((self.max_len_per_env, state_dim), dtype=np.float32)
+                           for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
+        if if_use_cnn:
+            self.buf_state_cnn = [{trainer: np.empty((self.max_len_per_env, state_cnn_shape[0], state_cnn_shape[1],
+                                                    state_cnn_shape[2]), dtype=np.float32)
+                                                    for trainer in trainers}
+                                                  for trainers in self.total_trainers_envs]
+        if if_use_rnn:
+            self.buf_state_rnn = [{trainer: np.empty((self.max_len_per_env, state_rnn_dim), dtype=np.float32)
+                               for trainer in trainers}
+                              for trainers in self.total_trainers_envs]
+        self.tail_idx = [{trainer: 0 for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
+        self.if_use_cnn = if_use_cnn
+        self.if_use_rnn = if_use_rnn
+
+    def extend(self, states, others, states_cnn=None, states_rnn=None, env_id=0, agent_id=0):  # CPU array to GPU array
+        size = len(states)
+        cur_head = self.tail_idx[env_id][agent_id]
+        self.tail_idx[env_id][agent_id] += size
+        self.next_idx += size
+        assert self.tail_idx[env_id][agent_id] < self.max_len_per_env, 'self.tail_idx[env_id][agent_id] error'
+        cur_tail = self.tail_idx[env_id][agent_id]
+        self.buf_state[env_id][agent_id][cur_head:cur_tail] = states
+        self.buf_other[env_id][agent_id][cur_head:cur_tail] = others
+        if self.if_use_cnn:
+            self.buf_state_cnn[env_id][agent_id][cur_head:cur_tail] = states_cnn
+        if self.if_use_rnn:
+            self.buf_state_rnn[env_id][agent_id][cur_head:cur_tail] = states_rnn
+
+    def add(self, state, other, state_cnn=None, state_rnn=None, env_id=0, agent_id=0):  # CPU array to GPU array
+        cur_head = self.tail_idx[env_id][agent_id]
+        self.tail_idx[env_id][agent_id] += 1
+        self.next_idx += 1
+        assert self.tail_idx[env_id][agent_id] < self.max_len_per_env, 'self.tail_idx[env_id][agent_id] error'
+        self.buf_state[env_id][agent_id][cur_head] = state
+        self.buf_other[env_id][agent_id][cur_head] = other
+        if self.if_use_cnn:
+            self.buf_state_cnn[env_id][agent_id][cur_head] = state_cnn
+        if self.if_use_rnn:
+            self.buf_state_rnn[env_id][agent_id][cur_head] = state_rnn
+
+    def empty_buffer(self):
+        self.tail_idx = [{trainer: 0 for trainer in trainers}
+                          for trainers in self.total_trainers_envs]
+        self.next_idx = 0
+
+    def sample_all(self):
+        reward = [{} for _ in range(self.env_num)]
+        mask = [{} for _ in range(self.env_num)]
+        pseudo_mask = [{} for _ in range(self.env_num)]
+        action = [{} for _ in range(self.env_num)]
+        action_noise = [{} for _ in range(self.env_num)]
+        state = [{} for _ in range(self.env_num)]
+        state_cnn = [{} for _ in range(self.env_num)]
+        state_rnn = [{} for _ in range(self.env_num)]
+        for env_id in range(self.env_num):
+            for trainer in self.total_trainers_envs[env_id]:
+                tail_idx = self.tail_idx[env_id][trainer]
+                buf_other = self.buf_other[env_id][trainer]
+                buf_state = self.buf_state[env_id][trainer]
+                reward[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 0], device=self.device)
+                mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 1], device=self.device)
+                pseudo_mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2], device=self.device)
+                action[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3:3 + self.action_dim], device=self.device)
+                action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3 + self.action_dim:], device=self.device)
+                state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
+                if self.if_use_cnn:
+                    state_cnn[env_id][trainer] = torch.as_tensor(self.buf_state_cnn[env_id][trainer][0:tail_idx], device=self.device)
+                if self.if_use_rnn:
+                    state_rnn[env_id][trainer] = self.buf_state_rnn[env_id][trainer][0:tail_idx]
+        return reward, mask, pseudo_mask, action, action_noise, state, state_cnn, state_rnn

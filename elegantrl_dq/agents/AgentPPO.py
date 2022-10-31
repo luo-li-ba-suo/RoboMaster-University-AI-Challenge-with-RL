@@ -364,18 +364,19 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.env_num = None
         self.total_trainers_envs = None
         self.last_states = None
-        self.if_complete_episode = True
+        self.if_complete_episode = False
         self.trajectory_list_rest = None
-        self.remove_rest_trajectory = True
+        self.remove_rest_trajectory = False
 
         self.state_dim = None
         self.state_matrix_shape = None
 
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False,
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, max_step=0,
              env=None, if_build_enemy_act=False, self_play=True, enemy_policy_share_memory=False,
              if_use_cnn=False, if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, state_matrix_shape=[1,25,25]):
         self.state_dim = state_dim
         self.state_matrix_shape = state_matrix_shape
+        self.max_step = max_step
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
@@ -437,16 +438,30 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.env_num = env.env_num
         self.state = env.reset()
         self.total_trainers_envs = env.get_trainer_ids()
+        self.other_dim = 1 + 2 + action_dim.size + sum(action_dim)
         if self.if_complete_episode:
-            self.trajectory_list_rest = [{trainer_id: [] for trainer_id in trainers} for trainers in
-                                         self.total_trainers_envs]
+            self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
+                                                   'others': np.empty((self.max_step, self.other_dim), dtype=np.float32),
+                                                   'matrix': np.empty((self.max_step, self.state_matrix_shape[0],
+                                                                       self.state_matrix_shape[1],
+                                                                       self.state_matrix_shape[2]),  dtype=np.float32)
+                                                                       if self.if_use_cnn else None}
+                                      for trainer_id in trainers} for trainers in self.total_trainers_envs]
+            self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
+        else:
+            self.remove_rest_trajectory = False
 
-    def explore_env(self, env, target_step, reward_scale, gamma):
+    def explore_env(self, env, target_step, reward_scale, gamma, replay_buffer=None):
         if self.remove_rest_trajectory:
-            self.trajectory_list_rest = [{trainer_id: [] for trainer_id in trainers} for trainers in
-                                         self.total_trainers_envs]
+            self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
+                                                   'others': np.empty((self.max_step, self.other_dim), dtype=np.float32),
+                                                   'matrix': np.empty((self.max_step, self.state_matrix_shape[0],
+                                                                       self.state_matrix_shape[1],
+                                                                       self.state_matrix_shape[2]),  dtype=np.float32)
+                                                                       if self.if_use_cnn else None}
+                                      for trainer_id in trainers} for trainers in self.total_trainers_envs]
+            self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
             self.state = env.reset()
-        trajectory_list = [{trainer_id: [] for trainer_id in trainers} for trainers in self.total_trainers_envs]
         logging_list = list()
         episode_rewards = list()
         win_rate = list()
@@ -548,33 +563,41 @@ class MultiEnvDiscretePPO(AgentPPO):
                         if self.if_use_cnn:
                             end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
                         if self.if_complete_episode:
-                            if not self.if_use_rnn and not self.if_use_cnn:
-                                self.trajectory_list_rest[env_id][n].append((states_trainers['vector'][trainer_i], other))
-                            elif self.if_use_cnn and not self.if_use_rnn:
-                                self.trajectory_list_rest[env_id][n].append(
-                                    (states_trainers['vector'][trainer_i], states_trainers['matrix'][trainer_i], other))
+                            self.trajectory_cache[env_id][n]['vector'][self.cache_tail_idx[env_id][n]] = states_trainers['vector'][trainer_i]
+                            self.trajectory_cache[env_id][n]['others'][self.cache_tail_idx[env_id][n]] = other
+                            if self.if_use_cnn:
+                                self.trajectory_cache[env_id][n]['matrix'][self.cache_tail_idx[env_id][n]] = states_trainers['matrix'][trainer_i]
+                                replay_buffer.extend(
+                                    self.trajectory_cache[env_id][n]['vector'][:self.cache_tail_idx[env_id][n]+1],
+                                    self.trajectory_cache[env_id][n]['others'][:self.cache_tail_idx[env_id][n]+1],
+                                    self.trajectory_cache[env_id][n]['matrix'][:self.cache_tail_idx[env_id][n]+1],
+                                    env_id=env_id, agent_id=n)
                             else:
-                                raise NotImplementedError
-                            trajectory_list[env_id][n] += self.trajectory_list_rest[env_id][n]
-                            step += len(self.trajectory_list_rest[env_id][n])
-                            self.trajectory_list_rest[env_id][n] = []
+                                replay_buffer.extend(
+                                    self.trajectory_cache[env_id][n]['vector'][:self.cache_tail_idx[env_id][n]+1],
+                                    self.trajectory_cache[env_id][n]['others'][:self.cache_tail_idx[env_id][n]+1],
+                                    env_id=env_id, agent_id=n)
+
+                            step += self.cache_tail_idx[env_id][n]+1
+                            self.cache_tail_idx[env_id][n] = 0
                     else:
                         other = (rewards[env_id][i] * reward_scale, gamma, 0.0,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob))
                         if self.if_complete_episode:
-                            if not self.if_use_rnn and not self.if_use_cnn:
-                                self.trajectory_list_rest[env_id][n].append((states_trainers['vector'][trainer_i], other))
-                            elif self.if_use_cnn and not self.if_use_rnn:
-                                self.trajectory_list_rest[env_id][n].append(
-                                    (states_trainers['vector'][trainer_i], states_trainers['matrix'][trainer_i], other))
-                            else:
-                                raise NotImplementedError
+                            self.trajectory_cache[env_id][n]['vector'][self.cache_tail_idx[env_id][n]] = states_trainers['vector'][trainer_i]
+                            self.trajectory_cache[env_id][n]['others'][self.cache_tail_idx[env_id][n]] = other
+                            if self.if_use_cnn:
+                                self.trajectory_cache[env_id][n]['matrix'][self.cache_tail_idx[env_id][n]] = states_trainers['matrix'][trainer_i]
+                            self.cache_tail_idx[env_id][n] += 1
+                            assert self.cache_tail_idx[env_id][n] < self.max_step, "self.cache_tail_idx[env_id][n] error"
                     if not self.if_complete_episode:
                         if not self.if_use_rnn and not self.if_use_cnn:
-                            trajectory_list[env_id][n].append((states_trainers['vector'][trainer_i], other))
+                            replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                                        env_id=env_id, agent_id=n)
                         elif self.if_use_cnn and not self.if_use_rnn:
-                            trajectory_list[env_id][n].append(
-                                (states_trainers['vector'][trainer_i], states_trainers['matrix'][trainer_i], other))
+                            replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                              states_trainers['matrix'][trainer_i],
+                                                        env_id=env_id, agent_id=n)
                         else:
                             raise NotImplementedError
                         step += 1
@@ -586,9 +609,10 @@ class MultiEnvDiscretePPO(AgentPPO):
         if not self.if_complete_episode:
             for env_id in range(env.env_num):
                 for n in last_trainers_envs[env_id]:
-                    end_states['vector'][env_id][n] = states_envs[env_id][n][0]
-                    if self.if_use_cnn:
-                        end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                    if states_envs[env_id][n] == None:
+                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                        if self.if_use_cnn:
+                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
         self.state = states_envs
         for env_id in range(env.env_num):
             # 将最后一个状态单独存起来
@@ -599,7 +623,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         logging_list.append(np.mean(win_rate))
-        return trajectory_list, logging_list
+        return logging_list, step
 
     def select_stochastic_action(self, state):
         states_1D = state['vector']

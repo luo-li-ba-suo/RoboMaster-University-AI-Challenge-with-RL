@@ -232,7 +232,8 @@ def train_and_evaluate(args):
     if_multi_discrete = env.if_multi_discrete
 
     '''init: Agent, ReplayBuffer, Evaluator'''
-    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
+    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
+               if_build_enemy_act=if_build_enemy_act,
                env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
@@ -255,10 +256,10 @@ def train_and_evaluate(args):
                               fix_enemy_policy=fix_evaluation_enemy_policy,
                               if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
-        buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
-                                                 action_dim=action_dim, state_matrix_shape=state_matrix_shape,
-                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
-                                                 if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
+        buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
+                                    action_dim=action_dim, state_cnn_shape=state_matrix_shape,
+                                    if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
+                                    if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
     else:
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
@@ -278,14 +279,14 @@ def train_and_evaluate(args):
         if if_print_time:
             start_explore = time.time()
         with torch.no_grad():
-            trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
+            logging_list, step = agent.explore_env(env, target_step, reward_scale, gamma, buffer)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
             # if time.time() - start_explore > 50:
             #     break
             start_update_net = time.time()
-        steps = buffer.extend_buffer_from_list(trajectory_list)
-        total_step += steps
+        # steps = buffer.extend_buffer_from_list(trajectory_list)
+        total_step += step
         if total_step > train_actor_step and not if_train_actor:
             if_train_actor = True
         logging_tuple = agent.update_net(buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau,
