@@ -10,7 +10,7 @@ import heapq
 import numpy as np
 
 
-def search(goal, obs, s_start, bord, quiet=False, max_try_time=20):
+def search(goal, obs, s_start, bord, quiet=True, max_try_time=20):
     # search from end(s_start) to start(goal) by Astar
     # first, determine a valid start by widthwise and longitudinal searching
     offsets = np.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
