@@ -10,13 +10,48 @@ import heapq
 import numpy as np
 
 
-def search(goal, obs, s_start, bord):
+def search(goal, obs, s_start, bord, quiet=False, max_try_time=20):
+    # search from end(s_start) to start(goal) by Astar
+    # first, determine a valid start by widthwise and longitudinal searching
+    offsets = np.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
+    find_valid_goal = False
+    new_goal = goal
+    for i in range(20):
+        offsets_cur = offsets * i
+        for offset in offsets_cur:
+            new_goal = tuple(goal + offset)
+            if new_goal not in obs and bord[0] < new_goal[0] < bord[1] - 1 and bord[2] < new_goal[1] < bord[3] - 1:
+                find_valid_goal = True
+                break
+            if i == 0:
+                break
+        if find_valid_goal:
+            break
+    if not find_valid_goal:
+        if not quiet:
+            print("determining a valid start failed")
+        return [], None
+    # second, determine a valid goal by broad prior search
     ply = 1
-    current_offset = np.array([1,1])
-    diffusion_offset = np.array([[0,-1], [-1,0], [0,1], [1,0]])
+    current_offset = np.array([1, 1])
+    diffusion_offset = np.array([[0, -1], [-1, 0], [0, 1], [1, 0]])
     i = 0
     s_start_copy = s_start
-    while s_start_copy in obs or not(bord[0] < s_start_copy[0] < bord[1]-1 and bord[2] < s_start_copy[1] < bord[3]-1):
+    try_time = 0
+    while ply < 11:
+        if s_start_copy not in obs and bord[0] < s_start_copy[0] < bord[1]-1 and bord[2] < s_start_copy[1] < bord[3]-1:
+            astar = AStar(s_start_copy, new_goal, "euclidean", obs)
+            path, visited = astar.searching()
+            try_time += 1
+            if path:
+                if try_time > 1 and not quiet:
+                    print(f"tried {try_time} times")
+                return path, visited
+            else:
+                if try_time > max_try_time:
+                    if not quiet:
+                        print(f"determining a valid goal failed, tried {try_time} times")
+                    return [], None
         s_start_copy = tuple(current_offset+s_start)
         current_offset += diffusion_offset[i]
         if np.linalg.norm(current_offset, ord=1) == 2*ply:
@@ -25,23 +60,9 @@ def search(goal, obs, s_start, bord):
                 i = 0
                 ply += 1
                 current_offset += [1,1]
-        if ply == 11:
-            return [], None
-
-    candidates = np.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
-    path = visited = None
-    for i in range(20):
-        candidates_ = candidates * i
-        for candidate in candidates_:
-            new_goal = tuple(goal + candidate)
-            if new_goal not in obs and bord[0] < new_goal[0] < bord[1]-1 and bord[2] < new_goal[1] < bord[3]-1:
-                astar = AStar(s_start_copy, new_goal, "euclidean", obs)
-                path, visited = astar.searching()
-                if path:
-                    return path, visited
-            if i == 0:
-                break
-    return path, visited
+    if not quiet:
+        print(f"determining a valid goal failed, tried {try_time} times")
+    return [], None
 
 
 class AStar:

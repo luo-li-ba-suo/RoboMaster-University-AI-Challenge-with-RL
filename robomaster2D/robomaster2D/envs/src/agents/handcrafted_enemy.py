@@ -81,15 +81,15 @@ class My_Agent(Base_Agent):
                     goal = (game_state.robots[target_enemy].center * game_state.map.Astar_map_x_size / 808).astype(np.int32)
                     if not self.path[i] or len(self.path[i]) < 2:
                         obs_set = game_state.map.get_Astar_obstacle_set(robot_id)
-                        self.path[i], visited = search(s_start=tuple(start), goal=tuple(goal), obs=obs_set,
+                        self.path[i], visited = search(s_start=tuple(goal), goal=tuple(start), obs=obs_set,
                                                        bord=game_state.map.bord)
-                        plot = plotting.Plotting(tuple(start), tuple(goal), obs_set)
+                        plot = plotting.Plotting(tuple(goal), tuple(start), obs_set)
                         # plot.animation(self.path[i], visited, "A*", pause=False)
                     if self.path[i] and len(self.path[i]) > self.path_cache_len:
-                        self.path[i] = self.path[i][-self.path_cache_len:]
+                        self.path[i] = self.path[i][0:self.path_cache_len]
                     if self.path[i]:
-                        self.orders.set[i].x = self.path[i][-2][0] - self.path[i][-1][0]
-                        self.orders.set[i].y = self.path[i][-2][1] - self.path[i][-1][1]
+                        self.orders.set[i].x = self.path[i][1][0] - self.path[i][0][0]
+                        self.orders.set[i].y = self.path[i][1][1] - self.path[i][0][1]
                         self.orders.set[i].rotate = np.angle(self.orders.set[i].x + self.orders.set[i].y*1j, deg=True)
                         self.orders.set[i].rotate_target_mode = True
                         del self.path[i][-1]

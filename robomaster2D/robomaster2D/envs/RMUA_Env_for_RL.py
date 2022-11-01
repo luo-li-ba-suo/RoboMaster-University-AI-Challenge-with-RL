@@ -390,6 +390,7 @@ class RMUA_Multi_agent_Env(gym.Env):
 
 
 if __name__ == '__main__':
+    np.random.seed(0)
     args = Parameters()
     args.red_agents_path = ['src.agents.human_agent']
     args.blue_agents_path = ['src.agents.handcrafted_enemy']
@@ -398,7 +399,8 @@ if __name__ == '__main__':
     args.episode_step = 0
     args.render = True
     args.training_mode = False
-    args.time_delay_frame = 0.1
+    args.time_delay_frame = 0
+    args.enable_blocks = True
     env = RMUA_Multi_agent_Env(args)
     env.simulator.state.pause = True
     env.reset()

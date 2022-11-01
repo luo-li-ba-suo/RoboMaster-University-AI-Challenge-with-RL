@@ -272,10 +272,10 @@ class Parameters(object):  # 参数集合
 
     def if_start_positions_valid(self, positions_r, positions_b):
         if len(positions_r) > 1:
-            if np.linalg.norm(np.array(positions_r[0]) - np.array(positions_r[1])) < 60:
+            if np.linalg.norm(np.array(positions_r[0]) - np.array(positions_r[1])) < 75:
                 return False
         if len(positions_b) > 1:
-            if np.linalg.norm(np.array(positions_b[0]) - np.array(positions_b[1])) < 60:
+            if np.linalg.norm(np.array(positions_b[0]) - np.array(positions_b[1])) < 75:
                 return False
         for pos_r in positions_r:
             for pos_b in positions_b:
