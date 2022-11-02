@@ -1,3 +1,4 @@
+import copy
 import math
 
 import numpy as np
@@ -24,6 +25,7 @@ class Map(object):
         self.obstacle_map_unit = options.obstacle_map_unit
         self.obstacle_map_size = options.obstacle_map_size
         self.robot_num = options.robot_r_num + options.robot_b_num
+        self.robot_r_num = options.robot_r_num
         self.death_idx = []
 
         self.map_length = 808
@@ -92,6 +94,7 @@ class Map(object):
         self.Astar_obstacle_expand = options.Astar_obstacle_expand
         self.bord = np.array([self.Astar_obstacle_expand, self.Astar_map_x_size-self.Astar_obstacle_expand,
                                                       self.Astar_obstacle_expand, self.Astar_map_y_size-self.Astar_obstacle_expand])
+        self.lidar_num = options.lidar_num
 
     def map_x_convert(self, pointx, expand=1):  # unit指网格化边长，expand指障碍物拓宽
         if pointx < expand:
@@ -350,6 +353,90 @@ class Map(object):
             for i in range(rec[2], rec[3]):
                 obs_map.add((rec[1] - 1, i))
 
+    def init_Lidar(self):
+        self.barrier_points = [[]]
+        self.barrier_points[-1].append([[0, self.map_length], [0, 0]])
+        self.barrier_points[-1].append([[0, 0], [0, self.map_width]])
+        self.barrier_points[-1].append([[self.map_length, self.map_length], [0, self.map_width]])
+        self.barrier_points[-1].append([[0, self.map_length], [self.map_width, self.map_width]])
+        for i, b in enumerate(self.barriers):
+            if self.barriers_pose[i] == 0:
+                self.barrier_points.append([])
+                self.barrier_points[-1].append([[b[0], b[0]], [b[2], b[3]]])
+                self.barrier_points[-1].append([[b[1], b[1]], [b[2], b[3]]])
+                self.barrier_points[-1].append([[b[0], b[1]], [b[2], b[2]]])
+                self.barrier_points[-1].append([[b[0], b[1]], [b[3], b[3]]])
+            else:
+                self.barrier_points.append([])
+                self.barrier_points[-1].append([[b[0], (b[0]+b[1])/2], [(b[2]+b[3])/2, b[3]]])
+                self.barrier_points[-1].append([[b[0], (b[0]+b[1])/2], [(b[2]+b[3])/2, b[2]]])
+                self.barrier_points[-1].append([[b[1], (b[0]+b[1])/2], [(b[2]+b[3])/2, b[3]]])
+                self.barrier_points[-1].append([[b[1], (b[0]+b[1])/2], [(b[2]+b[3])/2, b[2]]])
+
+    def update_lidar_array(self, robots):
+        for robot_id in range(self.robot_num):
+            barriers = copy.deepcopy(self.barrier_points)
+            for robot in robots:
+                if robot.id != robot_id:
+                    outlines_ = robot.outlines[0:4].copy()
+                    outlines = outlines_.copy()
+                    outlines[:, 0] = outlines_[:, 0] * math.cos(math.radians(90-robot.angle)) + \
+                                   outlines_[:, 1] * math.sin(math.radians(90-robot.angle))
+                    outlines[:, 1] = outlines_[:, 1] * math.cos(math.radians(90-robot.angle)) - \
+                                   outlines_[:, 0] * math.sin(math.radians(90-robot.angle))
+                    outlines += robot.center
+                    barriers.append([[[outlines[0][0], outlines[1][0]], [outlines[0][1], outlines[1][1]]],
+                                     [[outlines[0][0], outlines[2][0]], [outlines[0][1], outlines[2][1]]],
+                                     [[outlines[3][0], outlines[1][0]], [outlines[3][1], outlines[1][1]]],
+                                     [[outlines[3][0], outlines[2][0]], [outlines[3][1], outlines[2][1]]]])
+            barriers = np.array(barriers)
+            unit_angle = 2*np.pi/self.lidar_num
+            lidar_array = np.zeros((6, self.lidar_num), dtype=np.float32)
+            for i in range(self.lidar_num//2):
+                angle = unit_angle * i
+                x0, y0 = robots[robot_id].x, robots[robot_id].y
+                x1, y1 = x0 + np.cos(angle), y0 + np.sin(angle)
+                coefficient_matrixes = np.dot(barriers, [[0, 1], [0, -1]]) + [[x1-x0, 0], [y1-y0, 0]]
+                constant_vectors = np.dot(barriers, [[1], [0]]) - [[x0], [y0]]
+                barriers_may_intersect = np.where(np.linalg.det(coefficient_matrixes) != 0)
+                intersection_results = np.einsum('ijk,ikn->ijn', np.linalg.inv(coefficient_matrixes[barriers_may_intersect]), constant_vectors[barriers_may_intersect])
+                barriers_may_intersect_dir1 = np.where((intersection_results[:,1,0] >= 0) & (intersection_results[:,1,0] <= 1)
+                                                    & (intersection_results[:,0,0] > 0))
+                barriers_may_intersect_dir2 = np.where((intersection_results[:,1,0] >= 0) & (intersection_results[:,1,0] <= 1)
+                                                    & (intersection_results[:,0,0] < 0))
+                intersection_distance_dir1 = np.min(abs(intersection_results[barriers_may_intersect_dir1, 0, 0]))
+                intersection_distance_dir2 = np.min(abs(intersection_results[barriers_may_intersect_dir2, 0, 0]))
+                lidar_array[0, 2 * i] = intersection_distance_dir1
+                lidar_array[0, 2 * i + 1] = intersection_distance_dir2
+                intersection_index_dir1 = np.argmin(abs(intersection_results[barriers_may_intersect_dir1, 0, 0]))
+                intersection_index_dir2 = np.argmin(abs(intersection_results[barriers_may_intersect_dir2, 0, 0]))
+                intersection_index_dir1 = barriers_may_intersect[0][barriers_may_intersect_dir1[0][intersection_index_dir1]]
+                intersection_index_dir2 = barriers_may_intersect[0][barriers_may_intersect_dir2[0][intersection_index_dir2]]
+                lidar_array[self.get_obstacle_channel(intersection_index_dir1, robot_id), 2 * i] = 1
+                lidar_array[self.get_obstacle_channel(intersection_index_dir2, robot_id), 2 * i + 1] = 1
+            robots[robot_id].lidar_array = lidar_array
+
+    def get_obstacle_channel(self, index, robot_idx):
+        # obstacle: channel
+        # high obstacle: 1
+        # low obstacle: 2
+        # friend robot: 3
+        # enemy robot: 4, 5
+        if index < 10:
+            if self.barriers_mode[index-1]:
+                return 2
+            else:
+                return 1
+        else:
+            if robot_idx < self.robot_r_num:
+                return index - 7  # 即3,4,5
+            else:
+                if index == 12:
+                    return 3
+                else:
+                    return index - 6  # 即4,5
+
+
 
 if __name__ == "__main__":
     from robomaster2D.envs.options import Parameters
@@ -362,9 +449,9 @@ if __name__ == "__main__":
     map = Map(options)
     bm = map.obstacle_map_init()
     robots = [Robot(2, 2, x=70, y=90, angle=45),
-              Robot(2, 2, x=540, y=100, angle=0),
-              Robot(2, 2, x=310, y=200, angle=-45),
-              Robot(2, 2, x=550, y=290, angle=90)]
+              Robot(2, 2, x=540, y=100, angle=0, id=1),
+              Robot(2, 2, x=310, y=200, angle=-45, id=2),
+              Robot(2, 2, x=550, y=290, angle=90, id=3)]
     bm = map.update_obstacle_map(robots)
 
     s_start = tuple((robots[0].center * map.Astar_map_x_size/808).astype(int))
@@ -374,9 +461,6 @@ if __name__ == "__main__":
     obs_set = map.get_Astar_obstacle_set(0)
     plot = plotting.Plotting(s_start, s_goal, obs_set)
 
-    start_time = time.time()
-    path, visited = search(s_goal, obs_set, s_start, map.bord)
-    print("cost time: ", time.time() - start_time)
-    # while not path:
-    #     s_goal
-    plot.animation(path, visited, "A*")  # animation
+    # lidar unit test
+    map.init_Lidar()
+    map.get_lidar_vector(robots, 0)

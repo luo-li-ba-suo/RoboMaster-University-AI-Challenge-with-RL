@@ -185,7 +185,7 @@ class Referee(object):
             return False
 
     def line_prismatic_check(self, l1, l2, sq):
-        # this part code came from: https://www.jianshu.com/p/a5e73dbc742a
+        # this part code modified by kideng
         # check if line cross rect, sq = [x_leftdown, y_leftdown, x_rightup, y_rightup]
         # if self.cross()
         p1 = [sq[0], (sq[1] + sq[3]) / 2]

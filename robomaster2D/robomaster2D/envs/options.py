@@ -50,9 +50,6 @@ class Parameters:
     impact_effect = True
     collision_bounce = False
 
-    # 有關信息處理
-    lidar_num = 8
-
     # 有关交互界面
     do_plot = [True, True, False, False]
     energySaving_mode = False
@@ -84,6 +81,14 @@ class Parameters:
     Astar_map_x_size = 81
     Astar_map_y_size = 45
     Astar_obstacle_expand = 2
+
+    # 有关雷达
+    use_lidar = True
+    # 雷达数要求为偶数
+    lidar_num = 30
+
+    # 有关局部障碍物地图
+    use_obstacle_map = False
 
     def get_dict(self):
         dict_ = {}

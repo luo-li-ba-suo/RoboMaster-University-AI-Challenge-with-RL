@@ -64,6 +64,7 @@ class User_Interface(object):
         self.show_center_barrier_vertices = False
         self.show_goals_position = False
         self.show_goal_line = False
+        self.show_lidar = True
         self.show_state_data = True
         self.show_robot_data = True
         self.show_figure = True
@@ -237,6 +238,8 @@ class User_Interface(object):
                 self.update_figure()
             if self.show_goal_line:
                 self.update_goal_line()
+            if self.show_lidar:
+                self.update_lidar()
             self.buttons.render(self.screen)
             self.buttons.show_button_name(self.font, self.screen)
         pygame.display.flip()
@@ -505,6 +508,20 @@ class User_Interface(object):
                 pygame.draw.aaline(self.screen, self.blue if self.state.robots[n].owner else self.red,
                                    self.state.robots[0].center,
                                    self.controller.route_plan.goals[n], 1)
+
+    def update_lidar(self):
+        for robot in self.state.robots:
+            unit_angle = 2*np.pi/self.map.lidar_num
+            for i in range(self.map.lidar_num//2):
+                angle = unit_angle * i
+                distance = robot.lidar_array[0, 2 * i]
+                pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
+                                   robot.center, robot.center + [distance * np.cos(angle), distance * np.sin(angle)], 1)
+                angle = unit_angle * i + np.pi
+                distance = robot.lidar_array[0, 2 * i + 1]
+                pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
+                                   robot.center, robot.center + [distance * np.cos(angle), distance * np.sin(angle)], 1)
+
 
     def update_other_image(self, coor, image_path='./imgs/area_destination.png'):
         if coor is not None and image_path is not None:  # 如果赋值了目标点

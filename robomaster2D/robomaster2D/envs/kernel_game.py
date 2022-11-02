@@ -153,7 +153,7 @@ class State(object):  # 总状态
                                      angle=start_angle[n],
                                      bullet=start_bullet[n], no_dying=self.no_dying, hp=start_hp[n]))
         for n in range(self.robot_b_num):
-            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n, x=start_pos[n + self.robot_r_num][0],
+            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n + self.robot_r_num, x=start_pos[n + self.robot_r_num][0],
                                      y=start_pos[n + self.robot_r_num][1],
                                      angle=start_angle[n + self.robot_r_num],
                                      bullet=start_bullet[n + self.robot_r_num], no_dying=self.no_dying,
