@@ -421,19 +421,21 @@ class Map(object):
         # low obstacle: 2
         # friend robot: 3
         # enemy robot: 4, 5
-        if index < 10:
+        if index == 0:  # bord
+            return 1
+        if index < 1+len(self.barriers):
             if self.barriers_mode[index-1]:
                 return 2
             else:
                 return 1
         else:
             if robot_idx < self.robot_r_num:
-                return index - 7  # 即3,4,5
+                return index + 2 - len(self.barriers)  # 即3,4,5
             else:
-                if index == 12:
+                if index == len(self.barriers) + 3:
                     return 3
                 else:
-                    return index - 6  # 即4,5
+                    return index + 3 - len(self.barriers)  # 即4,5
 
 
 
