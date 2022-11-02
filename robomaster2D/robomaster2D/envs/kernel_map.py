@@ -454,12 +454,20 @@ if __name__ == "__main__":
               Robot(2, 2, x=550, y=290, angle=90, id=3)]
     bm = map.update_obstacle_map(robots)
 
+    # Astar unit test
     s_start = tuple((robots[0].center * map.Astar_map_x_size/808).astype(int))
     s_goal = (54, 45-10)
     obs_set = map.init_Astar_obstacle_set()
     map.update_Astar_obstacle_set_robots(robots)
     obs_set = map.get_Astar_obstacle_set(0)
     plot = plotting.Plotting(s_start, s_goal, obs_set)
+
+    start_time = time.time()
+    path, visited = search(s_goal, obs_set, s_start, map.bord)
+    print("cost time: ", time.time() - start_time)
+    # while not path:
+    #     s_goal
+    plot.animation(path, visited, "A*")  # animation
 
     # lidar unit test
     map.init_Lidar()

@@ -47,7 +47,7 @@ def demo_discrete_action():
         args.config.eval_gap = 0
         args.env_eval = PreprocessEnv(env_name)
     elif not args.config.new_processing_for_evaluation:
-        args.config.eval_gap = 60 * 5
+        args.config.eval_gap = 60 * 3
         args.env_eval = PreprocessEnv(env_name)
     args.agent.cri_target = False
     '''train and evaluate'''
