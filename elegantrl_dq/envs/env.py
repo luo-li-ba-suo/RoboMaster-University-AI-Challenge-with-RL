@@ -13,7 +13,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         super(PreprocessEnv, self).__init__(self.env)
         self.if_multi_processing = False
         (self.env_name, self.state_dim, self.action_dim, self.action_max, self.max_step,
-         self.if_discrete, self.if_multi_discrete, self.target_return, self.state_matrix_shape) = get_gym_env_info(self.env, if_print)
+         self.if_discrete, self.if_multi_discrete, self.target_return, self.observation_matrix_shape) = get_gym_env_info(self.env, if_print)
         self.args = self.env.args
         self.reset = self.reset_type
         self.step = self.step_type
@@ -40,7 +40,7 @@ class VecEnvironments:
         self.if_multi_processing = True
         self.envs = [PreprocessEnv(env_name, if_print=True if env_id == 0 else False) for env_id in range(env_num)]
         self.state_dim = self.envs[0].state_dim
-        self.state_matrix_shape = self.envs[0].state_matrix_shape
+        self.observation_matrix_shape = self.envs[0].observation_matrix_shape
         self.action_dim = self.envs[0].action_dim
         self.if_discrete = self.envs[0].if_discrete
         self.if_multi_discrete = self.envs[0].if_multi_discrete
@@ -155,7 +155,7 @@ def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
     env_name = env.unwrapped.spec.id
 
     state_shape = env.observation_space.shape
-    state_matrix_shape = env.observation_matrix_shape
+    observation_matrix_shape = env.observation_matrix_shape
     state_dim = state_shape[0] if len(state_shape) == 1 else state_shape  # sometimes state_dim is a list
 
     target_return = getattr(env, 'target_return', None)
@@ -191,7 +191,7 @@ def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
         f"\n| env_name:  {env_name}, action space if_discrete: {if_discrete or if_multi_discrete} if_multi_discrete: {if_multi_discrete}"
         f"\n| state_dim: {state_dim:4}, action_dim: {action_dim}, action_max: {action_max}"
         f"\n| max_step:  {max_step:4}, target_return: {target_return}") if if_print else None
-    return env_name, state_dim, action_dim, action_max, max_step, if_discrete, if_multi_discrete, target_return, state_matrix_shape
+    return env_name, state_dim, action_dim, action_max, max_step, if_discrete, if_multi_discrete, target_return, observation_matrix_shape
 
 
 def deepcopy_or_rebuild_env(env):

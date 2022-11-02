@@ -26,6 +26,9 @@ class RMUA_Multi_agent_Env(gym.Env):
     target_return = 50
 
     def __init__(self, args=Parameters()):
+        self.use_obstacle_map = args.use_obstacle_map
+        self.use_lidar = args.use_lidar
+
         self.individual_observations = None
         self.public_observation = None
 
@@ -54,8 +57,10 @@ class RMUA_Multi_agent_Env(gym.Env):
         self.rewards = [{} for _ in range(self.robot_num)]
         self.rewards_episode = [{} for _ in range(self.robot_num)]
         self.rewards_record = [[] for _ in range(self.robot_num)]
-
-        self.observation_matrix_shape = [2 + self.robot_num, args.obstacle_map_size, args.obstacle_map_size]
+        if self.use_obstacle_map:
+            self.observation_matrix_shape = [2 + self.robot_num, args.obstacle_map_size, args.obstacle_map_size]
+        elif self.use_lidar:
+            self.observation_matrix_shape = [2 + self.robot_num, args.lidar_num]
         # flags
         self.cal_public_obs_already = False
 
@@ -359,9 +364,14 @@ class RMUA_Multi_agent_Env(gym.Env):
                 observation.append(self.simulator.state.y_dist_matrix[robot_index][i] / 448)
                 # 相对角度
                 observation.append((self.simulator.state.relative_angle[robot_index, i]) / 180)
-
-        return [np.array(observation).astype(np.float32),
-                self.simulator.state.robots[robot_index].local_map.astype(np.float32)]
+        if self.use_lidar:
+            return [np.array(observation).astype(np.float32),
+                    self.simulator.state.robots[robot_index].lidar_array.astype(np.float32)]
+        elif self.use_obstacle_map:
+            return [np.array(observation).astype(np.float32),
+                    self.simulator.state.robots[robot_index].local_map.astype(np.float32)]
+        else:
+            return [np.array(observation).astype(np.float32), None]
 
     def if_robot_valid(self, idx):  # 仅当机器人存活或刚被击杀时有效
         if self.simulator.state.robots_survival_status[idx] or idx in self.simulator.state.robots_killed_this_step:

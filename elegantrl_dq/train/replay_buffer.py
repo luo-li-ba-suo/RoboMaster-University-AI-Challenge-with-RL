@@ -84,7 +84,7 @@ class ReplayBuffer:
 
 
 class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_cnn_shape=[1,25,25],
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, observation_matrix_shape=[1,25,25],
                  state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
@@ -95,7 +95,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
                           for trainers in self.total_trainers_envs]
         self.buf_state = [{trainer: np.empty((max_len, state_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
-        self.buf_state_cnn = [{trainer: np.empty((max_len, state_cnn_shape[0], state_cnn_shape[1], state_cnn_shape[2]), dtype=np.float32) for trainer in trainers}
+        self.buf_state_cnn = [{trainer: np.empty((max_len, *observation_matrix_shape), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
         self.buf_state_rnn = [{trainer: np.empty((max_len, state_rnn_dim), dtype=np.float32) for trainer in trainers}
                           for trainers in self.total_trainers_envs]
@@ -183,7 +183,7 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
 
 
 class PlugInReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, state_cnn_shape=[1,25,25],
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, observation_matrix_shape=[1,25,25],
                  state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
@@ -198,8 +198,7 @@ class PlugInReplayBuffer(ReplayBuffer):
                            for trainer in trainers}
                           for trainers in self.total_trainers_envs]
         if if_use_cnn:
-            self.buf_state_cnn = [{trainer: np.empty((self.max_len_per_env, state_cnn_shape[0], state_cnn_shape[1],
-                                                    state_cnn_shape[2]), dtype=np.float32)
+            self.buf_state_cnn = [{trainer: np.empty((self.max_len_per_env, *observation_matrix_shape), dtype=np.float32)
                                                     for trainer in trainers}
                                                   for trainers in self.total_trainers_envs]
         if if_use_rnn:

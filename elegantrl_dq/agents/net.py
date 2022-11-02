@@ -140,15 +140,15 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_matrix_channel=6, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6, if_use_rnn=False):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
         self.if_use_cnn = if_use_cnn
         self.cnn_out_dim = 64
         if if_use_cnn:
-            self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-            self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
+            self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
@@ -168,18 +168,18 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
-    def forward(self, state, state_2D=None, rnn_state=None):
+    def forward(self, state, state_cnn=None, rnn_state=None):
 
         if self.if_use_cnn:
-            hidden = self.state_1D_net(state)
-            CNN_out = self.state_matrix_net(state_2D)
+            hidden = self.vector_net(state)
+            CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.main_net(state)
         return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
 
-    def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.forward(state, state_2D, rnn_state)
+    def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
+        result = self.forward(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -192,8 +192,8 @@ class MultiAgentActorDiscretePPO(nn.Module):
             action.append(action_)
         return action, a_prob
 
-    def get_deterministic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.forward(state, state_2D, rnn_state)
+    def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
+        result = self.forward(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
@@ -201,8 +201,8 @@ class MultiAgentActorDiscretePPO(nn.Module):
             n += action_dim_
         return action
 
-    def get_logprob_entropy(self, state, action, state_2D=None, state_rnn=None):
-        result = self.forward(state, state_2D, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
+        result = self.forward(state, state_cnn, state_rnn)
         a_prob = []
         dist_prob = []
         dist_entropy = []
@@ -234,12 +234,12 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_matrix_channel=6):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_cnn_channel=6):
         super().__init__()
         self.if_use_cnn = if_use_cnn
         self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
         self.cnn_out_dim = 64
-        self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
+        self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
@@ -255,10 +255,10 @@ class CriticAdv(nn.Module):
                                             nn.Linear(mid_dim, 1))
         layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
-    def forward(self, state, state_2D=None):
+    def forward(self, state, state_cnn=None):
         hidden = self.net(state)
         if self.if_use_cnn:
-            CNN_out = self.state_matrix_net(state_2D)
+            CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)
@@ -267,28 +267,35 @@ class CriticAdv(nn.Module):
 
 # actor与critic网络共享特征提取的主干
 class DiscretePPOShareNet(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False, state_matrix_channel=6):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_conv1D=True,
+                 if_use_rnn=False, state_cnn_channel=6, state_seq_len=30):
         super().__init__()
         self.action_dim = action_dim  # 默认为多维动作空间
 
-        self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
 
         self.if_use_cnn = if_use_cnn
+        self.if_use_conv1D = if_use_conv1D
         self.cnn_out_dim = 64
-        self.state_matrix_net = nn.Sequential(nn.Conv2d(state_matrix_channel, 16, 3),
-                                          nn.ReLU(),
-                                          nn.Conv2d(16, 32, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.Conv2d(32, 64, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.AdaptiveMaxPool2d(1),
-                                          nn.Flatten()) if if_use_cnn else None
-
-        self.rnn = None
-        if if_use_cnn:
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        self.conv1D_kernel_size = 3
+        if if_use_conv1D:
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - 3 + 1) * 32
+        elif if_use_cnn:
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
+                                              nn.ReLU(),
+                                              nn.Conv2d(16, 32, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.Conv2d(32, self.cnn_out_dim, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.AdaptiveMaxPool2d(1),
+                                              nn.Flatten())
         else:
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU())
+            self.conv_net = None
+            self.cnn_out_dim = 0
+        self.rnn = None
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
@@ -301,26 +308,29 @@ class DiscretePPOShareNet(nn.Module):
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
-    def actor(self, state, state_2D=None, rnn_state=None):
-        hidden = self.state_1D_net(state)
-        if self.if_use_cnn:
-            CNN_out = self.state_matrix_net(state_2D)
+    def share_net(self, state, state_cnn=None, rnn_state=None):
+        hidden = self.vector_net(state)
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
+            CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)
+        return hidden
+
+    def actor(self, state, state_cnn=None, rnn_state=None):
+        hidden = self.share_net(state, state_cnn, rnn_state)
         return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
 
-    def critic(self, state, state_2D=None, rnn_state=None):
-        hidden = self.state_1D_net(state)
-        if self.if_use_cnn:
-            CNN_out = self.state_matrix_net(state_2D)
-            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
-        else:
-            hidden = self.hidden_net(hidden)
+    def critic(self, state, state_cnn=None, rnn_state=None):
+        hidden = self.share_net(state, state_cnn, rnn_state)
         return self.value_net(hidden)
 
-    def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.actor(state, state_2D, rnn_state)
+    def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
+        result = self.actor(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -333,8 +343,8 @@ class DiscretePPOShareNet(nn.Module):
             action.append(action_)
         return action, a_prob
 
-    def get_deterministic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.actor(state, state_2D, rnn_state)
+    def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
+        result = self.actor(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
@@ -342,8 +352,8 @@ class DiscretePPOShareNet(nn.Module):
             n += action_dim_
         return action
 
-    def get_logprob_entropy(self, state, action, state_2D=None, state_rnn=None):
-        result = self.actor(state, state_2D, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
+        result = self.actor(state, state_cnn, state_rnn)
         a_prob = []
         dist_prob = []
         dist_entropy = []

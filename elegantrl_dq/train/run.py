@@ -72,8 +72,8 @@ class Configs:
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'new obstacle map'
-        self.wandb_name = 'multiChannelObsMap' + str(self.random_seed)
+        self.wandb_notes = 'lidar'
+        self.wandb_name = 'lidar' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -193,6 +193,7 @@ def train_and_evaluate(args):
     '''training arguments'''
     net_dim = args.config.net_dim
     if_use_cnn = args.config.if_use_cnn
+    if_use_conv1D = args.env.args.use_lidar
     if_use_rnn = args.config.if_use_rnn
     if_share_network = args.config.if_share_network
     # max_memo = args.config.max_memo
@@ -221,23 +222,24 @@ def train_and_evaluate(args):
     del args  # In order to show these hyper-parameters clearly, I put them above.
 
     '''init: environment'''
-    env.render()
+    # env.render()
+    # env_eval.render()
     if not if_multi_processing or not if_train:
         env_eval.render()
     max_step = env.max_step
     state_dim = env.state_dim
-    state_matrix_shape = env.state_matrix_shape
+    observation_matrix_shape = env.observation_matrix_shape
     action_dim = env.action_dim
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
-               if_build_enemy_act=if_build_enemy_act,
+               if_build_enemy_act=if_build_enemy_act, if_use_conv1D=if_use_conv1D,
                env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-               state_matrix_shape=state_matrix_shape)
+               observation_matrix_shape=observation_matrix_shape)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -257,7 +259,7 @@ def train_and_evaluate(args):
                               if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
-                                    action_dim=action_dim, state_cnn_shape=state_matrix_shape,
+                                    action_dim=action_dim, observation_matrix_shape=observation_matrix_shape,
                                     if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
                                     if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
     else:

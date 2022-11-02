@@ -406,14 +406,14 @@ class Map(object):
                                                     & (intersection_results[:,0,0] < 0))
                 intersection_distance_dir1 = np.min(abs(intersection_results[barriers_may_intersect_dir1, 0, 0]))
                 intersection_distance_dir2 = np.min(abs(intersection_results[barriers_may_intersect_dir2, 0, 0]))
-                lidar_array[0, 2 * i] = intersection_distance_dir1
-                lidar_array[0, 2 * i + 1] = intersection_distance_dir2
+                lidar_array[0, i] = intersection_distance_dir1 / 808
+                lidar_array[0, self.lidar_num//2 + i] = intersection_distance_dir2 / 808
                 intersection_index_dir1 = np.argmin(abs(intersection_results[barriers_may_intersect_dir1, 0, 0]))
                 intersection_index_dir2 = np.argmin(abs(intersection_results[barriers_may_intersect_dir2, 0, 0]))
                 intersection_index_dir1 = barriers_may_intersect[0][barriers_may_intersect_dir1[0][intersection_index_dir1]]
                 intersection_index_dir2 = barriers_may_intersect[0][barriers_may_intersect_dir2[0][intersection_index_dir2]]
-                lidar_array[self.get_obstacle_channel(intersection_index_dir1, robot_id), 2 * i] = 1
-                lidar_array[self.get_obstacle_channel(intersection_index_dir2, robot_id), 2 * i + 1] = 1
+                lidar_array[self.get_obstacle_channel(intersection_index_dir1, robot_id), i] = 1
+                lidar_array[self.get_obstacle_channel(intersection_index_dir2, robot_id), self.lidar_num//2 + i] = 1
             robots[robot_id].lidar_array = lidar_array
 
     def get_obstacle_channel(self, index, robot_idx):

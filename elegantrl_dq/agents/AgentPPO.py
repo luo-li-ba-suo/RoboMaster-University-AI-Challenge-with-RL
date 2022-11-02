@@ -98,7 +98,7 @@ class AgentPPO:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-5)
 
             if update_policy_net > 0 or self.if_share_network:
-                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_2D=state_2D,
+                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_cnn=state_2D,
                                                                         state_rnn=state_rnn)  # it is obj_actor
                 ratio = (new_logprob - logprob.detach()).exp()
                 surrogate1 = advantage * ratio
@@ -369,20 +369,24 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.remove_rest_trajectory = False
 
         self.state_dim = None
-        self.state_matrix_shape = None
+        self.observation_matrix_shape = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, max_step=0,
              env=None, if_build_enemy_act=False, self_play=True, enemy_policy_share_memory=False,
-             if_use_cnn=False, if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, state_matrix_shape=[1,25,25]):
+             if_use_cnn=False, if_use_conv1D=False,
+             if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25]):
         self.state_dim = state_dim
-        self.state_matrix_shape = state_matrix_shape
+        self.observation_matrix_shape = observation_matrix_shape
         self.max_step = max_step
         self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         if if_share_network:
-            self.act = DiscretePPOShareNet(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn).to(
-                self.device)
+            self.act = DiscretePPOShareNet(net_dim, state_dim, action_dim,
+                                           if_use_cnn=if_use_cnn,
+                                           if_use_conv1D=if_use_conv1D,
+                                           if_use_rnn=if_use_rnn,
+                                           state_seq_len=observation_matrix_shape[-1]).to(self.device)
             self.cri = self.act.critic
         else:
             self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn,
@@ -442,9 +446,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         if self.if_complete_episode:
             self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
                                                    'others': np.empty((self.max_step, self.other_dim), dtype=np.float32),
-                                                   'matrix': np.empty((self.max_step, self.state_matrix_shape[0],
-                                                                       self.state_matrix_shape[1],
-                                                                       self.state_matrix_shape[2]),  dtype=np.float32)
+                                                   'matrix': np.empty((self.max_step, *self.observation_matrix_shape),  dtype=np.float32)
                                                                        if self.if_use_cnn else None}
                                       for trainer_id in trainers} for trainers in self.total_trainers_envs]
             self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
@@ -455,9 +457,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         if self.remove_rest_trajectory:
             self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
                                                    'others': np.empty((self.max_step, self.other_dim), dtype=np.float32),
-                                                   'matrix': np.empty((self.max_step, self.state_matrix_shape[0],
-                                                                       self.state_matrix_shape[1],
-                                                                       self.state_matrix_shape[2]),  dtype=np.float32)
+                                                   'matrix': np.empty((self.max_step, *self.observation_matrix_shape),  dtype=np.float32)
                                                                        if self.if_use_cnn else None}
                                       for trainer_id in trainers} for trainers in self.total_trainers_envs]
             self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
@@ -495,8 +495,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                 last_trainers_envs_size += len(last_trainers)
             states_trainers = {'vector': np.zeros((last_trainers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
-                states_trainers['matrix'] = np.zeros((last_trainers_envs_size, self.state_matrix_shape[0], self.state_matrix_shape[1],
-                                                      self.state_matrix_shape[2]))
+                states_trainers['matrix'] = np.zeros((last_trainers_envs_size, *self.observation_matrix_shape))
             trainer_i = 0
             for env_id in range(env.env_num):
                 for trainer_id in last_trainers_envs[env_id]:
@@ -515,8 +514,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                 last_testers_envs_size += len(last_testers)
             states_testers = {'vector': np.zeros((last_testers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
-                states_testers['matrix'] = np.zeros((last_testers_envs_size, self.state_matrix_shape[0], self.state_matrix_shape[1],
-                                                      self.state_matrix_shape[2]))
+                states_testers['matrix'] = np.zeros((last_testers_envs_size, *self.observation_matrix_shape))
             tester_i = 0
             for env_id in range(env.env_num):
                 for tester_id in last_testers_envs[env_id]:

@@ -514,13 +514,15 @@ class User_Interface(object):
             unit_angle = 2*np.pi/self.map.lidar_num
             for i in range(self.map.lidar_num//2):
                 angle = unit_angle * i
-                distance = robot.lidar_array[0, 2 * i]
+                distance = robot.lidar_array[0, i]
                 pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
-                                   robot.center, robot.center + [distance * np.cos(angle), distance * np.sin(angle)], 1)
+                                   robot.center, robot.center + [808 * distance * np.cos(angle),
+                                                                 808 * distance * np.sin(angle)], 1)
                 angle = unit_angle * i + np.pi
-                distance = robot.lidar_array[0, 2 * i + 1]
+                distance = robot.lidar_array[0, self.map.lidar_num//2 + i]
                 pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
-                                   robot.center, robot.center + [distance * np.cos(angle), distance * np.sin(angle)], 1)
+                                   robot.center, robot.center + [808 * distance * np.cos(angle),
+                                                                 808 * distance * np.sin(angle)], 1)
 
 
     def update_other_image(self, coor, image_path='./imgs/area_destination.png'):
