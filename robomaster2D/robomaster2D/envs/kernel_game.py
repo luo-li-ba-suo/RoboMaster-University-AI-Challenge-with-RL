@@ -27,7 +27,7 @@ class Alarm20hz(object):
         self.go_off_flag = False
 
     def go_off(self, frame):
-        assert frame >= self.last_frame, "alarm 20hz not reset"
+        # assert frame >= self.last_frame, "alarm 20hz not reset"  # 会影响调试/单元测试中的pause功能
         if frame == self.last_frame:  # 使得在同一帧中可以重复使用
             return self.go_off_flag
         self.delta_frame += frame - self.last_frame
