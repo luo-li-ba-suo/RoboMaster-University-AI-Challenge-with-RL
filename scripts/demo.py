@@ -27,8 +27,8 @@ def demo_discrete_action():
 
     args.config.random_seed = 1
 
-    args.config.eval_times1 = 5
-    args.config.eval_times2 = 10
+    args.config.eval_times1 = 8
+    args.config.eval_times2 = 16
 
     args.config.if_use_cnn = True
     args.config.if_share_network = True
