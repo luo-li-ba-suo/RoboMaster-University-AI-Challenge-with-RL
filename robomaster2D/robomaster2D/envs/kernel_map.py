@@ -239,8 +239,7 @@ class Map(object):
         for robot in robots:
             obs = set()
             points = robot.outlines[0:4].copy()
-            points_ = points + [[-15, -15], [15, -15],
-                       [-15, 15], [15, 15]]
+            points_ = points + [[-15, -15], [15, -15], [-15, 15], [15, 15]]
             points[:, 0] = points_[:, 0] * math.cos(math.radians(90 - robot.angle)) + \
                            points_[:, 1] * math.sin(math.radians(90 - robot.angle))
             points[:, 1] = points_[:, 1] * math.cos(math.radians(90 - robot.angle)) - \

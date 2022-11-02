@@ -170,7 +170,7 @@ class AgentPPO:
                 buf_advantage[i] += buf_pseudo_mask[i] * next_state_value[index]
                 index -= 1
             pre_advantage = buf_value[i] + buf_advantage[i] * self.lambda_gae_adv
-        buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
+        # buf_advantage = (buf_advantage - buf_advantage.mean()) / (buf_advantage.std() + 1e-5)
         return buf_r_sum, buf_advantage
 
     @staticmethod
