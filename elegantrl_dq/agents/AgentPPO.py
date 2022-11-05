@@ -390,8 +390,14 @@ class MultiEnvDiscretePPO(AgentPPO):
             self.cri = self.act.critic
         else:
             self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn,
-                                                  if_use_rnn=if_use_rnn).to(self.device)
-            self.cri = CriticAdv(net_dim, state_dim).to(self.device)
+                                                  state_cnn_channel=observation_matrix_shape[0],
+                                                  if_use_rnn=if_use_rnn,
+                                                  if_use_conv1D=if_use_conv1D,
+                                                  state_seq_len=observation_matrix_shape[-1]).to(self.device)
+            self.cri = CriticAdv(net_dim, state_dim, if_use_cnn=if_use_cnn,
+                                 state_cnn_channel=observation_matrix_shape[0],
+                                  if_use_conv1D=if_use_conv1D,
+                                  state_seq_len=observation_matrix_shape[-1]).to(self.device)
         if self_play or if_build_enemy_act:
             self.enemy_act = deepcopy(self.act)
 

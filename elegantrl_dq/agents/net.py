@@ -140,42 +140,50 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6, if_use_rnn=False,
+                 if_use_conv1D=True, state_seq_len=30):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
         self.if_use_cnn = if_use_cnn
+        self.if_use_conv1D = if_use_conv1D
         self.cnn_out_dim = 64
-        if if_use_cnn:
-            self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        self.conv1D_kernel_size = 3
+        self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        if if_use_conv1D:
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+        elif if_use_cnn:
             self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
-                                              nn.Conv2d(32, 64, 3, stride=2),
+                                              nn.Conv2d(32, self.cnn_out_dim, 3, stride=2),
                                               nn.ReLU(),
                                               nn.AdaptiveMaxPool2d(1),
                                               nn.Flatten())
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         else:
-            self.main_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU(),
-                                          nn.Linear(mid_dim, mid_dim), nn.ReLU())
+            self.cnn_out_dim = 0
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         self.rnn = None
-        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
-                                                         nn.Linear(mid_dim, action_d)) for action_d in action_dim])
+        self.action_nets = nn.Sequential(*[nn.Linear(mid_dim, action_d) for action_d in action_dim])
         for net in self.action_nets:
-            layer_norm(net[-1], std=0.01)
+            layer_norm(net, std=0.01)
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
     def forward(self, state, state_cnn=None, rnn_state=None):
-
-        if self.if_use_cnn:
-            hidden = self.vector_net(state)
+        hidden = self.vector_net(state)
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
             CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
-            hidden = self.main_net(state)
+            hidden = self.hidden_net(hidden)
         return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
 
     def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
@@ -234,30 +242,41 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_cnn_channel=6):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_cnn_channel=6,
+                 if_use_conv1D=True, state_seq_len=30):
         super().__init__()
         self.if_use_cnn = if_use_cnn
         self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
         self.cnn_out_dim = 64
-        self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
-                                              nn.ReLU(),
-                                              nn.Conv2d(16, 32, 3, stride=2),
-                                              nn.ReLU(),
-                                              nn.Conv2d(32, 64, 3, stride=2),
-                                              nn.ReLU(),
-                                              nn.AdaptiveMaxPool2d(1),
-                                              nn.Flatten()) if if_use_cnn else None
-        if if_use_cnn:
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU(),
-                                            nn.Linear(mid_dim, 1))
+        self.if_use_conv1D = if_use_conv1D
+        self.conv1D_kernel_size = 3
+        if if_use_conv1D:
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+        elif if_use_cnn:
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
+                                                  nn.ReLU(),
+                                                  nn.Conv2d(16, 32, 3, stride=2),
+                                                  nn.ReLU(),
+                                                  nn.Conv2d(32, 64, 3, stride=2),
+                                                  nn.ReLU(),
+                                                  nn.AdaptiveMaxPool2d(1),
+                                                  nn.Flatten())
         else:
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
-                                            nn.Linear(mid_dim, 1))
+            self.conv_net = None
+            self.cnn_out_dim = 0
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU(),
+                                        nn.Linear(mid_dim, 1))
         layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
     def forward(self, state, state_cnn=None):
         hidden = self.net(state)
-        if self.if_use_cnn:
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
             CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
@@ -281,7 +300,7 @@ class DiscretePPOShareNet(nn.Module):
         if if_use_conv1D:
             self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
                                           nn.ReLU(), nn.Flatten())
-            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - 3 + 1) * 32
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
         elif if_use_cnn:
             self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
