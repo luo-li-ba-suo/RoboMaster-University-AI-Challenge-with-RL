@@ -67,7 +67,15 @@ class Configs:
 
         '''Arguments for self play '''
         self.self_play = True
+        # self play mode:
+        # naive self play: 0
+        # history self play : 1
+        # PSRO: 2
+        self.self_play_mode = 1
+        self.model_pool_capacity_historySP = 100
+        self.delta_historySP = 1.0
         self.fix_evaluation_enemy_policy = True
+        self.enemy_act_update_interval = 0
 
         '''Arguments for wandb'''
         self.if_wandb = True
@@ -205,8 +213,12 @@ def train_and_evaluate(args):
     repeat_times_policy = args.config.repeat_times_policy
     learning_rate = args.config.learning_rate
     if_per_or_gae = args.config.if_per_or_gae
+    enemy_act_update_interval = args.config.enemy_act_update_interval
 
     self_play = args.config.self_play
+    self_play_mode = args.config.self_play_mode
+    delta_historySP = args.config.delta_historySP
+    model_pool_capacity_historySP = args.config.model_pool_capacity_historySP
     fix_evaluation_enemy_policy = args.config.fix_evaluation_enemy_policy
 
     gamma = args.config.gamma
@@ -233,14 +245,21 @@ def train_and_evaluate(args):
     action_dim = env.action_dim
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
+    '''selfPlay args'''
+    self_play_args = {'self_play': self_play,
+                      'if_build_enemy_act': if_build_enemy_act,
+                      'enemy_policy_share_memory': not fix_evaluation_enemy_policy and new_processing_for_evaluation,
+                      'enemy_act_update_interval': enemy_act_update_interval,
+                      'self_play_mode': self_play_mode,
+                      'delta_historySP': delta_historySP,
+                      'model_pool_capacity_historySP': model_pool_capacity_historySP}
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
-               if_build_enemy_act=if_build_enemy_act, if_use_conv1D=if_use_conv1D,
-               env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
-               enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
+               if_use_conv1D=if_use_conv1D,
+               env=env, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-               observation_matrix_shape=observation_matrix_shape)
+               observation_matrix_shape=observation_matrix_shape, **self_play_args)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None

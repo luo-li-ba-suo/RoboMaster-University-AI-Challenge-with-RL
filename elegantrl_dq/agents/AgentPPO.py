@@ -2,7 +2,7 @@ import os
 from copy import deepcopy
 
 from elegantrl_dq.agents.net import *
-
+from elegantrl_dq.agents.model_pool import *
 """agent.py"""
 
 
@@ -355,8 +355,12 @@ class MultiEnvDiscretePPO(AgentPPO):
     def __init__(self):
         super().__init__()
         # self play
+        self.delta_historySP = None
+        self.model_pool_capacity_historySP = None
+        self.model_pool = None
+        self.self_play_mode = 0
         self.self_play = None
-        self.enemy_act_update_interval = 1
+        self.enemy_act_update_interval = 0
         self.enemy_update_steps = 0
 
         self.enemy_act = None
@@ -372,13 +376,17 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.observation_matrix_shape = None
 
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, max_step=0,
-             env=None, if_build_enemy_act=False, self_play=True, enemy_policy_share_memory=False,
+             env=None, if_build_enemy_act=False, enemy_policy_share_memory=False,
              if_use_cnn=False, if_use_conv1D=False,
-             if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25]):
+             if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25],
+             **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        if self.self_play_mode == 1 and self.self_play:
+            self.model_pool = ModelPool(self.model_pool_capacity_historySP, self.self_play_mode, self.delta_historySP)
         self.state_dim = state_dim
         self.observation_matrix_shape = observation_matrix_shape
         self.max_step = max_step
-        self.self_play = self_play
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         if if_share_network:
@@ -398,7 +406,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                                  state_cnn_channel=observation_matrix_shape[0],
                                   if_use_conv1D=if_use_conv1D,
                                   state_seq_len=observation_matrix_shape[-1]).to(self.device)
-        if self_play or if_build_enemy_act:
+        if self.self_play or if_build_enemy_act:
             self.enemy_act = deepcopy(self.act)
 
         self.cri_target = deepcopy(self.cri) if self.cri_target is True else self.cri
@@ -433,7 +441,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                            'net_dim': net_dim,
                            'state_dim': state_dim,
                            'action_dim': action_dim,
-                           'if_build_enemy_act': self_play or if_build_enemy_act}
+                           'if_build_enemy_act': self.self_play or if_build_enemy_act}
 
         self.criterion = torch.nn.SmoothL1Loss()
 
@@ -490,9 +498,14 @@ class MultiEnvDiscretePPO(AgentPPO):
         if self.if_use_cnn:
             end_states['matrix'] = [{trainer_id: None for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs]
-        if self.enemy_act_update_interval == 0:
-            # 貌似没有这么做的必要，因为这个情况下敌人也是trainer
-            self.enemy_act = self.act
+        if self.self_play:
+            if self.self_play_mode == 0:
+                if self.enemy_act_update_interval == 0:
+                    # naive self play
+                    self.enemy_act = self.act
+            elif self.self_play_mode == 1:
+                self.model_pool.push_model(self.act.state_dict())
+                self.enemy_act.load_state_dict(self.model_pool.pull_model())
         while step < target_step:
             # 获取训练者的状态与动作
             last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
@@ -608,7 +621,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                     trainer_i += 1
         # 更新敌方策略
         # if self.self_play and np.mean(win_rate) >= 0.55:
-        if self.self_play and self.enemy_act_update_interval > 0:
+        if self.self_play and self.self_play_mode == 0 and self.enemy_act_update_interval > 0:
             self.update_enemy_policy(step)
         if not self.if_complete_episode:
             for env_id in range(env.env_num):
