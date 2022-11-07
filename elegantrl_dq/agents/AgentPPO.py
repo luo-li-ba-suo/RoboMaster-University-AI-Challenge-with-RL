@@ -626,10 +626,9 @@ class MultiEnvDiscretePPO(AgentPPO):
         if not self.if_complete_episode:
             for env_id in range(env.env_num):
                 for n in last_trainers_envs[env_id]:
-                    if states_envs[env_id][n] == None:
-                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
-                        if self.if_use_cnn:
-                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                    end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                    if self.if_use_cnn:
+                        end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
         self.state = states_envs
         for env_id in range(env.env_num):
             # 将最后一个状态单独存起来
