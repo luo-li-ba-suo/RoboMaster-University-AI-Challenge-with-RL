@@ -34,7 +34,7 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
 
 
 class VecEnvironments:
-    def __init__(self, env_name, env_num):
+    def __init__(self, env_name, env_num, pseudo_step=0):
         self.env_num = env_num
         print(f"\n{env_num} envs launched \n")
         self.if_multi_processing = True
@@ -48,6 +48,8 @@ class VecEnvironments:
         self.env_name = self.envs[0].env_name
         self.args = self.envs[0].env.args
         self.max_step = self.envs[0].max_step
+        self.reset_count = [0 for _ in range(env_num)]
+        self.pseudo_step = pseudo_step  # 代表在伪终止状态后还需要进行的伪步数
 
         if env_num > 1:
             self.agent_conns, self.env_conns = zip(*[mp.Pipe() for _ in range(env_num)])
@@ -95,20 +97,46 @@ class VecEnvironments:
             curr_states, infos = [curr_states], [infos]
         return np.array(curr_states, dtype=object), infos
 
-    def step(self, actions):
+    def step(self, actions, pseudo_step_flag=True):
         if self.env_num > 1:
             [agent_conn.send(("step", action)) for agent_conn, action in zip(self.agent_conns, actions)]
             states, rewards, dones, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
             states = list(states)
             for env_id in range(self.env_num):
                 if dones[env_id]:
-                    self.agent_conns[env_id].send(("reset", None))
-                    states[env_id] = self.agent_conns[env_id].recv()
+                    if not infos[env_id]['pseudo_done']:
+                        infos[env_id]['pseudo_step_'] = -1
+                        self.agent_conns[env_id].send(("reset", None))
+                        states[env_id], new_info = self.agent_conns[env_id].recv()
+                        infos[env_id].update(new_info)
+                    else:
+                        if self.reset_count[env_id] == self.pseudo_step or not pseudo_step_flag:
+                            infos[env_id]['pseudo_step_'] = 0
+                            self.agent_conns[env_id].send(("reset", None))
+                            states[env_id], new_info = self.agent_conns[env_id].recv()
+                            infos[env_id].update(new_info)
+                            self.reset_count[env_id] = 0
+                        else:
+                            infos[env_id]['pseudo_step_'] = 1  # 代表接下来需要进行伪步
+                            self.reset_count[env_id] += 1
         else:
             states, rewards, dones, infos = self.envs[0].step(actions[0])
             states, rewards, dones, infos = [states], [rewards], [dones], [infos]
             if dones[0]:
-                states = [self.envs[0].reset()]
+                if not infos[0]['pseudo_done']:
+                    assert self.reset_count[0] == 0, "some bug happens"
+                    infos[0]['pseudo_step_'] = -1
+                    states[0], new_info = self.envs[0].reset()
+                    infos[0].update(new_info)
+                elif infos[0]['pseudo_done']:
+                    if self.reset_count[0] == self.pseudo_step or not pseudo_step_flag:
+                        infos[0]['pseudo_step_'] = 0
+                        states[0], new_info = self.envs[0].reset()
+                        infos[0].update(new_info)
+                        self.reset_count[0] = 0
+                    else:
+                        infos[0]['pseudo_step_'] = 1  # 代表接下来需要进行伪步
+                        self.reset_count[0] += 1
         return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos
 
     def stop(self):

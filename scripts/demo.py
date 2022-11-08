@@ -31,7 +31,7 @@ def demo_discrete_action():
     args.config.eval_times2 = 16
 
     args.config.if_use_cnn = True
-    args.config.if_share_network = True
+    args.config.if_share_network = False
 
     args.config.if_print_time = True
     args.config.if_train = True
@@ -40,9 +40,11 @@ def demo_discrete_action():
     # args.config.enemy_cwd = 'init_model'
     args.agent = MultiEnvDiscretePPO()
     if args.config.if_multi_processing and args.config.if_train:
-        args.env = VecEnvironments(env_name, args.config.num_envs)
+        args.env = VecEnvironments(env_name, args.config.num_envs,
+                                   pseudo_step=1 if args.config.use_action_prediction else 0)
     else:
-        args.env = VecEnvironments(env_name, 1)
+        args.env = VecEnvironments(env_name, 1,
+                                   pseudo_step=1 if args.config.use_action_prediction else 0)
     if not args.config.if_train:
         args.config.eval_gap = 0
         args.env_eval = PreprocessEnv(env_name)

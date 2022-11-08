@@ -178,6 +178,13 @@ class Engine(object):
                     elif rotate > 180:
                         rotate -= 360
                     self.acts[n].rotate_speed = rotate
+                    # 重新给rotate赋值是为了动作预测功能
+                    if rotate == 0:
+                        orders.set[n].rotate = 0
+                    elif rotate > 0:
+                        orders.set[n].rotate = 1
+                    else:
+                        orders.set[n].rotate = -1
                 else:
                     self.acts[n].rotate_speed += orders.set[n].rotate * self.state.robots[n].rotate_acceleration
                 # 因阻力减速:

@@ -14,13 +14,13 @@ class ReplayBuffer:
             self.action_dim = 1
         elif if_multi_discrete:
             self.action_dim = action_dim.size
-            action_dim = sum(action_dim)
+            self.action_dim_sum = sum(action_dim)
         else:
             self.action_dim = action_dim  # for self.sample_all(
         self.tuple = None
         self.np_torch = torch
 
-        self.other_dim = 1 + 2 + self.action_dim + action_dim
+        self.other_dim = 1 + 2 + self.action_dim + self.action_dim_sum
         # other = (reward, mask, action, a_noise) for continuous action
         # other = (reward, mask, a_int, a_prob) for discrete action
         self.buf_other = np.empty((max_len, self.other_dim), dtype=np.float32)
@@ -192,6 +192,14 @@ class PlugInReplayBuffer(ReplayBuffer):
         self.env_num = env.env_num
         self.total_trainers_envs = total_trainers_envs
         self.max_len_per_env = max_len//self.env_num*2
+        # kwargs:
+        # 是否启用上帝视角critic：use_god_critic
+        # 是否使用上帝视角动作预测：use_action_prediction
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        if self.use_extra_state_for_critic:
+            if self.use_action_prediction:
+                self.other_dim += (self.agent_num - 1)*sum(self.action_prediction_dim)
         self.buf_other = [{trainer: np.empty((self.max_len_per_env, self.other_dim), dtype=np.float32)
                            for trainer in trainers}
                           for trainers in self.total_trainers_envs]
@@ -249,6 +257,7 @@ class PlugInReplayBuffer(ReplayBuffer):
         action = [{} for _ in range(self.env_num)]
         action_noise = [{} for _ in range(self.env_num)]
         state = [{} for _ in range(self.env_num)]
+        extra_state = [{} for _ in range(self.env_num)]
         state_cnn = [{} for _ in range(self.env_num)]
         state_rnn = [{} for _ in range(self.env_num)]
         for env_id in range(self.env_num):
@@ -260,10 +269,15 @@ class PlugInReplayBuffer(ReplayBuffer):
                 mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 1], device=self.device)
                 pseudo_mask[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 2], device=self.device)
                 action[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3:3 + self.action_dim], device=self.device)
-                action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx, 3 + self.action_dim:], device=self.device)
+                action_noise[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx,
+                                    3 + self.action_dim:3 + self.action_dim+self.action_dim_sum], device=self.device)
+                if self.use_extra_state_for_critic:
+                    extra_state[env_id][trainer] = torch.as_tensor(buf_other[0:tail_idx,
+                                                                   3 + self.action_dim+self.action_dim_sum:],
+                                                                   device=self.device)
                 state[env_id][trainer] = torch.as_tensor(buf_state[0:tail_idx], device=self.device)
                 if self.if_use_cnn:
                     state_cnn[env_id][trainer] = torch.as_tensor(self.buf_state_cnn[env_id][trainer][0:tail_idx], device=self.device)
                 if self.if_use_rnn:
                     state_rnn[env_id][trainer] = self.buf_state_rnn[env_id][trainer][0:tail_idx]
-        return reward, mask, pseudo_mask, action, action_noise, state, state_cnn, state_rnn
+        return reward, mask, pseudo_mask, action, action_noise, state, state_cnn, state_rnn, extra_state

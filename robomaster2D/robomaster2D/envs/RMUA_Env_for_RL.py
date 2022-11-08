@@ -202,6 +202,31 @@ class RMUA_Multi_agent_Env(gym.Env):
                 self.trainer_ids.remove(i)
             elif i in self.tester_ids:
                 self.tester_ids.remove(i)
+        # 获取当前step每个智能体执行的动作（action mask后）
+        # 对于真终止状态，没有对应的动作
+        # 伪终止状态有对应动作，但需要再进行一个step
+        # 最后的下划线代表此信息不记录曲线
+        # -1代表无动作
+        info['last_actions_'] = np.ones((self.robot_num, self.action_space.shape[0]), dtype=np.int8) * -1
+        for i in range(self.robot_num):
+            if self.simulator.state.robots[i].hp > 0 or i in info['robots_being_killed_']:
+                action = []
+                action.append(self.simulator.orders.set[i].x + 1)
+                action.append(self.simulator.orders.set[i].y + 1)
+                action.append(self.simulator.orders.set[i].rotate + 1)
+                action.append(self.simulator.module_engine.acts[i].shoot)
+                if self.simulator.state.robots[i].aimed_enemy:
+                    if i < self.args.robot_r_num:
+                        # 说明是red
+                        action.append(self.simulator.state.robots[i].aimed_enemy - self.args.robot_r_num)
+                    else:
+                        # 说明是blue
+                        action.append(self.simulator.state.robots[i].aimed_enemy)
+                else:
+                    action.append(-1)
+                info['last_actions_'][i] = action
+        info['trainers_'] = self.trainer_ids
+        info['testers_'] = self.tester_ids
         return obs, r, done, info
 
     def compute_reward(self):
