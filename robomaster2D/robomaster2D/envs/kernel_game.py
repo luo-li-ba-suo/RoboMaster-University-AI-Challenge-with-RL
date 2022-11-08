@@ -136,7 +136,6 @@ class State(object):  # 总状态
         self.buff = None
         self.done = False  # 比赛是否结束
         self.camera_vision = np.zeros((self.robot_num, self.robot_num), dtype='int8')
-        self.lidar_detect = np.zeros((self.robot_num, self.lidar_num))
         self.relative_angle = np.zeros((self.robot_num, self.robot_num))
         self.dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
         self.delta_dist_matrix = np.zeros((self.robot_num, self.robot_num))

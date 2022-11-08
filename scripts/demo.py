@@ -10,16 +10,16 @@ def demo_discrete_action():
     env_name = 'Robomaster-v0'
     args.config.if_multi_processing = True
     args.config.new_processing_for_evaluation = False
-    args.config.num_envs = 8
+    args.config.num_envs = 10
     args.config.if_wandb = False
 
     args.config.reward_scale = 2 ** -1
-    args.config.net_dim = 128
-    args.config.gamma = 0.98
-    args.config.batch_size = 256
-    args.config.repeat_times = 8
-    args.config.repeat_times_policy = 8
-    args.config.target_step = 4096
+    args.config.net_dim = 256
+    args.config.gamma = 0.998
+    args.config.batch_size = 2 ** 12
+    args.config.repeat_times = 4
+    args.config.repeat_times_policy = 4
+    args.config.target_step = 2 ** 16
     args.config.learning_rate = 1e-4
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
