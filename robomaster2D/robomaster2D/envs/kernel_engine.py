@@ -10,7 +10,6 @@ class Acts(object):  # 底层动作
         self.x_speed = 0  # 前进后退速度
         self.y_speed = 0  # 左右平移速度
         self.shoot = shoot  # 是否发射
-        self.shoot_target_enemy = -1
         self.shoot_mutiple = False  # 是否连发
         self.dodge_dir = True
         self.dir_relate_to_map = True
