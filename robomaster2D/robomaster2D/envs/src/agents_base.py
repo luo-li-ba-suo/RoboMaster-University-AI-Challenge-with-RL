@@ -30,6 +30,13 @@ class Base_Agent(object):
                                      'vy': [-10, 10]
                                      }
 
+    def decode_actions(self, game_state, actions):
+        # 检查actions是否在合理范围内
+        if actions is not None:
+            for action in actions:
+                for i, action_key in enumerate(self.actions):
+                    assert action[i] < self.actions[action_key], "action value out of bound"
+
     def get_robot_ids(self):
         return self.robot_ids
 
