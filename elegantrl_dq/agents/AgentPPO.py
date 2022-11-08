@@ -634,8 +634,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                             self.last_states['vector'][env_id][n].append(states_envs[env_id][n][0])
                             if self.if_use_cnn:
                                 self.last_states['matrix'][env_id][n].append(states_envs[env_id][n][1])
-                            assert self.info_dict[env_id]['pseudo_step_'] == 1, f"'pseudo_step_' not in self.info_dict[{env_id}]"
-                            pseudo_step[env_id][n] = True
+                            if self.use_action_prediction:
+                                assert self.info_dict[env_id]['pseudo_step_'] == 1, f"'pseudo_step_' not in self.info_dict[{env_id}]"
+                                pseudo_step[env_id][n] = True
 
                         other = (rewards[env_id][i] * reward_scale, 0.0, mask,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob), *extra_states)
