@@ -21,6 +21,7 @@ class ModelPool:
         if self.self_play_mode == 1:
             # delta self play mode
             current_num = len(self.pool)
+            print(f"| Totally {current_num} models in pool now")
             if current_num > self.capacity:
                 if self.step * self.delta < self.capacity:
                     del self.pool[0]
@@ -38,4 +39,5 @@ class ModelPool:
 
     def pull_model(self):
         random_id = np.random.randint(0, self.model_num)
+        # print(f"| Pull the {random_id}th model from pool")
         return self.pool[random_id]

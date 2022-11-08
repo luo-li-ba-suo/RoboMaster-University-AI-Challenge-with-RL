@@ -505,8 +505,15 @@ class MultiEnvDiscretePPO(AgentPPO):
                     self.enemy_act = self.act
             elif self.self_play_mode == 1:
                 self.model_pool.push_model(self.act.state_dict())
-                self.enemy_act.load_state_dict(self.model_pool.pull_model())
+                last_step = 0
         while step < target_step:
+            if self.self_play:
+                if self.self_play_mode == 1:
+                    if self.enemy_update_steps > self.enemy_act_update_interval:
+                        self.enemy_update_steps -= self.enemy_act_update_interval
+                        self.enemy_act.load_state_dict(self.model_pool.pull_model())
+                    self.enemy_update_steps += step - last_step
+                    last_step = step
             # 获取训练者的状态与动作
             last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
             last_trainers_envs_size = 0

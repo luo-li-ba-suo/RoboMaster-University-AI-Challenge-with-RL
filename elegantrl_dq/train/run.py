@@ -154,6 +154,10 @@ class Arguments:
         gpu_id = self.config.gpu_id[process_id] if isinstance(self.config.gpu_id, list) else self.config.gpu_id
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
 
+        '''self play'''
+        if self.config.self_play_mode == 1:
+            assert self.config.env_config['blue_agents_path'] == ['src.agents.nn_enemy'], 'opponent should not be rl trainer'
+
 
 def train_and_evaluate(args):
     args.init_before_training()
