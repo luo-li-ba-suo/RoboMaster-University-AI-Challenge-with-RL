@@ -77,11 +77,15 @@ class Configs:
         self.fix_evaluation_enemy_policy = True
         self.enemy_act_update_interval = 0
 
+        '''Arguments for extra state for critic '''
+        self.use_extra_state_for_critic = True
+        self.use_action_prediction = True
+
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'lidar' + str(self.random_seed)
+        self.wandb_name = 'actionPrediction' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -158,6 +162,9 @@ class Arguments:
         if self.config.self_play_mode == 1:
             assert self.config.env_config['blue_agents_path'] == ['src.agents.nn_enemy'], 'opponent should not be rl trainer'
 
+        '''action prediction'''
+        if self.config.use_action_prediction:
+            assert not self.config.if_share_network, "Shared AC Net do not support action prediction temporarily"
 
 def train_and_evaluate(args):
     args.init_before_training()
@@ -220,6 +227,14 @@ def train_and_evaluate(args):
     if_per_or_gae = args.config.if_per_or_gae
     enemy_act_update_interval = args.config.enemy_act_update_interval
 
+    # 有关上帝视角critic：
+    action_prediction_dim = args.env.action_dim.copy()
+    action_prediction_dim += 1
+    extra_state_kwargs = {'use_extra_state_for_critic': args.config.use_extra_state_for_critic,
+                          'use_action_prediction': args.config.use_action_prediction,
+                          'agent_num': args.env.args.robot_r_num + args.env.args.robot_b_num,
+                          'action_prediction_dim': action_prediction_dim}
+
     self_play = args.config.self_play
     self_play_mode = args.config.self_play_mode
     delta_historySP = args.config.delta_historySP
@@ -264,7 +279,7 @@ def train_and_evaluate(args):
                if_use_conv1D=if_use_conv1D,
                env=env, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-               observation_matrix_shape=observation_matrix_shape, **self_play_args)
+               observation_matrix_shape=observation_matrix_shape, **self_play_args, **extra_state_kwargs)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -287,7 +302,8 @@ def train_and_evaluate(args):
                                     total_trainers_envs=total_trainers_envs,
                                     action_dim=action_dim, observation_matrix_shape=observation_matrix_shape,
                                     if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
-                                    if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
+                                    if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
+                                    **extra_state_kwargs)
     else:
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)

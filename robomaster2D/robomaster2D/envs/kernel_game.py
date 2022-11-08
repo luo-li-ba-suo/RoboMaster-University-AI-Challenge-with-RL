@@ -361,7 +361,7 @@ class Simulator(object):
                 self.state.robots_killed_this_step.append(i)
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
-            if self.state.step == self.parameters.episode_step:
+            if self.state.step >= self.parameters.episode_step:
                 pseudo_done = True
                 done = True
         # 结算比赛结果
@@ -374,7 +374,7 @@ class Simulator(object):
                                  for n in range(self.parameters.robot_r_num)]).all()
         if blue_all_dead or red_all_dead:
             done = True
-            pseudo_done = False
+            pseudo_done = pseudo_done or False  # 在伪步中pseudo_done始终为True
         if done:
             # 首先判断是否有一方全部阵亡
             if blue_all_dead and not red_all_dead:
