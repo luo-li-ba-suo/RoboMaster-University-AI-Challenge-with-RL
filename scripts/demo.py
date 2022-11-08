@@ -36,6 +36,8 @@ def demo_discrete_action():
     args.config.if_print_time = True
     args.config.if_train = True
     args.config.self_play = False
+    args.config.use_extra_state_for_critic = True
+    args.config.use_action_prediction = True
     # args.config.cwd = '2022-07-24_16-44-21'
     # args.config.enemy_cwd = 'init_model'
     args.agent = MultiEnvDiscretePPO()

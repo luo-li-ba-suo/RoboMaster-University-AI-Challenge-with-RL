@@ -82,7 +82,8 @@ class AgentPPO:
             indices = torch.randint(buf_len, size=(batch_size,), requires_grad=False, device=self.device)
 
             state = buf_state[indices]
-            state_extra = buf_state_extra[indices]
+            if self.use_extra_state_for_critic:
+                state_extra = buf_state_extra[indices]
             if self.if_use_cnn:
                 state_2D = buf_state_2D[indices]
             else:
@@ -109,7 +110,7 @@ class AgentPPO:
                 if if_train_actor and not self.if_share_network:
                     self.optim_update(self.act_optimizer, obj_actor)
                 update_policy_net -= 1
-            if self.use_action_prediction:
+            if self.use_extra_state_for_critic:
                 state_critic = torch.cat([state, state_extra], dim=-1)
             else:
                 state_critic = state

@@ -163,6 +163,10 @@ class Arguments:
             assert self.config.env_config['blue_agents_path'] == ['src.agents.nn_enemy'], 'opponent should not be rl trainer'
 
         '''action prediction'''
+        if not self.config.use_extra_state_for_critic:
+            assert not self.config.use_action_prediction
+        else:
+            assert self.config.use_action_prediction
         if self.config.use_action_prediction:
             assert not self.config.if_share_network, "Shared AC Net do not support action prediction temporarily"
 
