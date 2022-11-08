@@ -142,9 +142,9 @@ class Arguments:
         least_target_step = self.config.num_envs * self.config.env_config['episode_step']
         agent_num = 0
         if 'src.agents.rl_trainer' in self.config.env_config['red_agents_path']:
-            agent_num += 2
+            agent_num += self.config.env_config['robot_r_num']
         if 'src.agents.rl_trainer' in self.config.env_config['blue_agents_path']:
-            agent_num += 2
+            agent_num += self.config.env_config['robot_b_num']
         assert self.config.target_step > agent_num*least_target_step, "too small target_step, some bug will happen"
         np.random.seed(self.config.random_seed)
         torch.manual_seed(self.config.random_seed)
