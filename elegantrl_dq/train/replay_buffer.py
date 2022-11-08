@@ -183,13 +183,14 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
 
 
 class PlugInReplayBuffer(ReplayBuffer):
-    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, observation_matrix_shape=[1,25,25],
-                 state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False):
+    def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, total_trainers_envs,
+                 observation_matrix_shape=[1,25,25],
+                 state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False, **kwargs):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
             raise NotImplementedError
         self.env_num = env.env_num
-        self.total_trainers_envs = env.get_trainer_ids()
+        self.total_trainers_envs = total_trainers_envs
         self.max_len_per_env = max_len//self.env_num*2
         self.buf_other = [{trainer: np.empty((self.max_len_per_env, self.other_dim), dtype=np.float32)
                            for trainer in trainers}

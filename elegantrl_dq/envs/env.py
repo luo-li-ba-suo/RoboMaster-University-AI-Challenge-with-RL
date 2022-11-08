@@ -18,10 +18,10 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         self.reset = self.reset_type
         self.step = self.step_type
 
-    def reset_type(self, evaluation=False) -> list:
-        states = self.env.reset(evaluation)
+    def reset_type(self, evaluation=False):
+        states, info = self.env.reset(evaluation)
         self.reward_dict = self.env.rewards
-        return [np.array(state, dtype=object) for state in states]
+        return [np.array(state, dtype=object) for state in states], info
 
     def step_type(self, actions) -> (list, float, bool, dict):
         states, rewards, done, info = self.env.step(actions)
@@ -69,10 +69,6 @@ class VecEnvironments:
                 self.envs[index].render()
             elif request == "display_characters":
                 self.envs[index].env.display_characters(action)
-            elif request == "get_trainer_ids":
-                self.env_conns[index].send(self.envs[index].env.trainer_ids)
-            elif request == "get_tester_ids":
-                self.env_conns[index].send(self.envs[index].env.tester_ids)
             elif request == "stop":
                 break
             else:
@@ -93,10 +89,11 @@ class VecEnvironments:
     def reset(self):
         if self.env_num > 1:
             [agent_conn.send(("reset", None)) for agent_conn in self.agent_conns]
-            curr_states = [agent_conn.recv() for agent_conn in self.agent_conns]
+            curr_states, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
         else:
-            curr_states = [self.envs[0].reset()]
-        return np.array(curr_states, dtype=object)
+            curr_states, infos = self.envs[0].reset()
+            curr_states, infos = [curr_states], [infos]
+        return np.array(curr_states, dtype=object), infos
 
     def step(self, actions):
         if self.env_num > 1:
@@ -113,20 +110,6 @@ class VecEnvironments:
             if dones[0]:
                 states = [self.envs[0].reset()]
         return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos
-
-    def get_trainer_ids(self):
-        if self.env_num > 1:
-            [agent_conn.send(("get_trainer_ids", None)) for agent_conn in self.agent_conns]
-            return [agent_conn.recv() for agent_conn in self.agent_conns]
-        else:
-            return [self.envs[0].env.trainer_ids]
-
-    def get_tester_ids(self):
-        if self.env_num > 1:
-            [agent_conn.send(("get_tester_ids", None)) for agent_conn in self.agent_conns]
-            return [agent_conn.recv() for agent_conn in self.agent_conns]
-        else:
-            return [self.envs[0].env.tester_ids]
 
     def stop(self):
         if self.env_num > 1:

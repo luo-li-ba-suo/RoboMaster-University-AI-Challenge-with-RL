@@ -15,6 +15,7 @@ class AgentPPO:
         self.get_reward_sum = None
 
         self.state = None
+        self.info_dict = None
         self.device = None
         self.criterion = None
         self.act = self.enemy_act = self.act_optimizer = None
@@ -305,10 +306,10 @@ class AgentDiscretePPO(AgentPPO):
                 elif i in env.env.tester_ids:
                     actions_for_env[i] = self.select_enemy_action(states[i])
             self.last_alive_trainers = env.env.trainer_ids
-            next_states, rewards, done, info_dict = env.step(actions_for_env)
+            next_states, rewards, done, self.info_dict = env.step(actions_for_env)
 
             for i, n in enumerate(self.last_alive_trainers):
-                if n in info_dict['robots_being_killed_']:
+                if n in self.info_dict['robots_being_killed_']:
                     other = (rewards[i] * reward_scale, 0.0, *as_int[i], *np.concatenate(as_prob[i]))
                 else:
                     other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
@@ -454,8 +455,8 @@ class MultiEnvDiscretePPO(AgentPPO):
         if env is None:
             raise NotImplementedError
         self.env_num = env.env_num
-        self.state = env.reset()
-        self.total_trainers_envs = env.get_trainer_ids()
+        self.state, self.info_dict = env.reset()
+        self.total_trainers_envs = np.array([info['trainers_'] for info in self.info_dict], dtype=object)
         self.other_dim = 1 + 2 + action_dim.size + sum(action_dim)
         if self.if_complete_episode:
             self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
@@ -466,6 +467,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
         else:
             self.remove_rest_trajectory = False
+        return self.total_trainers_envs
 
     def explore_env(self, env, target_step, reward_scale, gamma, replay_buffer=None):
         if self.remove_rest_trajectory:
@@ -475,7 +477,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                                                                        if self.if_use_cnn else None}
                                       for trainer_id in trainers} for trainers in self.total_trainers_envs]
             self.cache_tail_idx = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
-            self.state = env.reset()
+            self.state, self.info_dict = env.reset()
         logging_list = list()
         episode_rewards = list()
         win_rate = list()
@@ -515,7 +517,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                     self.enemy_update_steps += step - last_step
                     last_step = step
             # 获取训练者的状态与动作
-            last_trainers_envs = np.array(env.get_trainer_ids(), dtype=object)
+            last_trainers_envs = np.array([info['trainers_'] for info in self.info_dict], dtype=object)
             last_trainers_envs_size = 0
             for last_trainers in last_trainers_envs:
                 last_trainers_envs_size += len(last_trainers)
@@ -534,7 +536,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             trainer_actions, actions_prob = self.select_stochastic_action(states_trainers)
 
             # 获取测试者的状态与动作
-            last_testers_envs = np.array(env.get_tester_ids(), dtype=object)
+            last_testers_envs = np.array([info['testers_'] for info in self.info_dict], dtype=object)
             last_testers_envs_size = 0
             for last_testers in last_testers_envs:
                 last_testers_envs_size += len(last_testers)
@@ -572,9 +574,13 @@ class MultiEnvDiscretePPO(AgentPPO):
                     action_prob = [probs[trainer_i] for probs in actions_prob]
                     if n in info_dict[env_id]['robots_being_killed_'] or done[env_id]:
                         if done[env_id]:
-                            win_rate.append(info_dict[env_id]['win'])
+                            win_rate.append(self.info_dict[env_id]['win'])
                         mask = 0.0
-                        if info_dict[env_id]['pseudo_done']:
+                        # 有一种特殊情况：
+                        # 一个机器人死亡，另一个机器人坚持到了伪终止
+                        # 这时死亡机器人是没有伪步的
+                        if self.info_dict[env_id]['pseudo_done'] and n not in self.info_dict[env_id]['robots_being_killed_']:
+                            assert done[env_id]
                             mask = gamma
                             self.last_states['vector'][env_id][n].append(states_envs[env_id][n][0])
                             if self.if_use_cnn:

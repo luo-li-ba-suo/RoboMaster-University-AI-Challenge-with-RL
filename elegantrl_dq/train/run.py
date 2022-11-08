@@ -260,7 +260,7 @@ def train_and_evaluate(args):
                       'model_pool_capacity_historySP': model_pool_capacity_historySP}
 
     '''init: Agent, ReplayBuffer, Evaluator'''
-    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
+    total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
                if_use_conv1D=if_use_conv1D,
                env=env, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
@@ -284,6 +284,7 @@ def train_and_evaluate(args):
                               if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
+                                    total_trainers_envs=total_trainers_envs,
                                     action_dim=action_dim, observation_matrix_shape=observation_matrix_shape,
                                     if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
                                     if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)

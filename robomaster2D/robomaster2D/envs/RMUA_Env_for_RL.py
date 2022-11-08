@@ -155,7 +155,8 @@ class RMUA_Multi_agent_Env(gym.Env):
         for n in self.trainer_ids:
             robot = self.simulator.state.robots[n]
             robot.robot_info_plot['reward'] = self.rewards_record[n]
-        return self.get_observations()
+        info = {'trainers_': self.trainer_ids, 'testers_': self.tester_ids}
+        return self.get_observations(), info
 
     def decode_actions(self, actions):
         if self.args.action_type == 'Discrete':
