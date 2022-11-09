@@ -76,6 +76,7 @@ class Configs:
         self.delta_historySP = 1.0
         self.fix_evaluation_enemy_policy = True
         self.enemy_act_update_interval = 0
+        self.enemy_stochastic_policy = True
 
         '''Arguments for extra state for critic '''
         self.use_extra_state_for_critic = True
@@ -230,6 +231,7 @@ def train_and_evaluate(args):
     learning_rate = args.config.learning_rate
     if_per_or_gae = args.config.if_per_or_gae
     enemy_act_update_interval = args.config.enemy_act_update_interval
+    enemy_stochastic_policy = args.config.enemy_stochastic_policy
 
     # 有关上帝视角critic：
     action_prediction_dim = args.env.action_dim.copy()
@@ -276,7 +278,8 @@ def train_and_evaluate(args):
                       'enemy_act_update_interval': enemy_act_update_interval,
                       'self_play_mode': self_play_mode,
                       'delta_historySP': delta_historySP,
-                      'model_pool_capacity_historySP': model_pool_capacity_historySP}
+                      'model_pool_capacity_historySP': model_pool_capacity_historySP,
+                      'enemy_stochastic_policy': enemy_stochastic_policy}
 
     '''init: Agent, ReplayBuffer, Evaluator'''
     total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,

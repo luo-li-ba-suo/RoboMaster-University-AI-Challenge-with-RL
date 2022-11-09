@@ -35,7 +35,11 @@ def demo_discrete_action():
 
     args.config.if_print_time = True
     args.config.if_train = True
-    args.config.self_play = False
+    args.config.self_play = True
+    args.config.enemy_act_update_interval = 2 ** 12
+    args.config.model_pool_capacity_historySP = 1000
+    args.config.delta_historySP = 1.0
+    args.config.enemy_stochastic_policy = True
     args.config.use_extra_state_for_critic = True
     args.config.use_action_prediction = True
     # args.config.cwd = '2022-07-24_16-44-21'

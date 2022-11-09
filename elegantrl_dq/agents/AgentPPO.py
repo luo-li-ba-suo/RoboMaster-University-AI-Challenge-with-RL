@@ -570,7 +570,10 @@ class MultiEnvDiscretePPO(AgentPPO):
                         states_testers['matrix'][tester_i] = states_envs[env_id][tester_id][1]
                     tester_i += 1
             if last_testers_envs.any():
-                tester_actions = self.select_deterministic_action(states_testers)
+                if self.enemy_stochastic_policy:
+                    tester_actions, _ = self.select_stochastic_action(states_testers)
+                else:
+                    tester_actions = self.select_deterministic_action(states_testers)
             else:
                 tester_actions = None
 
