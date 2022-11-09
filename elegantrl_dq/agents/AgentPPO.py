@@ -593,7 +593,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                 # print(f'{real_step},', self.info_dict)
             else:
                 # 最后这一伪步不允许环境自行开始新的伪步
-                _, _, _, self.info_dict = env.step(actions_for_env, pseudo_step_flag=False)
+                states_envs, _, _, self.info_dict = env.step(actions_for_env, pseudo_step_flag=False)
                 # print(f'{real_step},', self.info_dict)
             trainer_i = 0
             for env_id in range(env.env_num):
@@ -606,12 +606,18 @@ class MultiEnvDiscretePPO(AgentPPO):
                                 self.get_one_hot_other_actions(n, self.info_dict[env_id]['last_actions_']))
                             if self.info_dict[env_id]['pseudo_step_'] == 0:
                                 pseudo_step[env_id][n] = False
-                        # last_pseudo_step > 0代表当前为最后一个伪步数
-                        # 当pseudo_step[env_id][n]和last_pseudo_step > 0都满足条件时，会添加两次同一个额外状态
-                        if last_pseudo_step > 0:
+                if last_pseudo_step > 0:
+                    for i, n in enumerate(self.total_trainers_envs[env_id]):
+                        if self.use_extra_state_for_critic:
+                            # last_pseudo_step > 0代表当前为最后一个伪步数
+                            # 当pseudo_step[env_id][n]和last_pseudo_step > 0都满足条件时，会添加两次同一个额外状态
                             pseudo_step_cur_env = True
                             self.last_states['extra'][env_id][n].append(
                                 self.get_one_hot_other_actions(n, self.info_dict[env_id]['last_actions_']))
+                            # 这一个对应end_states
+                            # 那么引出一个问题：如果有机器人提前死亡，last_trainers_envs中没有它，
+                            # 那么self.last_states['extra']就会缺少它的信息，导致对不齐
+                            # 所以这里遍历的对象为self.total_trainers_envs
                             step += 1
                 if pseudo_step_cur_env:
                     continue
@@ -718,7 +724,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.state = states_envs
         for env_id in range(env.env_num):
             # 将最后一个状态单独存起来
-            for n in end_states['vector'][env_id]:
+            for n in self.total_trainers_envs[env_id]:
                 self.last_states['vector'][env_id][n].append(end_states['vector'][env_id][n])
                 if self.if_use_cnn:
                     self.last_states['matrix'][env_id][n].append(end_states['matrix'][env_id][n])
@@ -726,7 +732,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             for env_id in range(env.env_num):
                 for trainers in self.total_trainers_envs:
                     for trainer in trainers:
-                        assert len(self.last_states['vector'][env_id][trainer]) == len(self.last_states['extra'][env_id][trainer])
+                        assert len(self.last_states['vector'][env_id][trainer]) == len(self.last_states['extra'][env_id][trainer]), f"env_id{env_id} trainer{trainer} {len(self.last_states['vector'][env_id][trainer])} != {len(self.last_states['extra'][env_id][trainer])}"
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         logging_list.append(np.mean(win_rate))
