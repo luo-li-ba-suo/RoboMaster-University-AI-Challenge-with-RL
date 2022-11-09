@@ -26,6 +26,7 @@ class Map(object):
         self.obstacle_map_size = options.obstacle_map_size
         self.robot_num = options.robot_r_num + options.robot_b_num
         self.robot_r_num = options.robot_r_num
+        self.robot_b_num = options.robot_b_num
         self.death_idx = []
 
         self.map_length = 808
@@ -411,11 +412,11 @@ class Map(object):
                 intersection_index_dir2 = np.argmin(abs(intersection_results[barriers_may_intersect_dir2, 0, 0]))
                 intersection_index_dir1 = barriers_may_intersect[0][barriers_may_intersect_dir1[0][intersection_index_dir1]]
                 intersection_index_dir2 = barriers_may_intersect[0][barriers_may_intersect_dir2[0][intersection_index_dir2]]
-                lidar_array[self.get_obstacle_channel(intersection_index_dir1, robot_id), i] = 1
-                lidar_array[self.get_obstacle_channel(intersection_index_dir2, robot_id), self.lidar_num//2 + i] = 1
+                lidar_array[self.get_obstacle_channel(robots, intersection_index_dir1, robot_id), i] = 1
+                lidar_array[self.get_obstacle_channel(robots, intersection_index_dir2, robot_id), self.lidar_num//2 + i] = 1
             robots[robot_id].lidar_array = lidar_array
 
-    def get_obstacle_channel(self, index, robot_idx):
+    def get_obstacle_channel(self, robots, index, robot_idx):
         # obstacle: channel
         # high obstacle: 1
         # low obstacle: 2
@@ -430,13 +431,28 @@ class Map(object):
                 return 1
         else:
             if robot_idx < self.robot_r_num:
+                # 死去的机器人算作高墙壁
+                if robot_idx == 0 or index - len(self.barriers) > 1:
+                    cur_robot_id = index - len(self.barriers)
+                else:
+                    cur_robot_id = 0
+                if robots[cur_robot_id].hp <= 0:
+                    return 1
+
                 return index + 2 - len(self.barriers)  # 即3,4,5
             else:
+                # 死去的机器人算作高墙壁
+                if robot_idx == self.robot_num - 1 or index - len(self.barriers) < 3:
+                    cur_robot_id = index - len(self.barriers) - 1
+                else:
+                    cur_robot_id = self.robot_num - 1
+                if robots[cur_robot_id].hp <= 0:
+                    return 1
+
                 if index == len(self.barriers) + 3:
                     return 3
                 else:
                     return index + 3 - len(self.barriers)  # 即4,5
-
 
 
 if __name__ == "__main__":
