@@ -159,7 +159,7 @@ class Arguments:
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
 
         '''self play'''
-        if self.config.self_play_mode == 1:
+        if self.config.self_play and self.config.self_play_mode == 1:
             assert self.config.env_config['blue_agents_path'] == ['src.agents.nn_enemy'], 'opponent should not be rl trainer'
 
         '''action prediction'''

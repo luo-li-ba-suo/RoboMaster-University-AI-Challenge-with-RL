@@ -719,6 +719,11 @@ class MultiEnvDiscretePPO(AgentPPO):
                 self.last_states['vector'][env_id][n].append(end_states['vector'][env_id][n])
                 if self.if_use_cnn:
                     self.last_states['matrix'][env_id][n].append(end_states['matrix'][env_id][n])
+        if self.use_extra_state_for_critic:
+            for env_id in range(env.env_num):
+                for trainers in self.total_trainers_envs:
+                    for trainer in trainers:
+                        assert len(self.last_states['vector'][env_id][trainer]) == len(self.last_states['extra'][env_id][trainer])
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         logging_list.append(np.mean(win_rate))
