@@ -167,9 +167,10 @@ class MultiAgentActorDiscretePPO(nn.Module):
             self.cnn_out_dim = 0
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         self.rnn = None
-        self.action_nets = nn.Sequential(*[nn.Linear(mid_dim, action_d) for action_d in action_dim])
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+                                                         nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
-            layer_norm(net, std=0.01)
+            layer_norm(net[-1], std=0.01)
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
