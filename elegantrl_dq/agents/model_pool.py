@@ -20,22 +20,17 @@ class ModelPool:
             self.model_num += 1
         if self.self_play_mode == 1:
             # delta self play mode
+            while self.pool_step[0] < (1 - self.delta) * self.step:
+                del self.pool[0]
+                del self.pool_step[0]
             current_num = len(self.pool)
-            print(f"| Totally {current_num} models in pool now")
             if current_num > self.capacity:
-                if self.step * self.delta < self.capacity:
-                    del self.pool[0]
-                    del self.pool_step[0]
-                else:
-                    if self.pool_step[0] < self.step * (1 - self.delta):
-                        del self.pool[0]
-                        del self.pool_step[0]
-                    else:
-                        del self.pool[self.delete_step]
-                        del self.pool_step[self.delete_step]
-                        self.delete_step += 1
-                        if self.delete_step >= self.capacity:
-                            self.delete_step = 0
+                del self.pool[self.delete_step]
+                del self.pool_step[self.delete_step]
+                self.delete_step += 1
+                if self.delete_step >= self.capacity:
+                    self.delete_step = 0
+            print(f"| Totally {len(self.pool)} models in pool now")
 
     def pull_model(self):
         random_id = np.random.randint(0, self.model_num)
