@@ -161,7 +161,7 @@ class Arguments:
 
         '''self play'''
         if self.config.self_play and self.config.self_play_mode == 1:
-            assert self.config.env_config['blue_agents_path'] == ['src.agents.nn_enemy'], 'opponent should not be rl trainer'
+            assert 'src.agents.rl_trainer' not in self.config.env_config['blue_agents_path'], 'opponent should not be rl trainer'
 
         '''action prediction'''
         if not self.config.use_extra_state_for_critic:
