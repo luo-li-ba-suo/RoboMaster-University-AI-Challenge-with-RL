@@ -105,10 +105,7 @@ class RMUA_Multi_agent_Env(gym.Env):
             actions = 1
         else:
             actions = []
-        agent = None
-        for agent_ in self.simulator.agents:
-            if agent_.name == 'rl_trainer':
-                agent = agent_
+        agent = self.simulator.agents[0]
         if agent is not None:
             if action_type == 'MultiDiscrete':
                 for action in agent.actions:
@@ -435,7 +432,7 @@ if __name__ == '__main__':
     args.episode_step = 0
     args.render = True
     args.training_mode = False
-    args.time_delay_frame = 0
+    args.time_delay_frame = 0.5
     args.enable_blocks = True
     env = RMUA_Multi_agent_Env(args)
     env.simulator.state.pause = True
