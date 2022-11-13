@@ -95,7 +95,10 @@ class VecEnvironments:
             if request == "step":
                 self.env_conns[index].send(self.envs[index].step(action))
             elif request == "reset":
-                self.env_conns[index].send(self.envs[index].reset())
+                if action is not None and action['evaluation']:
+                    self.env_conns[index].send(self.envs[index].reset(evaluation=True))
+                else:
+                    self.env_conns[index].send(self.envs[index].reset())
             elif request == "render":
                 self.envs[index].render()
             elif request == "display_characters":
@@ -117,12 +120,12 @@ class VecEnvironments:
         else:
             self.envs[index].env.display_characters(characters)
 
-    def reset(self):
+    def reset(self, evaluation=False):
         if self.env_num > 1:
-            [agent_conn.send(("reset", None)) for agent_conn in self.agent_conns]
+            [agent_conn.send(("reset", {'evaluation': evaluation})) for agent_conn in self.agent_conns]
             curr_states, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
         else:
-            curr_states, infos = self.envs[0].reset()
+            curr_states, infos = self.envs[0].reset(evaluation=evaluation)
             curr_states, infos = [curr_states], [infos]
         '''帧堆叠'''
         if self.frame_stack_num > 1 or self.history_action_stack_num > 0:
@@ -130,9 +133,12 @@ class VecEnvironments:
             for env_id in range(self.env_num):
                 for agent in self.total_agents:
                     for n in range(self.frame_stack_num):
-                        self.states_stack[env_id][agent][0][n * self.state_origin_dim:(n + 1) * self.state_origin_dim] = curr_states[env_id][agent][0]
-                        if self.if_use_cnn:
-                            self.states_stack[env_id][agent][1][n * self.obs_matrix_origin_shape[0]:(n + 1) * self.obs_matrix_origin_shape[0]] = curr_states[env_id][agent][1]
+                        if curr_states[env_id][agent] == None:
+                            self.states_stack[env_id][agent] = None
+                        else:
+                            self.states_stack[env_id][agent][0][n * self.state_origin_dim:(n + 1) * self.state_origin_dim] = curr_states[env_id][agent][0]
+                            if self.if_use_cnn:
+                                self.states_stack[env_id][agent][1][n * self.obs_matrix_origin_shape[0]:(n + 1) * self.obs_matrix_origin_shape[0]] = curr_states[env_id][agent][1]
             curr_states = self.states_stack
         return np.array(curr_states, dtype=object), infos
 
@@ -181,7 +187,11 @@ class VecEnvironments:
             for env_id in range(self.env_num):
                 if 'pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] == 0:  # 伪步中如果done=True，states中会有None，导致后续处理bug
                     for agent in self.total_agents:
-                        if dones[env_id]:
+                        if states[env_id][agent] == None:
+                            # 此处不能为is None，因为这样判断不出np.array(None)==None
+                            # 表示该robot处于死亡状态，无需处理
+                            self.states_stack[env_id][agent] = None
+                        elif dones[env_id]:
                             if self.states_stack[env_id][agent] is None:
                                 self.states_stack[env_id][agent] = [np.zeros(self.state_dim), None]
                                 if self.if_use_cnn:
@@ -191,10 +201,6 @@ class VecEnvironments:
                                 self.states_stack[env_id][agent][0][n * self.state_origin_dim:(n + 1) * self.state_origin_dim] = states[env_id][agent][0]
                                 if self.if_use_cnn:
                                     self.states_stack[env_id][agent][1][n * self.obs_matrix_origin_shape[0]:(n + 1) * self.obs_matrix_origin_shape[0]] = states[env_id][agent][1]
-                        elif states[env_id][agent] == None:
-                            # 此处不能为is None，因为这样判断不出np.array(None)==None
-                            # 表示该robot处于死亡状态，无需处理
-                            self.states_stack[env_id][agent] = None
                         else:
                             if self.frame_stack_num > 1:
                                 # 堆叠超过1则将整体往前移动一层，空出来一层赋予最新的一层
