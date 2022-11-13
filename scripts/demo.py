@@ -20,10 +20,10 @@ def demo_discrete_action():
     args.config.repeat_times = 4
     args.config.repeat_times_policy = 4
     args.config.target_step = 2 ** 16
-    args.config.learning_rate = 1e-4
+    args.config.learning_rate = 2e-4
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
-    args.config.break_step = 10000000
+    args.config.break_step = 100000000
 
     args.config.random_seed = 1
 
@@ -42,6 +42,8 @@ def demo_discrete_action():
     args.config.enemy_stochastic_policy = True
     args.config.use_extra_state_for_critic = True
     args.config.use_action_prediction = True
+    args.config.frame_stack_num = 4
+    args.config.history_action_stack_num = 3
     # args.config.cwd = '2022-07-24_16-44-21'
     # args.config.enemy_cwd = 'init_model'
     args.agent = MultiEnvDiscretePPO()
@@ -53,10 +55,10 @@ def demo_discrete_action():
                                    pseudo_step=1 if args.config.use_action_prediction else 0)
     if not args.config.if_train:
         args.config.eval_gap = 0
-        args.env_eval = PreprocessEnv(env_name)
+        args.env_eval = VecEnvironments(env_name, 1)
     elif not args.config.new_processing_for_evaluation:
         args.config.eval_gap = 60 * 3
-        args.env_eval = PreprocessEnv(env_name)
+        args.env_eval = VecEnvironments(env_name, 1)
     args.agent.cri_target = False
     '''train and evaluate'''
     train_and_evaluate(args)

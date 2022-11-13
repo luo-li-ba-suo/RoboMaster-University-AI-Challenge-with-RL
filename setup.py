@@ -9,7 +9,10 @@ setup(
     license="Apache 2.0",
     packages=['elegantrl_dq'],
     install_requires=[
-        'gym', 'matplotlib', 'numpy'],
+        'gym',
+        'matplotlib',
+        'numpy',
+        'torch>=1.8.1'],
     description="Lightweight, Efficient and Stable DRL Implementation Using PyTorch",
     classifiers=[
         # Trove classifiers

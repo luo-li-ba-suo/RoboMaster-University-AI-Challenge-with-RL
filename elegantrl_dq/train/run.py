@@ -82,11 +82,15 @@ class Configs:
         self.use_extra_state_for_critic = True
         self.use_action_prediction = True
 
+        '''Arguments for frame stack'''
+        self.frame_stack_num = 4
+        self.history_action_stack_num = 3
+
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'actionPrediction' + str(self.random_seed)
+        self.wandb_name = 'frameStack+historyAction' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -240,7 +244,10 @@ def train_and_evaluate(args):
                           'use_action_prediction': args.config.use_action_prediction,
                           'agent_num': args.env.args.robot_r_num + args.env.args.robot_b_num,
                           'action_prediction_dim': action_prediction_dim}
-
+    '''frame stack'''
+    frame_stack_num = args.config.frame_stack_num
+    history_action_stack_num = args.config.history_action_stack_num
+    '''self play'''
     self_play = args.config.self_play
     self_play_mode = args.config.self_play_mode
     delta_historySP = args.config.delta_historySP
@@ -266,6 +273,9 @@ def train_and_evaluate(args):
     if not if_multi_processing or not if_train:
         env_eval.render()
     max_step = env.max_step
+    env.init(frame_stack_num, history_action_stack_num, if_use_cnn)
+    env_eval.init(frame_stack_num, history_action_stack_num, if_use_cnn)
+
     state_dim = env.state_dim
     observation_matrix_shape = env.observation_matrix_shape
     action_dim = env.action_dim

@@ -49,7 +49,9 @@ class RMUA_Multi_agent_Env(gym.Env):
             self.reward_text = {}
         self.trainer_ids = []
         self.tester_ids = []
+        self.total_agents_ids = []
         for agent in self.simulator.agents:
+            self.total_agents_ids += agent.robot_ids
             if agent.name == 'rl_trainer':
                 self.trainer_ids += agent.robot_ids
             if agent.name == 'nn_enemy':

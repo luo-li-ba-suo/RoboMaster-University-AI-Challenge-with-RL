@@ -13,7 +13,8 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
         super(PreprocessEnv, self).__init__(self.env)
         self.if_multi_processing = False
         (self.env_name, self.state_dim, self.action_dim, self.action_max, self.max_step,
-         self.if_discrete, self.if_multi_discrete, self.target_return, self.observation_matrix_shape) = get_gym_env_info(self.env, if_print)
+         self.if_discrete, self.if_multi_discrete, self.target_return, self.observation_matrix_shape,
+         self.total_agents) = get_gym_env_info(self.env, if_print)
         self.args = self.env.args
         self.reset = self.reset_type
         self.step = self.step_type
@@ -58,6 +59,34 @@ class VecEnvironments:
                 process.start()
                 self.env_conns[index].close()
 
+        '''frame stack'''
+        self.total_agents = self.envs[0].total_agents
+        self.frame_stack_num = 1
+        self.history_action_stack_num = 1
+        self.if_use_cnn = False
+        self.state_origin_dim = self.state_dim
+        self.obs_matrix_origin_shape = deepcopy(self.observation_matrix_shape)
+        self.init_state_stack = None
+        self.history_action_stack_offset = None
+        self.states_stack = None
+
+    def init(self, frame_stack_num, history_action_stack_num, if_use_cnn):
+        '''帧堆叠'''
+        self.frame_stack_num = frame_stack_num
+        self.history_action_stack_num = history_action_stack_num
+        self.if_use_cnn = if_use_cnn
+        self.history_action_stack_offset = self.state_origin_dim * frame_stack_num
+        self.state_dim = self.history_action_stack_offset + sum(self.action_dim) * history_action_stack_num
+        self.observation_matrix_shape[0] *= frame_stack_num
+        if frame_stack_num > 1 or history_action_stack_num > 0:
+            if if_use_cnn:
+                self.init_state_stack = [{agent: [np.zeros(self.state_dim), np.zeros(self.observation_matrix_shape)]
+                                          for agent in self.total_agents} for _ in range(self.env_num)]
+            else:
+                self.init_state_stack = [{agent: [np.zeros(self.state_dim)]
+                                          for agent in self.total_agents} for _ in range(self.env_num)]
+            self.states_stack = deepcopy(self.init_state_stack)
+
     def run(self, index):
         np.random.seed(index)
         self.agent_conns[index].close()
@@ -95,6 +124,16 @@ class VecEnvironments:
         else:
             curr_states, infos = self.envs[0].reset()
             curr_states, infos = [curr_states], [infos]
+        '''帧堆叠'''
+        if self.frame_stack_num > 1 or self.history_action_stack_num > 0:
+            self.states_stack = deepcopy(self.init_state_stack)
+            for env_id in range(self.env_num):
+                for agent in self.total_agents:
+                    for n in range(self.frame_stack_num):
+                        self.states_stack[env_id][agent][0][n * self.state_origin_dim:(n + 1) * self.state_origin_dim] = curr_states[env_id][agent][0]
+                        if self.if_use_cnn:
+                            self.states_stack[env_id][agent][1][n * self.obs_matrix_origin_shape[0]:(n + 1) * self.obs_matrix_origin_shape[0]] = curr_states[env_id][agent][1]
+            curr_states = self.states_stack
         return np.array(curr_states, dtype=object), infos
 
     def step(self, actions, pseudo_step_flag=True):
@@ -137,7 +176,49 @@ class VecEnvironments:
                     else:
                         infos[0]['pseudo_step_'] = 1  # 代表接下来需要进行伪步
                         self.reset_count[0] += 1
+        '''帧堆叠'''
+        if self.frame_stack_num > 1 or self.history_action_stack_num > 0:
+            for env_id in range(self.env_num):
+                if 'pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] == 0:  # 伪步中如果done=True，states中会有None，导致后续处理bug
+                    for agent in self.total_agents:
+                        if dones[env_id]:
+                            if self.states_stack[env_id][agent] is None:
+                                self.states_stack[env_id][agent] = [np.zeros(self.state_dim), None]
+                                if self.if_use_cnn:
+                                    self.states_stack[env_id][agent][1] = np.zeros(self.observation_matrix_shape)
+                            # 表示经过了reset，则填充重复的初始状态和空的动作
+                            for n in range(self.frame_stack_num):
+                                self.states_stack[env_id][agent][0][n * self.state_origin_dim:(n + 1) * self.state_origin_dim] = states[env_id][agent][0]
+                                if self.if_use_cnn:
+                                    self.states_stack[env_id][agent][1][n * self.obs_matrix_origin_shape[0]:(n + 1) * self.obs_matrix_origin_shape[0]] = states[env_id][agent][1]
+                        elif states[env_id][agent] == None:
+                            # 此处不能为is None，因为这样判断不出np.array(None)==None
+                            # 表示该robot处于死亡状态，无需处理
+                            self.states_stack[env_id][agent] = None
+                        else:
+                            if self.frame_stack_num > 1:
+                                # 堆叠超过1则将整体往前移动一层，空出来一层赋予最新的一层
+                                self.states_stack[env_id][agent][0][0: (self.frame_stack_num-1) * self.state_origin_dim] = self.states_stack[env_id][agent][0][self.state_origin_dim: self.frame_stack_num * self.state_origin_dim]
+                            self.states_stack[env_id][agent][0][(self.frame_stack_num-1) * self.state_origin_dim:self.frame_stack_num * self.state_origin_dim] = states[env_id][agent][0]
+                            if self.history_action_stack_num > 1:
+                                self.states_stack[env_id][agent][0][self.history_action_stack_offset:self.history_action_stack_offset + (self.history_action_stack_num-1)*sum(self.action_dim)] = self.states_stack[env_id][agent][0][self.history_action_stack_offset+sum(self.action_dim):self.history_action_stack_offset + self.history_action_stack_num*sum(self.action_dim)]
+                            if self.history_action_stack_num > 0:
+                                self.states_stack[env_id][agent][0][self.history_action_stack_offset + (self.history_action_stack_num - 1) * sum(self.action_dim):self.history_action_stack_offset + self.history_action_stack_num * sum(self.action_dim)] = self.get_one_hot(actions[env_id][agent])
+                            if self.if_use_cnn:
+                                if self.frame_stack_num > 1:
+                                    self.states_stack[env_id][agent][1][0:(self.frame_stack_num-1) * self.obs_matrix_origin_shape[0]] = self.states_stack[env_id][agent][1][self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]]
+                                self.states_stack[env_id][agent][1][(self.frame_stack_num-1) * self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]] = states[env_id][agent][1]
+            states = self.states_stack
+
         return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos
+
+    def get_one_hot(self, action):
+        offset = 0
+        one_hot = np.zeros(sum(self.action_dim))
+        for i, dim in enumerate(self.action_dim):
+            one_hot[offset + action[i]] = 1
+            offset += dim
+        return one_hot
 
     def stop(self):
         if self.env_num > 1:
@@ -166,6 +247,7 @@ def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
     env_name = env.unwrapped.spec.id
 
     state_shape = env.observation_space.shape
+    total_agents = env.total_agents_ids
     observation_matrix_shape = env.observation_matrix_shape
     state_dim = state_shape[0] if len(state_shape) == 1 else state_shape  # sometimes state_dim is a list
 
@@ -202,7 +284,7 @@ def get_gym_env_info(env, if_print) -> (str, int, int, int, int, bool, float):
         f"\n| env_name:  {env_name}, action space if_discrete: {if_discrete or if_multi_discrete} if_multi_discrete: {if_multi_discrete}"
         f"\n| state_dim: {state_dim:4}, action_dim: {action_dim}, action_max: {action_max}"
         f"\n| max_step:  {max_step:4}, target_return: {target_return}") if if_print else None
-    return env_name, state_dim, action_dim, action_max, max_step, if_discrete, if_multi_discrete, target_return, observation_matrix_shape
+    return env_name, state_dim, action_dim, action_max, max_step, if_discrete, if_multi_discrete, target_return, observation_matrix_shape, total_agents
 
 
 def deepcopy_or_rebuild_env(env):
