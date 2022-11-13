@@ -226,6 +226,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                 info['last_actions_'][i] = action
         info['trainers_'] = self.trainer_ids
         info['testers_'] = self.tester_ids
+        info['reward_record_'] = self.rewards_episode
         return obs, r, done, info
 
     def compute_reward(self):

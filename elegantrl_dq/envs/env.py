@@ -185,7 +185,7 @@ class VecEnvironments:
         '''帧堆叠'''
         if self.frame_stack_num > 1 or self.history_action_stack_num > 0:
             for env_id in range(self.env_num):
-                if 'pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] == 0:  # 伪步中如果done=True，states中会有None，导致后续处理bug
+                if ('pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] <= 0) or 'pseudo_step_' not in infos[env_id]:  # 伪步中如果done=True，states中会有None，导致后续处理bug
                     for agent in self.total_agents:
                         if states[env_id][agent] == None:
                             # 此处不能为is None，因为这样判断不出np.array(None)==None

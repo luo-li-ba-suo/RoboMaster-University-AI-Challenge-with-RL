@@ -297,33 +297,32 @@ class AsyncEvaluator:
 def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False):
     episode_return = 0.0  # sum of rewards in an episode
     episode_discounted_return = 0.0  # sum of rewards in an episode
-    info_dict = None
     episode_step = 0
     max_step = env.max_step
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
-    state, _ = env.reset(evaluation=True)
-    trainer_ids_in_the_start = env.env.trainer_ids.copy()
+    state, info_dict = env.reset(evaluation=True)
+    trainer_ids_in_the_start = deepcopy(info_dict[0]['trainers_'])
 
     s_tensor_matrix = None
 
     for episode_step in range(max_step):
-        a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
-        for i in range(env.env.simulator.state.robot_num):
-            if i in env.env.trainer_ids:
-                s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
+        a_tensor = [None for _ in range(len(env.total_agents))]
+        for i in range(len(env.total_agents)):
+            if i in info_dict[0]['trainers_']:
+                s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
-                    s_tensor_matrix = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
+                    s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
                 a_tensor[i] = act(s_tensor, s_tensor_matrix)
-            elif i in env.env.tester_ids:
-                s_tensor = torch.as_tensor(state[i][0][np.newaxis, :], device=device)
+            elif i in info_dict[0]['testers_']:
+                s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
-                    s_tensor_matrix = torch.as_tensor(state[i][1][np.newaxis, :], device=device)
+                    s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
                 a_tensor[i] = enemy_act(s_tensor, s_tensor_matrix)
         # if if_discrete:
         #     a_tensor = a_tensor.argmax(dim=1)
         #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
-        actions = [None for _ in range(env.env.simulator.state.robot_num)]
+        actions = [None for _ in range(len(env.total_agents))]
         if if_multi_discrete:
             for i, a_tensor_ in enumerate(a_tensor):
                 if a_tensor_ is not None:
@@ -333,14 +332,14 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
                         action.append(a_tensor_[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
                         n += action_dim_
                     actions[i] = action
-        state, rewards, done, info_dict = env.step(actions)
+        state, rewards, done, info_dict = env.step([actions])
         episode_return += np.mean(rewards)
         episode_discounted_return += gamma ** episode_step * np.mean(rewards)
-        if done:
+        if done[0]:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
-    rewards_dict = [env.env.rewards_episode[i] for i in trainer_ids_in_the_start]
+    rewards_dict = [info_dict[0]['reward_record_'][i] for i in trainer_ids_in_the_start]
     mean_reward_dict = {}
     for key in rewards_dict[0]:
         mean_reward_dict[key] = np.mean([r[key] for r in rewards_dict])
-    return episode_return, episode_discounted_return, episode_step, mean_reward_dict, info_dict
+    return episode_return, episode_discounted_return, episode_step, mean_reward_dict, info_dict[0]
