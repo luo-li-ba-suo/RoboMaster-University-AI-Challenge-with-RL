@@ -363,7 +363,7 @@ class RMUA_Multi_agent_Env(gym.Env):
         # 相對距离
         # 友方
         if robot.friend is not None:
-            if self.if_robot_valid(robot.friend):
+            if not self.if_robot_valid(robot.friend):
                 observation.append(0.0)
                 observation.append(0.0)
                 observation.append(0.0)
@@ -376,7 +376,7 @@ class RMUA_Multi_agent_Env(gym.Env):
                 observation.append((self.simulator.state.relative_angle[robot_index, robot.friend]) / 180)
         # 敵方
         for i in robot.enemy:
-            if self.if_robot_valid(i):
+            if not self.if_robot_valid(i):
                 observation.append(0.0)
                 observation.append(0.0)
                 observation.append(0.0)
