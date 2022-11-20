@@ -313,7 +313,7 @@ def train_and_evaluate(args):
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
                               save_interval=save_interval, if_train=if_train, gamma=gamma,
                               fix_enemy_policy=fix_evaluation_enemy_policy,
-                              if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
+                              if_use_cnn=if_use_cnn, if_share_network=if_share_network)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                     total_trainers_envs=total_trainers_envs,
