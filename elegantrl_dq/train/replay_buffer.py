@@ -184,14 +184,17 @@ class MultiAgentMultiEnvsReplayBuffer(ReplayBuffer):
 
 class PlugInReplayBuffer(ReplayBuffer):
     def __init__(self, max_len, state_dim, action_dim, if_discrete, if_multi_discrete, env, total_trainers_envs,
-                 observation_matrix_shape=[1,25,25],
-                 state_rnn_dim=128, if_use_cnn=False, if_use_rnn=False, **kwargs):
+                 observation_matrix_shape=[1,25,25], if_use_cnn=False, **kwargs):
         super().__init__(max_len, state_dim, action_dim, if_discrete, if_multi_discrete)
         if env is None:
             raise NotImplementedError
         self.env_num = env.env_num
         self.total_trainers_envs = total_trainers_envs
         self.max_len_per_env = max_len//self.env_num*2
+        '''rnn'''
+        self.if_use_rnn = True
+        self.rnn_hidden_size = 128
+        self.LSTM_or_GRU = True
         # kwargs:
         # 是否启用上帝视角critic：use_god_critic
         # 是否使用上帝视角动作预测：use_action_prediction
@@ -210,14 +213,17 @@ class PlugInReplayBuffer(ReplayBuffer):
             self.buf_state_cnn = [{trainer: np.empty((self.max_len_per_env, *observation_matrix_shape), dtype=np.float32)
                                                     for trainer in trainers}
                                                   for trainers in self.total_trainers_envs]
-        if if_use_rnn:
-            self.buf_state_rnn = [{trainer: np.empty((self.max_len_per_env, state_rnn_dim), dtype=np.float32)
-                               for trainer in trainers}
-                              for trainers in self.total_trainers_envs]
+        if self.if_use_rnn:
+            self.buf_rnn_state = [{trainer: np.empty((self.max_len_per_env, self.rnn_hidden_size), dtype=np.float32)
+                                  for trainer in trainers}
+                                  for trainers in self.total_trainers_envs]
+            if self.LSTM_or_GRU:
+                self.buf_LSTM_cell = [{trainer: np.empty((self.max_len_per_env, self.rnn_hidden_size), dtype=np.float32)
+                                      for trainer in trainers}
+                                      for trainers in self.total_trainers_envs]
         self.tail_idx = [{trainer: 0 for trainer in trainers}
                           for trainers in self.total_trainers_envs]
         self.if_use_cnn = if_use_cnn
-        self.if_use_rnn = if_use_rnn
 
     def extend(self, states, others, states_cnn=None, states_rnn=None, env_id=0, agent_id=0):  # CPU array to GPU array
         size = len(states)
@@ -231,7 +237,9 @@ class PlugInReplayBuffer(ReplayBuffer):
         if self.if_use_cnn:
             self.buf_state_cnn[env_id][agent_id][cur_head:cur_tail] = states_cnn
         if self.if_use_rnn:
-            self.buf_state_rnn[env_id][agent_id][cur_head:cur_tail] = states_rnn
+            self.buf_rnn_state[env_id][agent_id][cur_head:cur_tail] = states_rnn[0]
+            if self.LSTM_or_GRU:
+                self.buf_LSTM_cell[env_id][agent_id][cur_head:cur_tail] = states_rnn[1]
 
     def add(self, state, other, state_cnn=None, state_rnn=None, env_id=0, agent_id=0):  # CPU array to GPU array
         cur_head = self.tail_idx[env_id][agent_id]
@@ -243,7 +251,9 @@ class PlugInReplayBuffer(ReplayBuffer):
         if self.if_use_cnn:
             self.buf_state_cnn[env_id][agent_id][cur_head] = state_cnn
         if self.if_use_rnn:
-            self.buf_state_rnn[env_id][agent_id][cur_head] = state_rnn
+            self.buf_rnn_state[env_id][agent_id][cur_head] = state_rnn[0]
+            if self.LSTM_or_GRU:
+                self.buf_LSTM_cell[env_id][agent_id][cur_head] = state_rnn[1]
 
     def empty_buffer(self):
         self.tail_idx = [{trainer: 0 for trainer in trainers}
@@ -279,5 +289,7 @@ class PlugInReplayBuffer(ReplayBuffer):
                 if self.if_use_cnn:
                     state_cnn[env_id][trainer] = torch.as_tensor(self.buf_state_cnn[env_id][trainer][0:tail_idx], device=self.device)
                 if self.if_use_rnn:
-                    state_rnn[env_id][trainer] = self.buf_state_rnn[env_id][trainer][0:tail_idx]
+                    state_rnn[env_id][trainer] = [torch.as_tensor(self.buf_rnn_state[env_id][trainer][0:tail_idx], device=self.device)]
+                    if self.LSTM_or_GRU:
+                        state_rnn[env_id][trainer].append(torch.as_tensor(self.buf_LSTM_cell[env_id][trainer][0:tail_idx], device=self.device))
         return reward, mask, pseudo_mask, action, action_noise, state, state_cnn, state_rnn, extra_state

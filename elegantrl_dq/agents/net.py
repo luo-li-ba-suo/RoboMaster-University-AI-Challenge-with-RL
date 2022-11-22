@@ -288,7 +288,8 @@ class CriticAdv(nn.Module):
 # actor与critic网络共享特征提取的主干
 class DiscretePPOShareNet(nn.Module):
     def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_conv1D=True,
-                 if_use_rnn=False, state_cnn_channel=6, state_seq_len=30, actor_obs_dim=None):
+                 if_use_rnn=False, rnn_state_size=128, LSTM_or_GRU=True,
+                 state_cnn_channel=6, state_seq_len=30, actor_obs_dim=None):
         super().__init__()
         '''参数处理'''
         self.action_dim = action_dim  # 默认为多维离散动作空间
@@ -299,6 +300,10 @@ class DiscretePPOShareNet(nn.Module):
             self.use_extra_obs_critic = True
         else:
             self.use_extra_obs_critic = False
+        '''Recurrent Network'''
+        self.if_use_rnn = if_use_rnn
+        rnn_state_size = rnn_state_size
+        self.LSTM_or_GRU = LSTM_or_GRU
 
         '''1.共享特征提取层：'''
         '''观测向量的处理'''
@@ -327,18 +332,30 @@ class DiscretePPOShareNet(nn.Module):
         else:
             self.conv_net = None
             cnn_out_dim = 0
-        '''2.共享记忆层'''
-        self.rnn = None
-        '''3.共享中间层'''
+        '''2.共享中间层'''
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + cnn_out_dim, mid_dim), nn.ReLU())
+        '''3.共享记忆层'''
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                self.rnn = nn.LSTM(mid_dim, rnn_state_size)
+            else:
+                self.rnn = nn.GRU(mid_dim, rnn_state_size)
+            for name, param in self.rnn.named_parameters():
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param, 1.0)
         '''4.策略层'''
-        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
             layer_norm(net[-1], std=0.01)
         self.forward = self.actor
         '''5.价值层'''
-        self.value_net = nn.Sequential(nn.Linear(mid_dim*2 if self.use_extra_obs_critic else mid_dim, mid_dim), nn.ReLU(),
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        input_dim += mid_dim if self.use_extra_obs_critic else 0
+        self.value_net = nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                        nn.Linear(mid_dim, 1))
         layer_norm(self.value_net[-1], std=0.5)
 
@@ -355,21 +372,29 @@ class DiscretePPOShareNet(nn.Module):
             CNN_out = self.conv_net(state_cnn)
             hidden = torch.cat((hidden, CNN_out), dim=1)
         hidden = self.hidden_net(hidden)
-        return hidden
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0), rnn_state[1].unsqueeze(0)))
+                rnn_state = [s.squeeze(0) for s in rnn_state]
+            else:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0))
+            hidden = hidden.squeeze(0)
+        return hidden, rnn_state
 
     def actor(self, state, state_cnn=None, rnn_state=None):
-        hidden = self.share_net(state, state_cnn, rnn_state)
-        return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
+        hidden, rnn_state = self.share_net(state, state_cnn, rnn_state)
+        return torch.cat([net(hidden) for net in self.action_nets], dim=1), rnn_state  # action_prob without softmax
 
     def critic(self, state, state_cnn=None, rnn_state=None):
-        hidden = self.share_net(state[..., :self.actor_obs_dim], state_cnn, rnn_state)
+        # 注意这里的state相对self.actor中的state可能多出一部分：extra_obs
+        hidden, _ = self.share_net(state[..., :self.actor_obs_dim], state_cnn, rnn_state)
         if self.use_extra_obs_critic:
             extra_hidden = self.extra_obs_net(state[..., self.actor_obs_dim:])
             hidden = torch.cat((hidden, extra_hidden), dim=1)
         return self.value_net(hidden)
 
     def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
-        result = self.actor(state, state_cnn, rnn_state)
+        result, rnn_state = self.actor(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -380,19 +405,19 @@ class DiscretePPOShareNet(nn.Module):
             samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
             action_ = samples_2d.reshape(result.size(0))
             action.append(action_)
-        return action, a_prob
+        return action, a_prob, rnn_state
 
     def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
-        result = self.actor(state, state_cnn, rnn_state)
+        result, rnn_state = self.actor(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
             action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
             n += action_dim_
-        return action
+        return action, rnn_state
 
     def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
-        result = self.actor(state, state_cnn, state_rnn)
+        result, _ = self.actor(state, state_cnn, state_rnn)
         a_prob = []
         dist_prob = []
         dist_entropy = []

@@ -89,7 +89,7 @@ class AgentPPO:
             else:
                 state_2D = None
             if self.if_use_rnn:
-                state_rnn = buf_state_rnn[indices]
+                state_rnn = [b[indices] for b in buf_state_rnn]
             else:
                 state_rnn = None
 
@@ -114,10 +114,9 @@ class AgentPPO:
                 state_critic = torch.cat([state, state_extra], dim=-1)
             else:
                 state_critic = state
-            if self.if_use_cnn:
-                value = self.cri(state_critic, state_2D).squeeze(1)
-            else:
-                value = self.cri(state_critic).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
+            value = self.cri(state_critic,
+                             state_cnn=state_2D if self.if_use_cnn else None,
+                             rnn_state=state_rnn if self.if_use_rnn else None).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
             obj_critic = self.criterion(value, r_sum) / (r_sum.std() + 1e-6)
             if self.if_share_network:
                 self.optim_update(self.act_optimizer, obj_actor + obj_critic)
@@ -388,10 +387,17 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.state_dim = None
         self.observation_matrix_shape = None
 
+        '''RNN'''
+        self.if_use_rnn = True
+        self.rnn_hidden_size = 0
+        self.LSTM_or_GRU = True
+        self.rnn_state_trainers = None
+        self.rnn_state_testers = None
+
     def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, max_step=0,
              env=None, if_build_enemy_act=False, enemy_policy_share_memory=False,
              if_use_cnn=False, if_use_conv1D=False,
-             if_use_rnn=False, if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25],
+             if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25],
              **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -413,13 +419,13 @@ class MultiEnvDiscretePPO(AgentPPO):
                                            if_use_cnn=if_use_cnn,
                                            if_use_conv1D=if_use_conv1D,
                                            state_cnn_channel=observation_matrix_shape[0],
-                                           if_use_rnn=if_use_rnn,
-                                           state_seq_len=observation_matrix_shape[-1]).to(self.device)
+                                           state_seq_len=observation_matrix_shape[-1],
+                                           if_use_rnn=self.if_use_rnn, rnn_state_size=self.rnn_hidden_size,
+                                           LSTM_or_GRU=self.LSTM_or_GRU).to(self.device)
             self.cri = self.act.critic
         else:
             self.act = MultiAgentActorDiscretePPO(net_dim, self.actor_obs_dim, action_dim, if_use_cnn=if_use_cnn,
                                                   state_cnn_channel=observation_matrix_shape[0],
-                                                  if_use_rnn=if_use_rnn,
                                                   if_use_conv1D=if_use_conv1D,
                                                   state_seq_len=observation_matrix_shape[-1]).to(self.device)
             self.cri = CriticAdv(net_dim, critic_obs_dim, if_use_cnn=if_use_cnn,
@@ -466,16 +472,20 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.criterion = torch.nn.SmoothL1Loss()
 
         self.if_use_cnn = if_use_cnn
-        self.if_use_rnn = if_use_rnn
         self.if_share_network = if_share_network
-        self.rnn_dim = None
-        self.rnn_state = np.nan
 
         if env is None:
             raise NotImplementedError
         self.env_num = env.env_num
         self.state, self.info_dict = env.reset()
         self.total_trainers_envs = np.array([info['trainers_'] for info in self.info_dict], dtype=object)
+        self.total_testers_envs = np.array([info['testers_'] for info in self.info_dict], dtype=object)
+        if self.if_use_rnn:
+            self.rnn_state_trainers = [{trainer: self.init_rnn_hidden_states() for trainer in trainers}
+                                       for trainers in self.total_trainers_envs]
+            self.rnn_state_testers = [{tester: self.init_rnn_hidden_states() for tester in testers}
+                                       for testers in self.total_testers_envs]
+
         self.other_dim = 1 + 2 + action_dim.size + sum(action_dim)
         if self.use_extra_state_for_critic:
             if self.use_action_prediction:
@@ -490,6 +500,12 @@ class MultiEnvDiscretePPO(AgentPPO):
         else:
             self.remove_rest_trajectory = False
         return self.total_trainers_envs
+
+    def init_rnn_hidden_states(self):
+        if self.LSTM_or_GRU:
+            return [np.zeros(self.rnn_hidden_size), np.zeros(self.rnn_hidden_size)]
+        else:
+            return [np.zeros(self.rnn_hidden_size)]
 
     def explore_env(self, env, target_step, reward_scale, gamma, replay_buffer=None):
         if self.remove_rest_trajectory:
@@ -512,10 +528,17 @@ class MultiEnvDiscretePPO(AgentPPO):
         last_pseudo_step = 0
         self.last_states = {'vector': [{trainer_id: [] for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs],
-                            'matrix': None}
+                            'matrix': None, 'rnn': None}
         if self.if_use_cnn:
             self.last_states['matrix'] = [{trainer_id: [] for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs]
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                self.last_states['rnn'] = [{trainer_id: [[],[]] for trainer_id in last_trainers}
+                                              for last_trainers in self.total_trainers_envs]
+            else:
+                self.last_states['rnn'] = [{trainer_id: [[]] for trainer_id in last_trainers}
+                                              for last_trainers in self.total_trainers_envs]
         if self.use_extra_state_for_critic:
             self.last_states['extra'] = [{trainer_id: [] for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs]
@@ -527,6 +550,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                             'matrix': None}
         if self.if_use_cnn:
             end_states['matrix'] = [{trainer_id: None for trainer_id in last_trainers}
+                                          for last_trainers in self.total_trainers_envs]
+        if self.if_use_rnn:
+            end_states['rnn'] = [{trainer_id: None for trainer_id in last_trainers}
                                           for last_trainers in self.total_trainers_envs]
         if self.self_play:
             if self.self_play_mode == 0:
@@ -553,17 +579,33 @@ class MultiEnvDiscretePPO(AgentPPO):
             states_trainers = {'vector': np.zeros((last_trainers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
                 states_trainers['matrix'] = np.zeros((last_trainers_envs_size, *self.observation_matrix_shape))
+            if self.if_use_rnn:
+                states_trainers['rnn'] = [np.zeros((last_trainers_envs_size, self.rnn_hidden_size))]
+                if self.LSTM_or_GRU:
+                    states_trainers['rnn'].append(np.zeros((last_trainers_envs_size, self.rnn_hidden_size)))
             trainer_i = 0
             for env_id in range(env.env_num):
                 for trainer_id in last_trainers_envs[env_id]:
                     states_trainers['vector'][trainer_i] = states_envs[env_id][trainer_id][0]
                     if self.if_use_cnn:
                         states_trainers['matrix'][trainer_i] = states_envs[env_id][trainer_id][1]
+                    if self.if_use_rnn:
+                        states_trainers['rnn'][0][trainer_i] = self.rnn_state_trainers[env_id][trainer_id][0]
+                        if self.LSTM_or_GRU:
+                            states_trainers['rnn'][1][trainer_i] = self.rnn_state_trainers[env_id][trainer_id][1]
                     trainer_i += 1
             # states_trainers: [num_env*num_trainer, state_dim] or
             #                  [state_num_of_categories, num_env*num_trainer, state_dim]
-            trainer_actions, actions_prob = self.select_stochastic_action(states_trainers)
-
+            trainer_actions, actions_prob, rnn_state = self.select_stochastic_action(states_trainers)
+            # 更新rnn state
+            if self.if_use_rnn:
+                trainer_i = 0
+                for env_id in range(self.env_num):
+                    for trainer_id in last_trainers_envs[env_id]:
+                        self.rnn_state_trainers[env_id][trainer_id][0] = rnn_state[0][trainer_i]
+                        if self.LSTM_or_GRU:
+                            self.rnn_state_trainers[env_id][trainer_id][1] = rnn_state[1][trainer_i]
+                        trainer_i += 1
             # 获取测试者的状态与动作
             last_testers_envs = np.array([info['testers_'] for info in self.info_dict], dtype=object)
             last_testers_envs_size = 0
@@ -572,21 +614,37 @@ class MultiEnvDiscretePPO(AgentPPO):
             states_testers = {'vector': np.zeros((last_testers_envs_size, self.state_dim)), 'matrix': None}
             if self.if_use_cnn:
                 states_testers['matrix'] = np.zeros((last_testers_envs_size, *self.observation_matrix_shape))
+            if self.if_use_rnn:
+                states_testers['rnn'] = [np.zeros((last_testers_envs_size, self.rnn_hidden_size))]
+                if self.LSTM_or_GRU:
+                    states_testers['rnn'].append(np.zeros((last_testers_envs_size, self.rnn_hidden_size)))
             tester_i = 0
             for env_id in range(env.env_num):
                 for tester_id in last_testers_envs[env_id]:
                     states_testers['vector'][tester_i] = states_envs[env_id][tester_id][0]
                     if self.if_use_cnn:
                         states_testers['matrix'][tester_i] = states_envs[env_id][tester_id][1]
+                    if self.if_use_rnn:
+                        states_testers['rnn'][0][tester_i] = self.rnn_state_testers[env_id][tester_id][0]
+                        if self.LSTM_or_GRU:
+                            states_testers['rnn'][1][tester_i] = self.rnn_state_testers[env_id][tester_id][1]
                     tester_i += 1
             if last_testers_envs.any():
                 if self.enemy_stochastic_policy:
-                    tester_actions, _ = self.select_stochastic_action(states_testers)
+                    tester_actions, _, rnn_state = self.select_stochastic_action(states_testers)
                 else:
-                    tester_actions = self.select_deterministic_action(states_testers)
+                    tester_actions, rnn_state = self.select_deterministic_action(states_testers)
             else:
                 tester_actions = None
-
+            # 更新rnn state
+            if self.if_use_rnn:
+                tester_i = 0
+                for env_id in range(self.env_num):
+                    for tester_id in last_testers_envs[env_id]:
+                        self.rnn_state_testers[env_id][tester_id][0] = rnn_state[0][tester_i]
+                        if self.LSTM_or_GRU:
+                            self.rnn_state_testers[env_id][tester_id][1] = rnn_state[1][tester_i]
+                        tester_i += 1
             # 标准化动作以传入环境
             trainer_i = tester_i = 0
             actions_for_env = [[None for _ in range(len(states_envs[env_id]))]
@@ -603,7 +661,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                 # print(f'{real_step},', self.info_dict)
             else:
                 # 最后这一伪步不允许环境自行开始新的伪步
-                states_envs, _, _, self.info_dict = env.step(actions_for_env, pseudo_step_flag=False)
+                states_envs, _, done, self.info_dict = env.step(actions_for_env, pseudo_step_flag=False)
                 # print(f'{real_step},', self.info_dict)
             trainer_i = 0
             for env_id in range(env.env_num):
@@ -654,10 +712,13 @@ class MultiEnvDiscretePPO(AgentPPO):
                             self.last_states['vector'][env_id][n].append(states_envs[env_id][n][0])
                             if self.if_use_cnn:
                                 self.last_states['matrix'][env_id][n].append(states_envs[env_id][n][1])
+                            if self.if_use_rnn:
+                                self.last_states['rnn'][env_id][n][0].append(self.rnn_state_trainers[env_id][n][0])
+                                if self.LSTM_or_GRU:
+                                    self.last_states['rnn'][env_id][n][1].append(self.rnn_state_trainers[env_id][n][1])
                             if self.use_action_prediction:
                                 assert self.info_dict[env_id]['pseudo_step_'] == 1, f"'pseudo_step_' not in self.info_dict[{env_id}]"
                                 pseudo_step[env_id][n] = True
-
                         other = (rewards[env_id][i] * reward_scale, 0.0, mask,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob), *extra_states)
                         episode_rewards.append(episode_reward[env_id][n])
@@ -665,6 +726,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                         end_states['vector'][env_id][n] = states_envs[env_id][n][0]
                         if self.if_use_cnn:
                             end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                        if self.if_use_rnn:
+                            end_states['rnn'][env_id][n] = self.rnn_state_trainers[env_id][n]
+                            self.rnn_state_trainers[env_id][n] = self.init_rnn_hidden_states()
                         if self.if_complete_episode:
                             self.trajectory_cache[env_id][n]['vector'][self.cache_tail_idx[env_id][n]] = states_trainers['vector'][trainer_i]
                             self.trajectory_cache[env_id][n]['others'][self.cache_tail_idx[env_id][n]] = other
@@ -701,20 +765,45 @@ class MultiEnvDiscretePPO(AgentPPO):
                             replay_buffer.add(states_trainers['vector'][trainer_i], other,
                                               states_trainers['matrix'][trainer_i],
                                                         env_id=env_id, agent_id=n)
-                        else:
-                            raise NotImplementedError
+                        elif self.if_use_cnn and self.if_use_rnn:
+                            if self.LSTM_or_GRU:
+                                replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                                  states_trainers['matrix'][trainer_i],
+                                                  [states_trainers['rnn'][0][trainer_i], states_trainers['rnn'][1][trainer_i]],
+                                                  env_id=env_id, agent_id=n)
+                            else:
+                                replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                                  states_trainers['matrix'][trainer_i],
+                                                  [states_trainers['rnn'][0][trainer_i]],
+                                                  env_id=env_id, agent_id=n)
+                        elif not self.if_use_cnn and self.if_use_rnn:
+                            if self.LSTM_or_GRU:
+                                replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                                  state_rnn=[states_trainers['rnn'][0][trainer_i], states_trainers['rnn'][1][trainer_i]],
+                                                  env_id=env_id, agent_id=n)
+                            else:
+                                replay_buffer.add(states_trainers['vector'][trainer_i], other,
+                                                  state_rnn=[states_trainers['rnn'][0][trainer_i]],
+                                                  env_id=env_id, agent_id=n)
                         step += 1
                     trainer_i += 1
+                for i, n in enumerate(last_testers_envs[env_id]):
+                    if n in self.info_dict[env_id]['robots_being_killed_'] or done[env_id]:
+                        if self.if_use_rnn:
+                            self.rnn_state_testers[env_id][n] = self.init_rnn_hidden_states()
             if not self.use_action_prediction and step >= target_step:
                 real_step = step
                 break
             if self.use_action_prediction and step >= target_step and last_pseudo_step == 0:
                 for env_id in range(env.env_num):
                     for n in last_trainers_envs[env_id]:
-                        # 已死亡的智能体已经存好了end_states，所以无须再提取
-                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
-                        if self.if_use_cnn:
-                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                        if n not in self.info_dict[env_id]['robots_being_killed_']:
+                            # 已死亡的智能体已经存好了end_states，所以无须再提取
+                            end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                            if self.if_use_cnn:
+                                end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                            if self.if_use_rnn:
+                                end_states['rnn'][env_id][n] = self.rnn_state_trainers[env_id][n]
                 # 如果还没开始最后一个伪步数（last_pseudo_step == 0）
                 # 则给last_pseudo_step赋值，使得该while循环还能再进行一次
                 real_step = step
@@ -727,10 +816,13 @@ class MultiEnvDiscretePPO(AgentPPO):
             if not self.use_action_prediction:
                 for env_id in range(env.env_num):
                     for n in last_trainers_envs[env_id]:
-                        # 已死亡的智能体已经存好了end_states，所以无须再提取
-                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
-                        if self.if_use_cnn:
-                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                        if n not in self.info_dict[env_id]['robots_being_killed_']:
+                            # 已死亡的智能体已经存好了end_states，所以无须再提取
+                            end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                            if self.if_use_cnn:
+                                end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
+                            if self.if_use_rnn:
+                                end_states['rnn'][env_id][n] = self.rnn_state_trainers[env_id][n]
         self.state = states_envs
         for env_id in range(env.env_num):
             # 将最后一个状态单独存起来
@@ -738,6 +830,10 @@ class MultiEnvDiscretePPO(AgentPPO):
                 self.last_states['vector'][env_id][n].append(end_states['vector'][env_id][n])
                 if self.if_use_cnn:
                     self.last_states['matrix'][env_id][n].append(end_states['matrix'][env_id][n])
+                if self.if_use_rnn:
+                    self.last_states['rnn'][env_id][n][0].append(self.rnn_state_trainers[env_id][n][0])
+                    if self.LSTM_or_GRU:
+                        self.last_states['rnn'][env_id][n][1].append(self.rnn_state_trainers[env_id][n][1])
         if self.use_extra_state_for_critic:
             for env_id in range(env.env_num):
                 for trainers in self.total_trainers_envs:
@@ -765,7 +861,7 @@ class MultiEnvDiscretePPO(AgentPPO):
     def select_stochastic_action(self, state):
         states_1D = state['vector']
         states_2D = state['matrix']
-        states_rnn = None
+        states_rnn = state['rnn']
         states_1D = torch.as_tensor(states_1D[np.newaxis, :], dtype=torch.float32, device=self.device)
         if self.if_use_cnn:
             if states_2D.ndim < 4:
@@ -773,7 +869,8 @@ class MultiEnvDiscretePPO(AgentPPO):
             else:
                 states_2D = torch.as_tensor(states_2D, dtype=torch.float32, device=self.device)
         if self.if_use_rnn:
-            states_rnn = torch.as_tensor((states_rnn,), dtype=torch.float32, device=self.device)
+            states_rnn = [torch.as_tensor(state_rnn, dtype=torch.float32, device=self.device)
+                          for state_rnn in states_rnn]
         if states_1D.dim() == 2:
             action_dim = [-1]
         elif states_1D.dim() == 3:
@@ -781,15 +878,16 @@ class MultiEnvDiscretePPO(AgentPPO):
             action_dim = [states_1D.shape[0], -1]
         else:
             raise NotImplementedError
-        actions, noises = self.act.get_stochastic_action(states_1D, states_2D, states_rnn)
+        actions, noises, rnn_state = self.act.get_stochastic_action(states_1D, states_2D, states_rnn)
         actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
         noises = [noise.view(*action_dim).detach().cpu().numpy() for noise in noises]
-        return actions, noises
+        rnn_state = [s.detach().cpu().numpy() for s in rnn_state]
+        return actions, noises, rnn_state
 
     def select_deterministic_action(self, state):
         states_1D = state['vector']
         states_2D = state['matrix']
-        states_rnn = None
+        states_rnn = state['rnn']
         states_1D = torch.as_tensor(states_1D[np.newaxis, :], dtype=torch.float32, device=self.device)
         if self.if_use_cnn:
             if states_2D.ndim < 4:
@@ -797,7 +895,8 @@ class MultiEnvDiscretePPO(AgentPPO):
             else:
                 states_2D = torch.as_tensor(states_2D, dtype=torch.float32, device=self.device)
         if self.if_use_rnn:
-            states_rnn = torch.as_tensor((states_rnn,), dtype=torch.float32, device=self.device)
+            states_rnn = (torch.as_tensor(state_rnn, dtype=torch.float32, device=self.device)
+                          for state_rnn in states_rnn)
         if states_1D.dim() == 2:
             action_dim = [-1]
         elif states_1D.dim() == 3:
@@ -805,16 +904,17 @@ class MultiEnvDiscretePPO(AgentPPO):
             action_dim = [states_1D.shape[0], -1]
         else:
             raise NotImplementedError
-        actions = self.enemy_act.get_deterministic_action(states_1D, states_2D, states_rnn)
+        actions, rnn_state = self.enemy_act.get_deterministic_action(states_1D, states_2D, states_rnn)
         actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
-        return actions
+        rnn_state = [s.detach().cpu().numpy() for s in rnn_state]
+        return actions, rnn_state
 
     def prepare_buffer(self, buffer):
         with torch.no_grad():  # compute reverse reward
             states = []
             extra_states = []
             states_2D = []
-            states_rnn = []
+            states_rnn = [[], []] if self.LSTM_or_GRU else [[]]
             actions = []
             r_sums = []
             logprobs = []
@@ -825,19 +925,14 @@ class MultiEnvDiscretePPO(AgentPPO):
                     if trainer in state_samples[env_id]:
                         data_len = len(state_samples[env_id][trainer])
                         if self.use_extra_state_for_critic:
-                            if self.if_use_cnn:
-                                value = self.cri_target(torch.cat((state_samples[env_id][trainer],
-                                                                   extra_state_samples[env_id][trainer]), dim=-1),
-                                                        state_2D_samples[env_id][trainer])
-                            else:
-                                value = self.cri_target(torch.cat((state_samples[env_id][trainer],
-                                                                   extra_state_samples[env_id][trainer]), dim=-1))
+                            value = self.cri_target(torch.cat((state_samples[env_id][trainer],
+                                                               extra_state_samples[env_id][trainer]), dim=-1),
+                                            state_cnn=state_2D_samples[env_id][trainer] if self.if_use_cnn else None,
+                                            rnn_state=state_rnn_samples[env_id][trainer] if self.if_use_rnn else None)
                         else:
-                            if self.if_use_cnn:
-                                value = self.cri_target(state_samples[env_id][trainer],
-                                                        state_2D_samples[env_id][trainer])
-                            else:
-                                value = self.cri_target(state_samples[env_id][trainer])
+                            value = self.cri_target(state_samples[env_id][trainer],
+                                                    state_cnn=state_2D_samples[env_id][trainer] if self.if_use_cnn else None,
+                                                    rnn_state=state_rnn_samples[env_id][trainer] if self.if_use_rnn else None)
                         logprob = self.act.get_old_logprob(action_samples[env_id][trainer],
                                                            a_noise_samples[env_id][trainer])
                         last_state = torch.as_tensor(np.array(self.last_states['vector'][env_id][trainer]),
@@ -846,12 +941,17 @@ class MultiEnvDiscretePPO(AgentPPO):
                             last_extra_state = torch.as_tensor(np.array(self.last_states['extra'][env_id][trainer]),
                                                                 dtype=torch.float32, device=self.device)
                             last_state = torch.cat([last_state, last_extra_state], dim=-1)
-                        if not self.if_use_cnn:
-                            rest_r_sum = self.cri_target(last_state).detach()
-                        else:
+                        last_state_2D = None
+                        last_rnn_state = None
+                        if self.if_use_cnn:
                             last_state_2D = torch.as_tensor(np.array(self.last_states['matrix'][env_id][trainer]),
                                                             dtype=torch.float32, device=self.device)
-                            rest_r_sum = self.cri_target(last_state, last_state_2D).detach()
+                        if self.if_use_rnn:
+                            last_rnn_state = [torch.as_tensor(rnn_state, dtype=torch.float32, device=self.device)
+                                              for rnn_state in np.array(self.last_states['rnn'][env_id][trainer])]
+                        rest_r_sum = self.cri_target(last_state,
+                                                     last_state_2D if self.if_use_cnn else None,
+                                                     last_rnn_state if self.if_use_rnn else None).detach()
                         value = value.squeeze(-1)
                         rest_r_sum = rest_r_sum.squeeze(-1)
                         r_sum, advantage = self.get_reward_sum(self, data_len, reward_samples[env_id][trainer],
@@ -863,7 +963,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                         if self.if_use_cnn:
                             states_2D.append(state_2D_samples[env_id][trainer])
                         if self.if_use_rnn:
-                            states_rnn.append(state_rnn_samples[env_id][trainer])
+                            states_rnn[0].append(state_rnn_samples[env_id][trainer][0])
+                            if self.LSTM_or_GRU:
+                                states_rnn[1].append(state_rnn_samples[env_id][trainer][1])
                         actions.append(action_samples[env_id][trainer])
                         r_sums.append(r_sum)
                         logprobs.append(logprob)
@@ -874,7 +976,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             if self.if_use_cnn:
                 states_2D = torch.cat(states_2D)
             if self.if_use_rnn:
-                states_rnn = torch.cat(states_rnn)
+                states_rnn = [torch.cat(state_rnn) for state_rnn in states_rnn]
             actions = torch.cat(actions)
             r_sums = torch.cat(r_sums)
             logprobs = torch.cat(logprobs)

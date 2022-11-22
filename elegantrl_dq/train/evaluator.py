@@ -7,7 +7,7 @@ from elegantrl_dq.agents.net import *
 
 class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train, gamma,
-                 fix_enemy_policy=False, if_use_cnn=False, if_share_network=False):
+                 fix_enemy_policy=False, if_use_cnn=False, if_share_network=False, **kwargs):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
         self.if_use_cnn = if_use_cnn
@@ -34,6 +34,14 @@ class Evaluator:
         self.enemy_act = None
         self.fix_enemy_policy = fix_enemy_policy
 
+        '''RNN'''
+        self.if_use_rnn = False
+        self.rnn_hidden_size = 0
+        self.LSTM_or_GRU = True
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
     def evaluate_save(self, act, cri, act_optimizer=None, critic_optimizer=None, steps=0, log_tuple=None, logger=None,
                       enemy_act=None):
         if self.enemy_act is None and enemy_act:
@@ -42,7 +50,10 @@ class Evaluator:
             self.enemy_act = enemy_act
         if log_tuple is None:
             log_tuple = [0, 0, 0, 0]
-
+        '''RNN kwargs'''
+        rnn_kwargs = {'if_use_rnn': self.if_use_rnn,
+                      'LSTM_or_GRU': self.LSTM_or_GRU,
+                      'rnn_hidden_size': self.rnn_hidden_size}
         if time.time() - self.eval_time > self.eval_gap:
             discounted_returns = []
             self.eval_time = time.time()
@@ -55,7 +66,8 @@ class Evaluator:
                                                                                                       self.device,
                                                                                                       self.gamma,
                                                                                                       self.enemy_act,
-                                                                                                      if_use_cnn=self.if_use_cnn)
+                                                                                                      if_use_cnn=self.if_use_cnn,
+                                                                                                      **rnn_kwargs)
                 discounted_returns.append(discounted_return)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
@@ -78,8 +90,8 @@ class Evaluator:
                                                                                                           self.device,
                                                                                                           self.gamma,
                                                                                                           self.enemy_act,
-
-                                                                                                          if_use_cnn=self.if_use_cnn)
+                                                                                                          if_use_cnn=self.if_use_cnn,
+                                                                                                          **rnn_kwargs)
                     rewards_steps_list.append((reward, step))
                     discounted_returns.append(discounted_return)
                     for key in reward_dict:
@@ -296,7 +308,10 @@ class AsyncEvaluator:
         self.evaluator_conn.send((steps, logging_tuple))
 
 
-def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False):
+def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False, **kwargs):
+    if_use_rnn = kwargs['if_use_rnn']
+    LSTM_or_GRU = kwargs['LSTM_or_GRU']
+    rnn_hidden_size = kwargs['rnn_hidden_size']
     episode_return = 0.0  # sum of rewards in an episode
     episode_discounted_return = 0.0  # sum of rewards in an episode
     episode_step = 0
@@ -305,9 +320,24 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
     if_multi_discrete = env.if_multi_discrete
     state, info_dict = env.reset(evaluation=True)
     trainer_ids_in_the_start = deepcopy(info_dict[0]['trainers_'])
+    tester_ids_in_the_start = deepcopy(info_dict[0]['testers_'])
 
     s_tensor_matrix = None
-
+    rnn_states_trainers = None
+    rnn_states_testers = None
+    if if_use_rnn:
+        if LSTM_or_GRU:
+            rnn_states_trainers = {trainer: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32),
+                                             torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                   for trainer in trainer_ids_in_the_start}
+            rnn_states_testers = {tester: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32),
+                                           torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                  for tester in tester_ids_in_the_start}
+        else:
+            rnn_states_trainers = {trainer: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                   for trainer in trainer_ids_in_the_start}
+            rnn_states_testers = {tester: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                  for tester in tester_ids_in_the_start}
     for episode_step in range(max_step):
         a_tensor = [None for _ in range(len(env.total_agents))]
         for i in range(len(env.total_agents)):
@@ -315,15 +345,18 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
                 s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
                     s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
-                a_tensor[i] = act(s_tensor, s_tensor_matrix)
+                if if_use_rnn:
+                    a_tensor[i], rnn_states_trainers[i] = act(s_tensor, s_tensor_matrix, rnn_states_trainers[i])
+                else:
+                    a_tensor[i], rnn_states = act(s_tensor, s_tensor_matrix)
             elif i in info_dict[0]['testers_']:
                 s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
                     s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
-                a_tensor[i] = enemy_act(s_tensor, s_tensor_matrix)
-        # if if_discrete:
-        #     a_tensor = a_tensor.argmax(dim=1)
-        #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
+                if if_use_rnn:
+                    a_tensor[i], rnn_states_testers[i] = enemy_act(s_tensor, s_tensor_matrix, rnn_states_testers[i])
+                else:
+                    a_tensor[i], rnn_states = enemy_act(s_tensor, s_tensor_matrix)
         actions = [None for _ in range(len(env.total_agents))]
         if if_multi_discrete:
             for i, a_tensor_ in enumerate(a_tensor):

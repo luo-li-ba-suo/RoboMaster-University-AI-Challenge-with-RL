@@ -25,7 +25,6 @@ class Configs:
 
         '''Arguments for training (off-policy)'''
         self.if_use_cnn = True
-        self.if_use_rnn = False
         self.if_share_network = True
         self.learning_rate = 1e-4
         self.soft_update_tau = 2 ** -8  # 2 ** -8 ~= 5e-3
@@ -86,11 +85,16 @@ class Configs:
         self.frame_stack_num = 4
         self.history_action_stack_num = 3
 
+        '''Arguments for RNN'''
+        self.if_use_rnn = True
+        self.LSTM_or_GRU = False
+        self.rnn_hidden_size = 256
+
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'frameStack+historyAction' + str(self.random_seed)
+        self.wandb_name = 'LSTM Policy' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -173,6 +177,10 @@ class Arguments:
         else:
             assert self.config.use_action_prediction
 
+        '''RNN'''
+        if self.config.if_use_rnn:
+            assert self.config.if_share_network, "Separated AC model do not support RNN yet."
+
 def train_and_evaluate(args):
     args.init_before_training()
 
@@ -251,6 +259,10 @@ def train_and_evaluate(args):
     delta_historySP = args.config.delta_historySP
     model_pool_capacity_historySP = args.config.model_pool_capacity_historySP
     fix_evaluation_enemy_policy = args.config.fix_evaluation_enemy_policy
+    '''RNN'''
+    if_use_rnn = args.config.if_use_rnn
+    LSTM_or_GRU = args.config.LSTM_or_GRU
+    rnn_hidden_size = args.config.rnn_hidden_size
 
     gamma = args.config.gamma
     reward_scale = args.config.reward_scale
@@ -289,12 +301,16 @@ def train_and_evaluate(args):
                       'model_pool_capacity_historySP': model_pool_capacity_historySP,
                       'enemy_stochastic_policy': enemy_stochastic_policy}
 
+    '''RNN kwargs'''
+    rnn_kwargs = {'if_use_rnn': if_use_rnn,
+                  'LSTM_or_GRU': LSTM_or_GRU,
+                  'rnn_hidden_size': rnn_hidden_size}
     '''init: Agent, ReplayBuffer, Evaluator'''
     total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
                if_use_conv1D=if_use_conv1D,
-               env=env, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
+               env=env, if_use_cnn=if_use_cnn,
                if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-               observation_matrix_shape=observation_matrix_shape, **self_play_args, **extra_state_kwargs)
+               observation_matrix_shape=observation_matrix_shape, **self_play_args, **extra_state_kwargs, **rnn_kwargs)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
@@ -311,14 +327,14 @@ def train_and_evaluate(args):
                               eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
                               save_interval=save_interval, if_train=if_train, gamma=gamma,
                               fix_enemy_policy=fix_evaluation_enemy_policy,
-                              if_use_cnn=if_use_cnn, if_share_network=if_share_network)  # build Evaluator
+                              if_use_cnn=if_use_cnn, if_share_network=if_share_network, **rnn_kwargs)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                     total_trainers_envs=total_trainers_envs,
                                     action_dim=action_dim, observation_matrix_shape=observation_matrix_shape,
                                     if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
-                                    if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
-                                    **extra_state_kwargs)
+                                    if_use_cnn=if_use_cnn,
+                                    **extra_state_kwargs, **rnn_kwargs)
     else:
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
