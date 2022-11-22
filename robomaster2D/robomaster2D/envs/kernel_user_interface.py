@@ -64,7 +64,7 @@ class User_Interface(object):
         self.show_center_barrier_vertices = False
         self.show_goals_position = False
         self.show_goal_line = False
-        self.show_lidar = True
+        self.show_lidar = False
         self.show_state_data = True
         self.show_robot_data = True
         self.show_figure = True
