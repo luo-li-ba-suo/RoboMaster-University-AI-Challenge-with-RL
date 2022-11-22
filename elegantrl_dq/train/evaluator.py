@@ -136,8 +136,8 @@ class Evaluator:
                                'objA': log_tuple[1],
                                'log-prob': log_tuple[2],
                                'win_rate_training': log_tuple[4],
-                               'actor-learning-rate': act_optimizer.param_groups['lr'],
-                               'critic-learning-rate': critic_optimizer.param_groups['lr']}
+                               'actor-learning-rate': act_optimizer.param_groups[0]['lr'],
+                               'critic-learning-rate': critic_optimizer.param_groups[0]['lr']}
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
             self.epoch += 1
