@@ -31,7 +31,7 @@ def demo_discrete_action():
     args.config.eval_times2 = 16
 
     args.config.if_use_cnn = True
-    args.config.if_share_network = False
+    args.config.if_share_network = True
 
     args.config.if_print_time = True
     args.config.if_train = True
@@ -40,8 +40,10 @@ def demo_discrete_action():
     args.config.model_pool_capacity_historySP = 1000
     args.config.delta_historySP = 1.0
     args.config.enemy_stochastic_policy = True
+
     args.config.use_extra_state_for_critic = True
     args.config.use_action_prediction = True
+
     args.config.frame_stack_num = 4
     args.config.history_action_stack_num = 3
     # args.config.cwd = '2022-07-24_16-44-21'

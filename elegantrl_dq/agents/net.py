@@ -288,42 +288,59 @@ class CriticAdv(nn.Module):
 # actor与critic网络共享特征提取的主干
 class DiscretePPOShareNet(nn.Module):
     def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_conv1D=True,
-                 if_use_rnn=False, state_cnn_channel=6, state_seq_len=30):
+                 if_use_rnn=False, state_cnn_channel=6, state_seq_len=30, actor_obs_dim=None):
         super().__init__()
-        self.action_dim = action_dim  # 默认为多维动作空间
+        '''参数处理'''
+        self.action_dim = action_dim  # 默认为多维离散动作空间
+        self.actor_obs_dim = actor_obs_dim
+        if self.actor_obs_dim is None:
+            self.actor_obs_dim = state_dim
+        if self.actor_obs_dim < state_dim:
+            self.use_extra_obs_critic = True
+        else:
+            self.use_extra_obs_critic = False
 
-        self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-
+        '''1.共享特征提取层：'''
+        '''观测向量的处理'''
+        self.vector_net = nn.Sequential(nn.Linear(self.actor_obs_dim, mid_dim), nn.ReLU())
+        self.extra_obs_net = None
+        if self.use_extra_obs_critic:
+            self.extra_obs_net = nn.Sequential(nn.Linear(state_dim - self.actor_obs_dim, mid_dim), nn.ReLU())
+        '''观测矩阵的处理'''
         self.if_use_cnn = if_use_cnn
         self.if_use_conv1D = if_use_conv1D
-        self.cnn_out_dim = 64
-        self.conv1D_kernel_size = 3
         if if_use_conv1D:
+            self.conv1D_kernel_size = 3
             self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
                                           nn.ReLU(), nn.Flatten())
-            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+            cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
         elif if_use_cnn:
+            cnn_out_dim = 64
             self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
-                                              nn.Conv2d(32, self.cnn_out_dim, 3, stride=2),
+                                              nn.Conv2d(32, cnn_out_dim, 3, stride=2),
                                               nn.ReLU(),
                                               nn.AdaptiveMaxPool2d(1),
                                               nn.Flatten())
         else:
             self.conv_net = None
-            self.cnn_out_dim = 0
+            cnn_out_dim = 0
+        '''2.共享记忆层'''
         self.rnn = None
-        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        '''3.共享中间层'''
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + cnn_out_dim, mid_dim), nn.ReLU())
+        '''4.策略层'''
         self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
             layer_norm(net[-1], std=0.01)
         self.forward = self.actor
-        # critic
-        self.value_net = nn.Linear(mid_dim, 1)
-        layer_norm(self.value_net, std=0.5)
+        '''5.价值层'''
+        self.value_net = nn.Sequential(nn.Linear(mid_dim*2 if self.use_extra_obs_critic else mid_dim, mid_dim), nn.ReLU(),
+                                       nn.Linear(mid_dim, 1))
+        layer_norm(self.value_net[-1], std=0.5)
 
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
@@ -336,9 +353,8 @@ class DiscretePPOShareNet(nn.Module):
                                    state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
         if self.if_use_cnn or self.if_use_conv1D:
             CNN_out = self.conv_net(state_cnn)
-            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
-        else:
-            hidden = self.hidden_net(hidden)
+            hidden = torch.cat((hidden, CNN_out), dim=1)
+        hidden = self.hidden_net(hidden)
         return hidden
 
     def actor(self, state, state_cnn=None, rnn_state=None):
@@ -346,7 +362,10 @@ class DiscretePPOShareNet(nn.Module):
         return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
 
     def critic(self, state, state_cnn=None, rnn_state=None):
-        hidden = self.share_net(state, state_cnn, rnn_state)
+        hidden = self.share_net(state[..., :self.actor_obs_dim], state_cnn, rnn_state)
+        if self.use_extra_obs_critic:
+            extra_hidden = self.extra_obs_net(state[..., self.actor_obs_dim:])
+            hidden = torch.cat((hidden, extra_hidden), dim=1)
         return self.value_net(hidden)
 
     def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):

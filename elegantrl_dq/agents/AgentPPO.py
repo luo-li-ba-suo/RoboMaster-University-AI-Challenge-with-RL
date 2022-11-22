@@ -360,6 +360,13 @@ class AgentDiscretePPO(AgentPPO):
 class MultiEnvDiscretePPO(AgentPPO):
     def __init__(self):
         super().__init__()
+        # extra state for critic
+        self.use_extra_state_for_critic = False
+        self.use_action_prediction = False
+        self.agent_num = 0
+        self.action_prediction_dim = None
+        self.actor_obs_dim = 0
+
         # self play
         self.delta_historySP = None
         self.model_pool_capacity_historySP = None
@@ -395,24 +402,27 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.max_step = max_step
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
+        self.actor_obs_dim = state_dim
+        critic_obs_dim = state_dim
+        if self.use_extra_state_for_critic:
+            if self.use_action_prediction:
+                critic_obs_dim += (self.agent_num - 1) * sum(self.action_prediction_dim)
         if if_share_network:
-            self.act = DiscretePPOShareNet(net_dim, state_dim, action_dim,
+            self.act = DiscretePPOShareNet(net_dim, critic_obs_dim, action_dim,
+                                           actor_obs_dim=self.actor_obs_dim,
                                            if_use_cnn=if_use_cnn,
                                            if_use_conv1D=if_use_conv1D,
+                                           state_cnn_channel=observation_matrix_shape[0],
                                            if_use_rnn=if_use_rnn,
                                            state_seq_len=observation_matrix_shape[-1]).to(self.device)
             self.cri = self.act.critic
         else:
-            self.act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim, if_use_cnn=if_use_cnn,
+            self.act = MultiAgentActorDiscretePPO(net_dim, self.actor_obs_dim, action_dim, if_use_cnn=if_use_cnn,
                                                   state_cnn_channel=observation_matrix_shape[0],
                                                   if_use_rnn=if_use_rnn,
                                                   if_use_conv1D=if_use_conv1D,
                                                   state_seq_len=observation_matrix_shape[-1]).to(self.device)
-            input_dim = state_dim
-            if self.use_extra_state_for_critic:
-                if self.use_action_prediction:
-                    input_dim += (self.agent_num - 1) * sum(self.action_prediction_dim)
-            self.cri = CriticAdv(net_dim, input_dim, if_use_cnn=if_use_cnn,
+            self.cri = CriticAdv(net_dim, critic_obs_dim, if_use_cnn=if_use_cnn,
                                  state_cnn_channel=observation_matrix_shape[0],
                                   if_use_conv1D=if_use_conv1D,
                                   state_seq_len=observation_matrix_shape[-1]).to(self.device)

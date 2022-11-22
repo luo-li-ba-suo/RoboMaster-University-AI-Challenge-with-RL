@@ -172,8 +172,6 @@ class Arguments:
             assert not self.config.use_action_prediction
         else:
             assert self.config.use_action_prediction
-        if self.config.use_action_prediction:
-            assert not self.config.if_share_network, "Shared AC Net do not support action prediction temporarily"
 
 def train_and_evaluate(args):
     args.init_before_training()
