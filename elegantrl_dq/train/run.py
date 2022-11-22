@@ -372,4 +372,4 @@ def train_and_evaluate(args):
     env.stop()
     if wandb_run:
         wandb_run.finish()
-    # os.kill(int(process_info()['pid']), signal.SIGKILL)
+    exit()
