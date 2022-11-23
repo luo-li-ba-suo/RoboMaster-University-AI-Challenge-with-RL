@@ -235,7 +235,7 @@ class VecEnvironments:
                                     state_stack[1][0:(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]] = state_stack[1][self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]]
                             state_stack[0][(self.frame_stack_num - 1) * self.state_origin_dim:self.frame_stack_num * self.state_origin_dim] = infos[env_id]['pseudo_terminal_state_'][agent][0]
                             state_stack[1][(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]] = infos[env_id]['pseudo_terminal_state_'][agent][1]
-                            infos[env_id]['pseudo_terminal_state_'] = state_stack
+                            infos[env_id]['pseudo_terminal_state_'][agent] = state_stack
             states = self.states_stack
 
         return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos
