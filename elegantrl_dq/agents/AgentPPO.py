@@ -1070,7 +1070,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                                'log-prob': log_tuple[2],
                                'win_rate_training': log_tuple[4],
                                'actor-learning-rate': self.act_optimizer.param_groups[0]['lr']}
-                if self.if_share_network:
+                if not self.if_share_network:
                     train_infos['critic-learning-rate'] = self.cri_optimizer.param_groups[0]['lr']
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
