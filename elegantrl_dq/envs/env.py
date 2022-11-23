@@ -156,6 +156,11 @@ class VecEnvironments:
                         states[env_id], new_info = self.agent_conns[env_id].recv()
                         infos[env_id].update(new_info)
                     else:
+                        if self.reset_count[env_id] != self.pseudo_step or not pseudo_step_flag:
+                            # 当没有使用动作预测时触发伪终止以及使用动作预测时没有进入伪步时记录
+                            # 伪终止状态
+                            infos[env_id]['pseudo_terminal_state_'] = np.array(states[env_id], dtype=object)
+
                         if self.reset_count[env_id] == self.pseudo_step or not pseudo_step_flag:
                             infos[env_id]['pseudo_step_'] = 0
                             self.agent_conns[env_id].send(("reset", {'evaluation': evaluation}))
@@ -175,6 +180,10 @@ class VecEnvironments:
                     states[0], new_info = self.envs[0].reset(evaluation=evaluation)
                     infos[0].update(new_info)
                 elif infos[0]['pseudo_done']:
+                    if self.reset_count[0] != self.pseudo_step or not pseudo_step_flag:
+                        # 当没有使用动作预测时触发伪终止以及使用动作预测时没有进入伪步时记录
+                        # 伪终止状态
+                        infos[0]['pseudo_terminal_state_'] = np.array(states[0], dtype=object)
                     if self.reset_count[0] == self.pseudo_step or not pseudo_step_flag:
                         infos[0]['pseudo_step_'] = 0
                         states[0], new_info = self.envs[0].reset(evaluation=evaluation)
@@ -186,7 +195,7 @@ class VecEnvironments:
         '''帧堆叠'''
         if self.frame_stack_num > 1 or self.history_action_stack_num > 0:
             for env_id in range(self.env_num):
-                if ('pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] <= 0) or 'pseudo_step_' not in infos[env_id]:  # 伪步中如果done=True，states中会有None，导致后续处理bug
+                if ('pseudo_step_' in infos[env_id] and infos[env_id]['pseudo_step_'] <= 0) or 'pseudo_step_' not in infos[env_id]:  # 排除伪步;伪步中如果done=True，states中会有None，导致后续处理bug
                     for agent in self.total_agents:
                         if states[env_id][agent] == None:
                             # 此处不能为is None，因为这样判断不出np.array(None)==None
@@ -215,6 +224,18 @@ class VecEnvironments:
                                 if self.frame_stack_num > 1:
                                     self.states_stack[env_id][agent][1][0:(self.frame_stack_num-1) * self.obs_matrix_origin_shape[0]] = self.states_stack[env_id][agent][1][self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]]
                                 self.states_stack[env_id][agent][1][(self.frame_stack_num-1) * self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]] = states[env_id][agent][1]
+                else:
+                    for agent in self.total_agents:
+                        if states[env_id][agent] != None and infos[env_id]['pseudo_done']:
+                            # 针对伪终止状态做帧堆叠
+                            state_stack = self.states_stack[env_id][agent]
+                            if self.frame_stack_num > 1:
+                                state_stack[0][0: (self.frame_stack_num - 1) * self.state_origin_dim] = state_stack[0][self.state_origin_dim: self.frame_stack_num * self.state_origin_dim]
+                                if self.if_use_cnn:
+                                    state_stack[1][0:(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]] = state_stack[1][self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]]
+                            state_stack[0][(self.frame_stack_num - 1) * self.state_origin_dim:self.frame_stack_num * self.state_origin_dim] = infos[env_id]['pseudo_terminal_state_'][agent][0]
+                            state_stack[1][(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]] = infos[env_id]['pseudo_terminal_state_'][agent][1]
+                            infos[env_id]['pseudo_terminal_state_'] = state_stack
             states = self.states_stack
 
         return np.array(states, dtype=object), np.array(rewards, dtype=object), dones, infos

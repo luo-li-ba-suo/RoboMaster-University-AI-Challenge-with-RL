@@ -719,11 +719,16 @@ class MultiEnvDiscretePPO(AgentPPO):
                         # 一个机器人死亡，另一个机器人坚持到了伪终止
                         # 这时死亡机器人是没有伪步的
                         if self.info_dict[env_id]['pseudo_done'] and n not in self.info_dict[env_id]['robots_being_killed_']:
+                            # 记录伪终止状态
                             assert done[env_id]
                             mask = gamma
-                            self.last_states['vector'][env_id][n].append(states_envs[env_id][n][0])
+                            pseudo_terminal_state = self.info_dict[env_id]['pseudo_terminal_state_']
+                            self.last_states['vector'][env_id][n].append(pseudo_terminal_state[n][0])
                             if self.if_use_cnn:
-                                self.last_states['matrix'][env_id][n].append(states_envs[env_id][n][1])
+                                self.last_states['matrix'][env_id][n].append(pseudo_terminal_state[n][1])
+                            end_states['vector'][env_id][n] = pseudo_terminal_state[n][0]
+                            if self.if_use_cnn:
+                                end_states['matrix'][env_id][n] = pseudo_terminal_state[n][1]
                             if self.if_use_rnn:
                                 self.last_states['rnn'][env_id][n][0].append(self.rnn_state_trainers[env_id][n][0])
                                 if self.LSTM_or_GRU:
@@ -731,13 +736,14 @@ class MultiEnvDiscretePPO(AgentPPO):
                             if self.use_action_prediction:
                                 assert self.info_dict[env_id]['pseudo_step_'] == 1, f"'pseudo_step_' not in self.info_dict[{env_id}]"
                                 pseudo_step[env_id][n] = True
+                        else:
+                            end_states['vector'][env_id][n] = states_envs[env_id][n][0]
+                            if self.if_use_cnn:
+                                end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
                         other = (rewards[env_id][i] * reward_scale, 0.0, mask,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob), *extra_states)
                         episode_rewards.append(episode_reward[env_id][n])
                         episode_reward[env_id][n] = 0
-                        end_states['vector'][env_id][n] = states_envs[env_id][n][0]
-                        if self.if_use_cnn:
-                            end_states['matrix'][env_id][n] = states_envs[env_id][n][1]
                         if self.if_use_rnn:
                             end_states['rnn'][env_id][n] = self.rnn_state_trainers[env_id][n]
                             self.rnn_state_trainers[env_id][n] = self.init_rnn_hidden_states()
