@@ -48,9 +48,9 @@ class Configs:
             self.if_per_or_gae = False  # PER for off-policy sparse reward: Prioritized Experience Replay.
 
         '''Arguments for evaluate'''
+        self.stochastic_policy_or_deterministic = True
         self.eval_gap = 60 * 10  # evaluate the agent per eval_gap seconds
-        self.eval_times1 = 2 ** 2  # evaluation times
-        self.eval_times2 = 2 ** 4  # evaluation times if 'eval_reward > max_reward'
+        self.eval_times = 2 ** 2  # evaluation times
         self.random_seed = 0  # initialize random seed in self.init_before_training()
 
         self.break_step = 2 ** 2  # break training after 'total_step > break_step'
@@ -230,7 +230,6 @@ def train_and_evaluate(args):
     net_dim = args.config.net_dim
     if_use_cnn = args.config.if_use_cnn
     if_use_conv1D = args.env.args.use_lidar
-    if_use_rnn = args.config.if_use_rnn
     if_share_network = args.config.if_share_network
     # max_memo = args.config.max_memo
     break_step = args.config.break_step
@@ -271,9 +270,9 @@ def train_and_evaluate(args):
     train_actor_step = args.config.train_actor_step
     '''evaluating arguments'''
     show_gap = args.config.eval_gap
-    eval_times1 = args.config.eval_times1
-    eval_times2 = args.config.eval_times2
+    eval_times = args.config.eval_times
     save_interval = args.config.save_interval
+    stochastic_policy_or_deterministic = args.config.stochastic_policy_or_deterministic
 
     del args  # In order to show these hyper-parameters clearly, I put them above.
 
@@ -305,29 +304,23 @@ def train_and_evaluate(args):
     rnn_kwargs = {'if_use_rnn': if_use_rnn,
                   'LSTM_or_GRU': LSTM_or_GRU,
                   'rnn_hidden_size': rnn_hidden_size}
+    '''Evaluation kwargs'''
+    evaluation_kwargs = {'cwd': cwd,
+                         'eval_times': eval_times,
+                         'eval_gap': show_gap,
+                         'save_interval': save_interval,
+                         'stochastic_policy_or_deterministic': stochastic_policy_or_deterministic}
     '''init: Agent, ReplayBuffer, Evaluator'''
     total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
-               if_use_conv1D=if_use_conv1D,
-               env=env, if_use_cnn=if_use_cnn,
-               if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-               observation_matrix_shape=observation_matrix_shape, **self_play_args, **extra_state_kwargs, **rnn_kwargs)
+                                     if_use_conv1D=if_use_conv1D,
+                                     env=env, if_use_cnn=if_use_cnn,
+                                     if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
+                                     observation_matrix_shape=observation_matrix_shape,
+                                     **self_play_args, **extra_state_kwargs, **rnn_kwargs, **evaluation_kwargs)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
 
-    if if_train and new_processing_for_evaluation:
-        async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device,
-                                         env_name=env.env_name,
-                                         eval_times1=eval_times1, eval_times2=eval_times2,
-                                         save_interval=save_interval, configs=configs,
-                                         fix_enemy_policy=fix_evaluation_enemy_policy,
-                                         if_use_cnn=if_use_cnn, if_share_network=True)
-    else:
-        evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
-                              eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
-                              save_interval=save_interval, if_train=if_train, gamma=gamma,
-                              fix_enemy_policy=fix_evaluation_enemy_policy,
-                              if_use_cnn=if_use_cnn, if_share_network=if_share_network, **rnn_kwargs)  # build Evaluator
     if if_multi_processing and if_train:
         buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
                                     total_trainers_envs=total_trainers_envs,
@@ -346,7 +339,7 @@ def train_and_evaluate(args):
     '''testing'''
     if not if_train:
         while True:
-            evaluator.evaluate_save(agent.act, agent.cri, enemy_act=agent.enemy_act)
+            agent.evaluate(env_eval, gamma, if_save=False)
     '''start training'''
     if_train_actor = False if train_actor_step > 0 else True
     start_training = time.time()
@@ -373,9 +366,7 @@ def train_and_evaluate(args):
         logging_tuple += logging_list
         with torch.no_grad():
             if not new_processing_for_evaluation:
-                evaluator.evaluate_save(agent.act, agent.cri, agent.act_optimizer, agent.cri_optimizer, total_step,
-                                        logging_tuple, wandb_run,
-                                        enemy_act=agent.enemy_act)
+                agent.evaluate(env_eval, gamma, steps=total_step, log_tuple=logging_tuple, logger=wandb_run)
             else:
                 async_evaluator.update(total_step, logging_tuple)
             if_train = not (total_step >= break_step or os.path.exists(f'{cwd}/stop'))

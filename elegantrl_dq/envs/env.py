@@ -35,8 +35,9 @@ class PreprocessEnv(gym.Wrapper):  # environment wrapper
 
 
 class VecEnvironments:
-    def __init__(self, env_name, env_num, pseudo_step=0):
+    def __init__(self, env_name, env_num, pseudo_step=0, seed_offset=0):
         self.env_num = env_num
+        self.seed_offset = seed_offset
         print(f"\n{env_num} envs launched \n")
         self.if_multi_processing = True
         self.envs = [PreprocessEnv(env_name, if_print=True if env_id == 0 else False) for env_id in range(env_num)]
@@ -88,7 +89,7 @@ class VecEnvironments:
             self.states_stack = deepcopy(self.init_state_stack)
 
     def run(self, index):
-        np.random.seed(index)
+        np.random.seed(index + self.seed_offset)
         self.agent_conns[index].close()
         while True:
             request, action = self.env_conns[index].recv()
@@ -142,7 +143,7 @@ class VecEnvironments:
             curr_states = self.states_stack
         return np.array(curr_states, dtype=object), infos
 
-    def step(self, actions, pseudo_step_flag=True):
+    def step(self, actions, pseudo_step_flag=True, evaluation=False):
         if self.env_num > 1:
             [agent_conn.send(("step", action)) for agent_conn, action in zip(self.agent_conns, actions)]
             states, rewards, dones, infos = zip(*[agent_conn.recv() for agent_conn in self.agent_conns])
@@ -151,13 +152,13 @@ class VecEnvironments:
                 if dones[env_id]:
                     if not infos[env_id]['pseudo_done']:
                         infos[env_id]['pseudo_step_'] = -1
-                        self.agent_conns[env_id].send(("reset", None))
+                        self.agent_conns[env_id].send(("reset", {'evaluation': evaluation}))
                         states[env_id], new_info = self.agent_conns[env_id].recv()
                         infos[env_id].update(new_info)
                     else:
                         if self.reset_count[env_id] == self.pseudo_step or not pseudo_step_flag:
                             infos[env_id]['pseudo_step_'] = 0
-                            self.agent_conns[env_id].send(("reset", None))
+                            self.agent_conns[env_id].send(("reset", {'evaluation': evaluation}))
                             states[env_id], new_info = self.agent_conns[env_id].recv()
                             infos[env_id].update(new_info)
                             self.reset_count[env_id] = 0
@@ -171,12 +172,12 @@ class VecEnvironments:
                 if not infos[0]['pseudo_done']:
                     assert self.reset_count[0] == 0, "some bug happens"
                     infos[0]['pseudo_step_'] = -1
-                    states[0], new_info = self.envs[0].reset()
+                    states[0], new_info = self.envs[0].reset(evaluation=evaluation)
                     infos[0].update(new_info)
                 elif infos[0]['pseudo_done']:
                     if self.reset_count[0] == self.pseudo_step or not pseudo_step_flag:
                         infos[0]['pseudo_step_'] = 0
-                        states[0], new_info = self.envs[0].reset()
+                        states[0], new_info = self.envs[0].reset(evaluation=evaluation)
                         infos[0].update(new_info)
                         self.reset_count[0] = 0
                     else:

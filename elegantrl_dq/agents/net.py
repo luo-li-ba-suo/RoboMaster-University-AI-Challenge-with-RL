@@ -199,7 +199,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
             samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
             action_ = samples_2d.reshape(result.size(0))
             action.append(action_)
-        return action, a_prob
+        return action, a_prob, None
 
     def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
         result = self.forward(state, state_cnn, rnn_state)
@@ -208,7 +208,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
         for action_dim_ in self.action_dim:
             action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
             n += action_dim_
-        return action
+        return action, None
 
     def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
         result = self.forward(state, state_cnn, state_rnn)

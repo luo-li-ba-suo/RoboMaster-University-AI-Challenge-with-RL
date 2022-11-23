@@ -75,6 +75,7 @@ class User_Interface(object):
         self.show_poses = options.show_poses
         self.red_agent = options.red_agents_path
         self.blue_agent = options.blue_agents_path
+        self.eval_blue_agent = options.eval_blue_agents_path
         self.orders = orders
         self.map = map
         pygame.init()
@@ -229,9 +230,6 @@ class User_Interface(object):
             self.update_buff()
             self.update_objects()
             self.update_state_data()
-            info = self.font.render('机器人信息', False, self.font_colors[0])
-            self.screen.blit(info, (self.map.map_length + 30, 4 + 5 * 17))
-
             if self.show_robot_data:
                 self.update_robot_data()
             if self.show_figure:
@@ -359,7 +357,8 @@ class User_Interface(object):
             tags_state = {'时间': self.state.time,
                           '渲染间隔': self.state.render_per_frame,
                           '红方': self.red_agent,
-                          '蓝方': self.blue_agent}
+                          '蓝方': self.blue_agent,
+                          '评估蓝方': self.eval_blue_agent}
             for i, tag in enumerate(tags_state):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 30, 22 + i * 17))
