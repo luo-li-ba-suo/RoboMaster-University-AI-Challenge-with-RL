@@ -285,11 +285,12 @@ class Engine(object):
             # move chassis
             if self.state.robots[n].freeze_state[1] != 1:  # 禁止移动
                 # rotate chassis
-                if rotate_speed_offset < -180:
-                    rotate_speed_offset += 360
-                elif rotate_speed_offset > 180:
-                    rotate_speed_offset -= 360
-                self.acts[n].rotate_speed += rotate_speed_offset
+                if self.acts[n].auto_rotate:
+                    if rotate_speed_offset < -180:
+                        rotate_speed_offset += 360
+                    elif rotate_speed_offset > 180:
+                        rotate_speed_offset -= 360
+                    self.acts[n].rotate_speed += rotate_speed_offset
                 if self.acts[n].rotate_speed:
                     p = self.state.robots[n].angle
                     self.state.robots[n].angle += self.acts[n].rotate_speed

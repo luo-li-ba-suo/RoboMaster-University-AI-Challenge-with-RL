@@ -204,7 +204,7 @@ class Robot(object):
         # self.yaw_motion = 3  # 云台旋转的惯性感大小
 
         # self.camera_angle = 75 / 2  # 摄像头的视野范围
-        self.camera_angle = 180 / 2  # 摄像头的视野范围
+        self.camera_angle = 360 / 2  # 摄像头的视野范围
         self.move_discount = 2.6  # 撞墙之后反弹的强度大小
         self.lidar_angle = 120 / 2  # 激光雷达的视野视野范围
         self.lidar_array = None
