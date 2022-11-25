@@ -271,7 +271,7 @@ class CriticAdv(nn.Module):
                                         nn.Linear(mid_dim, 1))
         layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
-    def forward(self, state, state_cnn=None):
+    def forward(self, state, state_cnn=None, rnn_state=None):
         hidden = self.net(state)
         if self.if_use_conv1D:
             state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
