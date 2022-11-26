@@ -177,10 +177,6 @@ class Arguments:
         else:
             assert self.config.use_action_prediction
 
-        '''RNN'''
-        if self.config.if_use_rnn:
-            assert self.config.if_share_network, "Separated AC model do not support RNN yet."
-
 def train_and_evaluate(args):
     args.init_before_training()
 
