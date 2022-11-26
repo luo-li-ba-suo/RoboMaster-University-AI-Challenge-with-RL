@@ -27,7 +27,7 @@ def demo_discrete_action():
 
     args.config.random_seed = 1
 
-    args.config.eval_times = args.config.num_envs * 2
+    args.config.eval_times = 20
 
     args.config.if_use_cnn = True
     args.config.if_use_rnn = True
