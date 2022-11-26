@@ -31,12 +31,13 @@ def demo_discrete_action():
 
     args.config.if_use_cnn = True
     args.config.if_use_rnn = True
-    args.config.if_share_network = True
+    args.config.sequence_length = 2 ** 3
+    args.config.if_share_network = False
 
     args.config.if_print_time = True
     args.config.if_train = True
 
-    args.config.self_play = True
+    args.config.self_play = False
     args.config.enemy_act_update_interval = 2 ** 12
     args.config.model_pool_capacity_historySP = 1000
     args.config.delta_historySP = 1.0

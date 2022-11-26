@@ -13,6 +13,7 @@ class AgentPPO:
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
         self.lambda_entropy = 0.02  # could be 0.02
         self.lambda_gae_adv = 0.98  # could be 0.95~0.99, GAE (Generalized Advantage Estimation. ICLR.2016.)
+        self.gamma = 0.998
         self.get_reward_sum = None
 
         self.state = None
@@ -49,7 +50,7 @@ class AgentPPO:
         else:
             return actions[0].detach().cpu().numpy(), noises[0].detach().cpu().numpy()
 
-    def explore_env(self, env, target_step, reward_scale, gamma):
+    def explore_env(self, env, target_step, reward_scale):
         trajectory_list = list()
 
         state = self.state
@@ -57,7 +58,7 @@ class AgentPPO:
             action, noise = self.select_action(state)
             next_state, reward, done, _ = env.step(np.tanh(action))
 
-            other = (reward * reward_scale, 0.0 if done else gamma, *action, *noise)
+            other = (reward * reward_scale, 0.0 if done else self.gamma, *action, *noise)
             trajectory_list.append((state, other))
 
             state = env.reset() if done else next_state
@@ -72,7 +73,7 @@ class AgentPPO:
     def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
         buffer.update_now_len()
         buf_len = buffer.now_len
-        buf_state, buf_action, buf_r_sum, buf_logprob, buf_advantage, buf_state_2D, buf_state_rnn, buf_state_extra = self.prepare_buffer(buffer)
+        buf_state, buf_action, buf_r_sum, buf_logprob, buf_advantage, buf_state_2D, buf_state_rnn, buf_state_extra, _ = self.prepare_buffer(buffer)
         buffer.empty_buffer()
 
         update_policy_net = int(buf_len / batch_size) * repeat_times_policy  # 策略更新只利用一次数据
@@ -145,7 +146,7 @@ class AgentPPO:
             pre_state = torch.as_tensor((self.state,), dtype=torch.float32, device=self.device)
             pre_r_sum = self.cri(pre_state).detach()
             r_sum, advantage = self.get_reward_sum(self, buf_len, reward, mask, value, pre_r_sum)
-        return state, action, r_sum, logprob, advantage, None, None, None
+        return state, action, r_sum, logprob, advantage, None, None, None, None
 
     @staticmethod
     def get_reward_sum_raw(self, buf_len, buf_reward, buf_mask, buf_value, rest_r_sum) -> (torch.Tensor, torch.Tensor):
@@ -290,7 +291,7 @@ class AgentDiscretePPO(AgentPPO):
             raise NotImplementedError
         self.state = env.reset()
 
-    def explore_env(self, env, target_step, reward_scale, gamma):
+    def explore_env(self, env, target_step, reward_scale):
         trajectory_list = list()
         trajectory_list_for_each_agent = [list() for _ in env.env.trainer_ids]
         logging_list = list()
@@ -317,7 +318,7 @@ class AgentDiscretePPO(AgentPPO):
                 if n in self.info_dict['robots_being_killed_']:
                     other = (rewards[i] * reward_scale, 0.0, *as_int[i], *np.concatenate(as_prob[i]))
                 else:
-                    other = (rewards[i] * reward_scale, 0.0 if done else gamma, *as_int[i], *np.concatenate(as_prob[i]))
+                    other = (rewards[i] * reward_scale, 0.0 if done else self.gamma, *as_int[i], *np.concatenate(as_prob[i]))
                 trajectory_list_for_each_agent[i].append((states[n], other))
             episode_reward += np.mean(rewards)
             if done:
@@ -396,6 +397,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.LSTM_or_GRU = True
         self.rnn_state_trainers = None
         self.rnn_state_testers = None
+        self.sequence_length = 2 ** 3
 
         '''Evaluation'''
         self.start_time = time.time()
@@ -406,7 +408,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.r_max = -float('inf')
         self.cwd = None
 
-    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, if_use_gae=False, max_step=0,
+    def init(self, net_dim, state_dim, action_dim, learning_rate=1e-4, gamma=0.998, if_use_gae=False, max_step=0,
              env=None, if_build_enemy_act=False, enemy_policy_share_memory=False,
              if_use_cnn=False, if_use_conv1D=False,
              if_share_network=True, if_new_proc_eval=False, observation_matrix_shape=[1,25,25],
@@ -421,6 +423,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.get_reward_sum = self.get_reward_sum_gae if if_use_gae else self.get_reward_sum_raw
         self.actor_obs_dim = state_dim
+        self.gamma = gamma
         critic_obs_dim = state_dim
         if self.use_extra_state_for_critic:
             if self.use_action_prediction:
@@ -437,6 +440,8 @@ class MultiEnvDiscretePPO(AgentPPO):
             self.cri = self.act.critic
         else:
             self.act = MultiAgentActorDiscretePPO(net_dim, self.actor_obs_dim, action_dim, if_use_cnn=if_use_cnn,
+                                                  if_use_rnn=self.if_use_rnn, rnn_state_size=self.rnn_hidden_size,
+                                                  LSTM_or_GRU=self.LSTM_or_GRU,
                                                   state_cnn_channel=observation_matrix_shape[0],
                                                   if_use_conv1D=if_use_conv1D,
                                                   state_seq_len=observation_matrix_shape[-1]).to(self.device)
@@ -519,7 +524,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         else:
             return [np.zeros(self.rnn_hidden_size)]
 
-    def explore_env(self, env, target_step, reward_scale, gamma, replay_buffer=None):
+    def explore_env(self, env, target_step, reward_scale, replay_buffer=None):
         if self.remove_rest_trajectory:
             self.trajectory_cache = [{trainer_id: {'vector': np.empty((self.max_step, self.state_dim), dtype=np.float32),
                                                    'others': np.empty((self.max_step, self.other_dim), dtype=np.float32),
@@ -721,7 +726,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         if self.info_dict[env_id]['pseudo_done'] and n not in self.info_dict[env_id]['robots_being_killed_']:
                             # 记录伪终止状态
                             assert done[env_id]
-                            mask = gamma
+                            mask = self.gamma
                             pseudo_terminal_state = self.info_dict[env_id]['pseudo_terminal_state_']
                             self.last_states['vector'][env_id][n].append(pseudo_terminal_state[n][0])
                             if self.if_use_cnn:
@@ -766,7 +771,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                             step += self.cache_tail_idx[env_id][n]+1
                             self.cache_tail_idx[env_id][n] = 0
                     else:
-                        other = (rewards[env_id][i] * reward_scale, gamma, 0.0,
+                        other = (rewards[env_id][i] * reward_scale, self.gamma, 0.0,
                                  *trainer_actions[trainer_i], *np.concatenate(action_prob), *extra_states)
                         if self.if_complete_episode:
                             self.trajectory_cache[env_id][n]['vector'][self.cache_tail_idx[env_id][n]] = states_trainers['vector'][trainer_i]
@@ -862,7 +867,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         logging_list.append(np.mean(win_rate))
         return logging_list, real_step
 
-    def evaluate(self, env_eval, gamma, if_save=True, steps=0, log_tuple=None, logger=None):
+    def evaluate(self, env_eval, if_save=True, steps=0, log_tuple=None, logger=None):
         if log_tuple is None:
             log_tuple = [0, 0, 0, 0, 0]
         if time.time() - self.eval_time > self.eval_gap:
@@ -994,7 +999,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         win_rate.append(info_dict[env_id]['win'])
                     for i, n in enumerate(last_trainers_envs[env_id]):
                         episode_reward[env_id][n] += np.mean(rewards[env_id][i])
-                        episode_return[env_id][n] += gamma ** episode_step[env_id][n] * np.mean(rewards[env_id][i])
+                        episode_return[env_id][n] += self.gamma ** episode_step[env_id][n] * np.mean(rewards[env_id][i])
                         episode_step[env_id][n] += 1
 
                         if self.if_use_rnn:
@@ -1199,6 +1204,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             r_sums = []
             logprobs = []
             advantages = []
+            done_masks = []
             reward_samples, mask_samples, pseudo_mask_samples, action_samples, a_noise_samples, state_samples, state_2D_samples, state_rnn_samples, extra_state_samples = buffer.sample_all()
             for env_id in range(self.env_num):
                 for trainer in self.total_trainers_envs[env_id]:
@@ -1250,6 +1256,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                         r_sums.append(r_sum)
                         logprobs.append(logprob)
                         advantages.append(advantage)
+                        if self.if_use_rnn:
+                            done_masks.append(mask_samples[env_id][trainer]/self.gamma)
             states = torch.cat(states)
             if self.use_extra_state_for_critic:
                 extra_states = torch.cat(extra_states)
@@ -1261,7 +1269,20 @@ class MultiEnvDiscretePPO(AgentPPO):
             r_sums = torch.cat(r_sums)
             logprobs = torch.cat(logprobs)
             advantages = torch.cat(advantages)
-        return states, actions, r_sums, logprobs, advantages, states_2D, states_rnn, extra_states
+            done_masks = torch.cat(done_masks)
+            if self.if_use_rnn:
+                # 重构成[new_batch_size, sequence_length, size]
+                batch_size = len(states) - len(states) % self.sequence_length
+                states = states[:batch_size].view(-1, self.sequence_length, states.shape[1])
+                actions = actions[:batch_size].view(-1, self.sequence_length, actions.shape[1])
+                r_sums = r_sums[:batch_size].view(-1, self.sequence_length)
+                logprobs = logprobs[:batch_size].view(-1, self.sequence_length)
+                advantages = advantages[:batch_size].view(-1, self.sequence_length)
+                states_2D = states_2D[:batch_size].view(-1, self.sequence_length, *states_2D.shape[1:])
+                states_rnn = [state_rnn[:batch_size].view(-1, self.sequence_length, state_rnn[:batch_size].shape[1]) for state_rnn in states_rnn]
+                extra_states = extra_states[:batch_size].view(-1, self.sequence_length, extra_states.shape[1])
+                done_masks = done_masks[:batch_size].view(-1, self.sequence_length)
+        return states, actions, r_sums, logprobs, advantages, states_2D, states_rnn, extra_states, done_masks
 
     def update_enemy_policy(self, step):
         if self.enemy_update_steps > self.enemy_act_update_interval:
@@ -1271,3 +1292,70 @@ class MultiEnvDiscretePPO(AgentPPO):
 
     def init_hidden_states(self, n):
         return np.zeros((n, self.rnn_dim))
+
+    def update_net(self, buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor=True):
+        if not self.if_use_rnn:
+            return super().update_net(buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau, if_train_actor)
+        else:
+            buffer.update_now_len()
+            buf_state, buf_action, buf_r_sum, buf_logprob, buf_advantage, \
+                buf_state_2D, buf_state_rnn, buf_state_extra, buf_done_mask = self.prepare_buffer(buffer)
+            buf_len = len(buf_state)
+            buffer.empty_buffer()
+
+            update_policy_net = int(buf_len * self.sequence_length / batch_size) * repeat_times_policy
+
+            '''PPO: Surrogate objective of Trust Region'''
+            obj_critic = obj_actor = logprob = None
+            indices = np.arange(buf_len)
+            for _ in range(repeat_times):
+                np.random.shuffle(indices)
+                for nbatch in range(0, int(buf_len*self.sequence_length/batch_size)):
+                    mb_indices = indices[nbatch:nbatch + int(batch_size/self.sequence_length)]
+                    state = buf_state[mb_indices]
+                    if self.use_extra_state_for_critic:
+                        state_extra = buf_state_extra[mb_indices]
+                    if self.if_use_cnn:
+                        state_2D = buf_state_2D[mb_indices]
+                    else:
+                        state_2D = None
+                    rnn_state = [b[mb_indices] for b in buf_state_rnn]
+                    done_mask = buf_done_mask[mb_indices]
+                    action = buf_action[mb_indices]
+                    r_sum = buf_r_sum[mb_indices]
+                    logprob = buf_logprob[mb_indices]
+                    advantage = buf_advantage[mb_indices]
+                    advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-5)
+
+                    if update_policy_net > 0 or self.if_share_network:
+                        new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_cnn=state_2D,
+                                                                                rnn_state=rnn_state,
+                                                                                done_mask=done_mask)  # it is obj_actor
+                        ratio = (new_logprob - logprob.detach()).exp()
+                        surrogate1 = advantage * ratio
+                        surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
+                        obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
+                        obj_actor = obj_surrogate + obj_entropy * self.lambda_entropy
+                        if if_train_actor and not self.if_share_network:
+                            self.optim_update(self.act_optimizer, obj_actor)
+                        update_policy_net -= 1
+                    if self.use_extra_state_for_critic:
+                        state_critic = torch.cat([state, state_extra], dim=-1)
+                    else:
+                        state_critic = state
+                    value = self.cri(state_critic,
+                                     state_cnn=state_2D if self.if_use_cnn else None,
+                                     rnn_state=rnn_state).squeeze()  # critic network predicts the reward_sum (Q value) of state
+                    obj_critic = self.criterion(value, r_sum) / (r_sum.std() + 1e-6)
+                    if self.if_share_network:
+                        self.optim_update(self.act_optimizer, obj_actor + obj_critic)
+                    else:
+                        self.optim_update(self.cri_optimizer, obj_critic)
+                        self.soft_update(self.cri_target, self.cri,
+                                         soft_update_tau) if self.cri_target is not self.cri else None
+            self.iteration += 1
+            # # 衰减学习率
+            # self.adjust_learning_rate(self.act_optimizer)
+            # if not self.if_share_network:
+            #     self.adjust_learning_rate(self.cri_optimizer)
+            return obj_critic.item(), obj_actor.item(), logprob.mean().item()  # logging_tuple

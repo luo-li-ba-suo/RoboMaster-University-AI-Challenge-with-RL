@@ -89,12 +89,13 @@ class Configs:
         self.if_use_rnn = True
         self.LSTM_or_GRU = False
         self.rnn_hidden_size = 256
+        self.sequence_length = 2 ** 3
 
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'LSTM Policy' + str(self.random_seed)
+        self.wandb_name = 'GRU Policy' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -258,6 +259,7 @@ def train_and_evaluate(args):
     if_use_rnn = args.config.if_use_rnn
     LSTM_or_GRU = args.config.LSTM_or_GRU
     rnn_hidden_size = args.config.rnn_hidden_size
+    sequence_length = args.config.sequence_length
 
     gamma = args.config.gamma
     reward_scale = args.config.reward_scale
@@ -299,7 +301,8 @@ def train_and_evaluate(args):
     '''RNN kwargs'''
     rnn_kwargs = {'if_use_rnn': if_use_rnn,
                   'LSTM_or_GRU': LSTM_or_GRU,
-                  'rnn_hidden_size': rnn_hidden_size}
+                  'rnn_hidden_size': rnn_hidden_size,
+                  'sequence_length': sequence_length}
     '''Evaluation kwargs'''
     evaluation_kwargs = {'cwd': cwd,
                          'eval_times': eval_times,
@@ -307,7 +310,8 @@ def train_and_evaluate(args):
                          'save_interval': save_interval,
                          'stochastic_policy_or_deterministic': stochastic_policy_or_deterministic}
     '''init: Agent, ReplayBuffer, Evaluator'''
-    total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, max_step=max_step,
+    total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, gamma=gamma,
+                                     if_use_gae=if_per_or_gae, max_step=max_step,
                                      if_use_conv1D=if_use_conv1D,
                                      env=env, if_use_cnn=if_use_cnn,
                                      if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
@@ -343,7 +347,7 @@ def train_and_evaluate(args):
         if if_print_time:
             start_explore = time.time()
         with torch.no_grad():
-            logging_list, step = agent.explore_env(env, target_step, reward_scale, gamma, buffer)
+            logging_list, step = agent.explore_env(env, target_step, reward_scale, buffer)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
             # if time.time() - start_explore > 50:

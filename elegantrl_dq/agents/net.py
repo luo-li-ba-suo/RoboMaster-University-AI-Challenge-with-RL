@@ -205,10 +205,11 @@ class MultiAgentActorDiscretePPO(nn.Module):
             hidden = self.hidden_net(hidden)
         if self.if_use_rnn:
             if self.LSTM_or_GRU:
-                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0), rnn_state[1].unsqueeze(0)))
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0).contiguous(),
+                                                                   rnn_state[1].unsqueeze(0).contiguous()))
                 rnn_state = [s.squeeze(0) for s in rnn_state]
             else:
-                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0))
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0).contiguous())
             hidden = hidden.squeeze(0)
         return torch.cat([net(hidden) for net in self.action_nets], dim=1), rnn_state  # action_prob without softmax
 
@@ -235,19 +236,44 @@ class MultiAgentActorDiscretePPO(nn.Module):
             n += action_dim_
         return action, rnn_state
 
-    def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
-        result, _ = self.forward(state, state_cnn, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, rnn_state=None, done_mask=None):
+        if self.if_use_rnn:
+            batch_size = state.shape[0]
+            sequence_length = state.shape[1]
+            rnn_size = rnn_state[0].shape[-1]
+            rnn_state_ = [s[:, 0, :] for s in rnn_state]
+            results = []
+            for i in range(sequence_length):
+                result, rnn_state_ = self.forward(state[:, i, :],
+                                                  state_cnn[:, i, ...] if self.if_use_cnn else None,
+                                                  rnn_state_)
+                mask = done_mask[:, i].view(batch_size, 1).repeat(1, rnn_size)
+                rnn_state_ = [s_ * mask for s_ in rnn_state_]
+                rnn_state_ = [s_ + (-mask+1)*s[:, i, :] for s_, s in zip(rnn_state_, rnn_state)]
+                results.append(result)
+            result = torch.cat(results, dim=1).view(batch_size, sequence_length, -1)
+        else:
+            result, _ = self.forward(state, state_cnn, None)
         a_prob = []
         dist_prob = []
         dist_entropy = []
         n = 0
-        for i, action_dim_ in enumerate(self.action_dim):
-            a_prob_ = self.soft_max(result[:, n:n + action_dim_])
-            a_prob.append(a_prob_)
-            dist = self.Categorical(a_prob_)
-            dist_prob.append(dist.log_prob(action[:, i].long()))
-            dist_entropy.append(dist.entropy().mean())
-            n += action_dim_
+        if self.if_use_rnn:
+            for i, action_dim_ in enumerate(self.action_dim):
+                a_prob_ = self.soft_max(result[:, :, n:n + action_dim_])
+                a_prob.append(a_prob_)
+                dist = self.Categorical(a_prob_)
+                dist_prob.append(dist.log_prob(action[:, :, i].long()))
+                dist_entropy.append(dist.entropy().mean())
+                n += action_dim_
+        else:
+            for i, action_dim_ in enumerate(self.action_dim):
+                a_prob_ = self.soft_max(result[:, n:n + action_dim_])
+                a_prob.append(a_prob_)
+                dist = self.Categorical(a_prob_)
+                dist_prob.append(dist.log_prob(action[:, i].long()))
+                dist_entropy.append(dist.entropy().mean())
+                n += action_dim_
         return sum(dist_prob), sum(dist_entropy) / len(dist_entropy)
 
     def get_old_logprob(self, action, a_prob):
@@ -297,6 +323,8 @@ class CriticAdv(nn.Module):
         layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
     def forward(self, state, state_cnn=None, rnn_state=None):
+        batch_shape = state.shape[:-1]
+        state = state.view(-1, state.shape[-1])
         hidden = self.net(state)
         if self.if_use_conv1D:
             state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
@@ -307,7 +335,7 @@ class CriticAdv(nn.Module):
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)
-        return hidden
+        return hidden.view(*batch_shape, -1)
 
 
 # actor与critic网络共享特征提取的主干
@@ -441,8 +469,8 @@ class DiscretePPOShareNet(nn.Module):
             n += action_dim_
         return action, rnn_state
 
-    def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
-        result, _ = self.actor(state, state_cnn, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, rnn_state=None, done_mask=None):
+        result, _ = self.actor(state, state_cnn, rnn_state)
         a_prob = []
         dist_prob = []
         dist_entropy = []
