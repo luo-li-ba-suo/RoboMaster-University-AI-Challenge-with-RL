@@ -140,8 +140,8 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6, if_use_rnn=False,
-                 if_use_conv1D=True, state_seq_len=30):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6,
+                 if_use_conv1D=True, state_seq_len=30, if_use_rnn=False, rnn_state_size=128, LSTM_or_GRU=True):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
@@ -149,6 +149,23 @@ class MultiAgentActorDiscretePPO(nn.Module):
         self.if_use_conv1D = if_use_conv1D
         self.cnn_out_dim = 64
         self.conv1D_kernel_size = 3
+
+        '''Recurrent Network'''
+        self.if_use_rnn = if_use_rnn
+        rnn_state_size = rnn_state_size
+        self.LSTM_or_GRU = LSTM_or_GRU
+        '''共享记忆层'''
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                self.rnn = nn.LSTM(mid_dim, rnn_state_size)
+            else:
+                self.rnn = nn.GRU(mid_dim, rnn_state_size)
+            for name, param in self.rnn.named_parameters():
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param, 1.0)
+
         self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
         if if_use_conv1D:
             self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
@@ -166,8 +183,9 @@ class MultiAgentActorDiscretePPO(nn.Module):
         else:
             self.cnn_out_dim = 0
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
-        self.rnn = None
-        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+        '''策略层'''
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
             layer_norm(net[-1], std=0.01)
@@ -185,10 +203,17 @@ class MultiAgentActorDiscretePPO(nn.Module):
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
             hidden = self.hidden_net(hidden)
-        return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0), rnn_state[1].unsqueeze(0)))
+                rnn_state = [s.squeeze(0) for s in rnn_state]
+            else:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0))
+            hidden = hidden.squeeze(0)
+        return torch.cat([net(hidden) for net in self.action_nets], dim=1), rnn_state  # action_prob without softmax
 
     def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
-        result = self.forward(state, state_cnn, rnn_state)
+        result, rnn_state = self.forward(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -199,19 +224,19 @@ class MultiAgentActorDiscretePPO(nn.Module):
             samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
             action_ = samples_2d.reshape(result.size(0))
             action.append(action_)
-        return action, a_prob, None
+        return action, a_prob, rnn_state
 
     def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
-        result = self.forward(state, state_cnn, rnn_state)
+        result, rnn_state = self.forward(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
             action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
             n += action_dim_
-        return action, None
+        return action, rnn_state
 
     def get_logprob_entropy(self, state, action, state_cnn=None, state_rnn=None):
-        result = self.forward(state, state_cnn, state_rnn)
+        result, _ = self.forward(state, state_cnn, state_rnn)
         a_prob = []
         dist_prob = []
         dist_entropy = []
