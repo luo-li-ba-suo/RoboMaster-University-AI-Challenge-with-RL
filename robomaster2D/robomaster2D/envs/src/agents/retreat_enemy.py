@@ -13,7 +13,11 @@ class My_Agent(Base_Agent):
         self.frame = 0
         self.path = [[] for _ in range(self.num_robots)]
         self.last_positions = [None for _ in range(self.num_robots)]
+        self.last_angles = [None for _ in range(self.num_robots)]
         self.path_cache_len = 10
+
+        self.need_new_goals = True
+        self.last_goals = None
 
         self.enable_blocks = options.enable_blocks
 
@@ -22,6 +26,8 @@ class My_Agent(Base_Agent):
     def reset(self):
         self.path = [[] for _ in range(self.num_robots)]
         self.last_positions = [None for _ in range(self.num_robots)]
+        self.last_angles = [None for _ in range(self.num_robots)]
+        self.need_new_goals = True
 
     def decode_actions(self, game_state, actions=None):  # 根据动作编码，解码产生动作
         self.orders.reset()
@@ -30,42 +36,22 @@ class My_Agent(Base_Agent):
             f"{self.robot_red_num} red and {self.robot_blue_num} blue not implemented"
 
         '''判断撤退位置'''
-        enemy_coordinates = np.array([game_state.robots[enemy].center for enemy in self.enemy_ids])
-        our_coordinates = np.array([game_state.robots[i].center for i in self.robot_ids])
-        if (enemy_coordinates[:, 0] < 404).all():
-            candidates = [1, 3]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        elif (enemy_coordinates[:, 0] >= 404).all():
-            candidates = [0, 2]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        elif (enemy_coordinates[:, 1] < 224).all():
-            candidates = [3, 5]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        elif (enemy_coordinates[:, 1] >= 224).all():
-            candidates = [0, 4]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        elif ((enemy_coordinates[:, 1]) >= 224 & (enemy_coordinates[:, 0] >= 404)).any():
-            candidates = [1, 2]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        else:
-            candidates = [0, 3]
-            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
-                                                             our_coordinates)
-        goals = [self.candidate_coordinate[candidates[goal_0]], self.candidate_coordinate[candidates[goal_1]]]
-
+        if self.need_new_goals:
+            # self.need_new_goals = False
+            self.last_goals = self.get_new_goals(game_state)
+        goals = self.last_goals
         '''用Astar算法计算路径前进方向'''
         game_state.map.init_Astar_obstacle_set()
         game_state.map.update_Astar_obstacle_set_robots(game_state.robots)
         for i, robot_id in enumerate(self.robot_ids):
-            if tuple(game_state.robots[robot_id].center) == self.last_positions[i]:
-                self.orders.set[i].x = np.random.randint(low=-1, high=2)
-                self.orders.set[i].y = np.random.randint(low=-1, high=2)
-                self.orders.set[i].rotate = np.random.randint(low=-1, high=2)
+            if game_state.robots[robot_id].hp <= 0:
+                continue
+            if (tuple(game_state.robots[robot_id].center) == self.last_positions[i]
+                and game_state.robots[robot_id].angle == self.last_angles[i]):
+                if not self.if_arrive(game_state.robots[robot_id].center, goals[i]):
+                    self.orders.set[i].x = np.random.randint(low=-1, high=2)
+                    self.orders.set[i].y = np.random.randint(low=-1, high=2)
+                    self.orders.set[i].rotate = np.random.randint(low=-1, high=2)
             else:
                 start = (game_state.robots[robot_id].center * game_state.map.Astar_map_x_size / 808).astype(np.int32)
                 goal = (goals[i] * game_state.map.Astar_map_x_size / 808).astype(np.int32)
@@ -88,12 +74,18 @@ class My_Agent(Base_Agent):
             self.orders.set[i].shoot_target_enemy = i
             self.orders.set[i].shoot = 1 if game_state.robots[robot_id].aimed_enemy is not None else 0
             self.last_positions[i] = tuple(game_state.robots[robot_id].center)
+            self.last_angles[i] = game_state.robots[robot_id].angle
         return self.orders
 
-    def if_safe(self, point):
+    def if_safe(self, point, safe_dis=40):
         for safe_point in self.candidate_coordinate[:4]:
-            if np.linalg.norm(point-safe_point) < 10:
+            if np.linalg.norm(point-safe_point) < safe_dis:
                 return True
+        return False
+
+    def if_arrive(self, point, goal):
+        if np.linalg.norm(np.array(point)-goal) < 10:
+            return True
         return False
 
     def assign_retreat_coordinates(self, game_state, retreat_points, robot_centers):
@@ -120,3 +112,33 @@ class My_Agent(Base_Agent):
                 return 1, 0
             else:
                 return 0, 1
+
+    def get_new_goals(self, game_state):
+        """判断撤退位置"""
+        enemy_coordinates = np.array([game_state.robots[enemy].center for enemy in self.enemy_ids])
+        our_coordinates = np.array([game_state.robots[i].center for i in self.robot_ids])
+        if (enemy_coordinates[:, 0] < 404).all():
+            candidates = [1, 3]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        elif (enemy_coordinates[:, 0] >= 404).all():
+            candidates = [0, 2]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        elif (enemy_coordinates[:, 1] < 224).all():
+            candidates = [3, 5]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        elif (enemy_coordinates[:, 1] >= 224).all():
+            candidates = [0, 4]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        elif ((enemy_coordinates[:, 1]) >= 224 & (enemy_coordinates[:, 0] >= 404)).any():
+            candidates = [1, 2]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        else:
+            candidates = [0, 3]
+            goal_0, goal_1 = self.assign_retreat_coordinates(game_state, self.candidate_coordinate[candidates],
+                                                             our_coordinates)
+        return [self.candidate_coordinate[candidates[goal_0]], self.candidate_coordinate[candidates[goal_1]]]

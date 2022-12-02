@@ -870,7 +870,7 @@ class MultiEnvDiscretePPO(AgentPPO):
     def evaluate(self, env_eval, if_save=True, steps=0, log_tuple=None, logger=None):
         if log_tuple is None:
             log_tuple = [0, 0, 0, 0, 0]
-        if time.time() - self.eval_time > self.eval_gap:
+        if time.time() - self.eval_time > self.eval_gap or not if_save:
             self.eval_time = time.time()
             infos_dict = {}
             episode_rewards = list()

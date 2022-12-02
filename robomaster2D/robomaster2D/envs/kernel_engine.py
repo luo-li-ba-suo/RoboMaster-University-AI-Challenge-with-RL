@@ -355,20 +355,28 @@ class Engine(object):
         assert m >= 0, 'get_valid_target_index error'
         if n < self.state.robot_r_num:
             m += self.state.robot_r_num
-        # 以下是敌人血量判断以及是否能观测到的判断，如果选中的敌人是死亡状态或不能观测，则不瞄准，自动换另一个敌人
+        # 以下是敌人血量判断以及是否能观测到的判断
+        # 优先级：能观测到的敌人>不能观测的敌人>阵亡的敌人
+        candidate = None
         if self.state.robots[m].hp == 0 or not self.can_target_enemy_be_seen(n, m):
             if n < self.state.robot_r_num and self.state.robot_b_num > 1:
                 if m == self.state.robot_r_num:
-                    m += 1
+                    candidate = m + 1
                 else:
-                    m -= 1
+                    candidate = m - 1
             elif n >= self.state.robot_r_num > 1:
                 if m == 0:
-                    m += 1
+                    candidate = m + 1
                 else:
-                    m -= 1
-            if self.state.robots[m].hp == 0 or not self.can_target_enemy_be_seen(n, m):
-                return None
+                    candidate = m - 1
+            if self.state.robots[m].hp == 0:
+                if self.state.robots[candidate].hp > 0:
+                    return candidate
+                else:
+                    return None
+            elif not self.can_target_enemy_be_seen(n, m):
+                if self.can_target_enemy_be_seen(n, candidate) and self.state.robots[candidate].hp > 0:
+                    return candidate
         return m
 
     def auto_aim(self, n, m):

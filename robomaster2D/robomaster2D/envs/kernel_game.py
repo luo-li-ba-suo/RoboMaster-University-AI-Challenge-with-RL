@@ -317,7 +317,8 @@ class Simulator(object):
             self.agents = self.agents_allocator.get_eval_agents()
         else:
             self.agents = self.agents_allocator.get_agents()
-
+        for agent in self.agents:
+            agent.reset()
         self.step_num = 0
         if self.parameters.random_start_pos:
             self.parameters.random_set_start_pos(self.map.goal_positions)

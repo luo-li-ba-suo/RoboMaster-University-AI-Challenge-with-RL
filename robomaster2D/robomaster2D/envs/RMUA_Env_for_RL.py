@@ -441,6 +441,7 @@ if __name__ == '__main__':
     env.simulator.state.pause = True
     env.reset()
     env.render()
+    env.display_characters("正在测试...")
     for e in range(args.episodes):
         _, _, done, _ = env.step([])
         if done:

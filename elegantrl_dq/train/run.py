@@ -339,7 +339,7 @@ def train_and_evaluate(args):
     '''testing'''
     if not if_train:
         while True:
-            agent.evaluate(env_eval, gamma, if_save=False)
+            agent.evaluate(env_eval, if_save=False)
     '''start training'''
     if_train_actor = False if train_actor_step > 0 else True
     start_training = time.time()
