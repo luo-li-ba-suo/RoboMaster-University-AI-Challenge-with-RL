@@ -63,6 +63,10 @@ class Parameters:
     show_robot_data = True
     show_figure = True
 
+    # priority init
+    random_start_prob = 0.5
+    priority_init_capacity = 1000
+
     # 有关测试：
     render = False
     training_mode = False
@@ -71,8 +75,8 @@ class Parameters:
 
     # 有關訓練
     red_agents_path = ['src.agents.rl_trainer']
-    blue_agents_path = ['src.agents.nn_enemy']
-    eval_blue_agents_path = ['src.agents.handcrafted_enemy']
+    blue_agents_path = ['src.agents.handcrafted_enemy', 'src.agents.retreat_enemy']
+    eval_blue_agents_path = ['src.agents.handcrafted_enemy', 'src.agents.retreat_enemy']
 
     # 有关地图信息：
     enable_blocks = True

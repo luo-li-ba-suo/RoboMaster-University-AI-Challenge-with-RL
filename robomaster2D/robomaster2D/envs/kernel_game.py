@@ -16,6 +16,7 @@ from itertools import combinations
 import time
 import copy
 
+
 class Alarm20hz(object):
     def __init__(self, frame_num_one_second):
         # 由于装甲板检测受击的频率为20hz
@@ -39,6 +40,24 @@ class Alarm20hz(object):
         else:
             self.go_off_flag = False
             return False
+
+
+class PriorityPosInit:
+    def __init__(self, capacity):
+        self.init_pos_queue = []
+        self.capacity = capacity
+
+    def push(self, pos):
+        self.init_pos_queue.append(pos)
+        if len(self.init_pos_queue) > self.capacity:
+            del self.init_pos_queue[0]
+
+    def pull(self):
+        if not self.init_pos_queue:
+            return None, None, None
+        pos = self.init_pos_queue[0]
+        del self.init_pos_queue[0]
+        return pos
 
 
 class WinRateManager(object):
@@ -127,7 +146,12 @@ class State(object):  # 总状态
 
         self.r_win_record = WinRateManager()
 
-    def reset(self, time, start_pos, start_angle, start_bullet, start_hp):
+        self.priority_init = PriorityPosInit(options.priority_init_capacity)
+        self.if_priority_init = 0
+
+    def reset(self, time, start_pos, start_angle, start_bullet, start_hp, if_priority_init):
+        self.if_priority_init = if_priority_init
+
         self.time = time  # 比赛剩余时间
         self.frame = 0
         self.step = 0
@@ -225,6 +249,7 @@ class Parameters(object):  # 参数集合
         # self.start_pos = [[758, 398], [758, 50], [50, 50], [50, 398]]
         self.start_pos = options.start_pos
         self.random_start_pos = options.random_start_pos
+        self.random_start_prob = options.random_start_prob
         self.start_angle = options.start_angle
         self.start_bullet = options.start_bullet
         self.start_hp = options.start_hp
@@ -237,6 +262,10 @@ class Parameters(object):  # 参数集合
         self.collision_bounce = options.collision_bounce
 
         self.enable_blocks = options.enable_blocks
+
+    def set_start_pos(self, pos, angle):
+        self.start_pos = pos
+        self.start_angle = angle
 
     def random_set_start_pos(self, positions):
         self.start_pos = []
@@ -294,10 +323,11 @@ class Simulator(object):
         self.orders = Orders_set((options.robot_r_num + options.robot_b_num))
         self.combination_robot_id = list(combinations(range(self.state.robot_num), 2))
         self.agents_allocator = AgentsAllocator(options)
-        self.agents = self.agents_allocator.get_agents()
+        self.agents, _ = self.agents_allocator.get_agents()
+        self.last_agents = None
         self.render_inited = False
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
-                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
+                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp, 0)
         self.render_frame = 0  # 渲染时清零
 
         # 手动调试内容：
@@ -316,14 +346,28 @@ class Simulator(object):
         if evaluation:
             self.agents = self.agents_allocator.get_eval_agents()
         else:
-            self.agents = self.agents_allocator.get_agents()
+            self.agents, self.last_agents = self.agents_allocator.get_agents()
         for agent in self.agents:
             agent.reset()
         self.step_num = 0
+        if_priority_init = 0
         if self.parameters.random_start_pos:
-            self.parameters.random_set_start_pos(self.map.goal_positions)
+            if np.random.random() < self.parameters.random_start_prob or evaluation:
+                self.parameters.random_set_start_pos(self.map.goal_positions)
+            else:
+                pos, angle, previous_agents = self.state.priority_init.pull()
+                if pos:
+                    if_priority_init = 1
+                    self.parameters.set_start_pos(pos, angle)
+                    self.agents = self.agents_allocator.get_previous_agents(previous_agents)
+                    for agent in self.agents:
+                        agent.reset()
+                else:
+                    self.parameters.random_set_start_pos(self.map.goal_positions)
+
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
-                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
+                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp,
+                         if_priority_init)
         self.orders.reset()
         # 清空上一次eposode记录
         for robot in self.state.robots:
@@ -397,16 +441,19 @@ class Simulator(object):
                 self.state.r_win_record.win()
                 info['win'] = 1
                 info['fail'] = 0
-            elif red_win == -1:
-                info['win'] = 0
-                info['fail'] = 1
-                self.state.r_win_record.fail()
-            elif red_win == 0:
-                info['win'] = 0
-                info['fail'] = 0
-                self.state.r_win_record.draw()
+            else:
+                self.state.priority_init.push([self.parameters.start_pos, self.parameters.start_angle, self.last_agents])
+                if red_win == -1:
+                    info['win'] = 0
+                    info['fail'] = 1
+                    self.state.r_win_record.fail()
+                elif red_win == 0:
+                    info['win'] = 0
+                    info['fail'] = 0
+                    self.state.r_win_record.draw()
             info['win_rate'] = self.state.r_win_record.get_win_rate()
             info['draw_rate'] = self.state.r_win_record.get_draw_rate()
+            info['priority_init_rate_'] = self.state.if_priority_init
         info['pseudo_done'] = pseudo_done
         return done, info
 

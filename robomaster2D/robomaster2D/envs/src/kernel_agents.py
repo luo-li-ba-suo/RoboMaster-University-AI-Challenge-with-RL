@@ -33,15 +33,15 @@ class AgentsAllocator:
 
     def get_agents(self):
         agents = []
-        if len(self.red_team) == 1:
-            agents.append(self.red_team[0])
-        else:
-            agents.append(self.red_team[np.random.randint(0, len(self.red_team))])
-        if len(self.blue_team) == 1:
-            agents.append(self.blue_team[0])
-        else:
-            agents.append(self.blue_team[np.random.randint(0, len(self.blue_team))])
-        return agents
+        agent_id_red = 0
+        if len(self.red_team) > 0:
+            agent_id_red = np.random.randint(0, len(self.red_team))
+        agents.append(self.red_team[agent_id_red])
+        agent_id_blue = 0
+        if len(self.blue_team) > 0:
+            agent_id_blue = np.random.randint(0, len(self.blue_team))
+        agents.append(self.blue_team[agent_id_blue])
+        return agents, [agent_id_red, agent_id_blue]
 
     def get_eval_agents(self):
         agents = []
@@ -53,4 +53,8 @@ class AgentsAllocator:
             agents.append(self.eval_blue_team[0])
         else:
             agents.append(self.eval_blue_team[np.random.randint(0, len(self.eval_blue_team))])
+        return agents
+
+    def get_previous_agents(self, previous_agents):
+        agents = [self.red_team[previous_agents[0]], self.blue_team[previous_agents[1]]]
         return agents

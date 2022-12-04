@@ -95,7 +95,7 @@ class Configs:
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'GRU Policy' + str(self.random_seed)
+        self.wandb_name = 'PriorityInit' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 

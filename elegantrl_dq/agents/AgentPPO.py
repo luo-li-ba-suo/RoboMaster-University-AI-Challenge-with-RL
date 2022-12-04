@@ -90,10 +90,6 @@ class AgentPPO:
                 state_2D = buf_state_2D[indices]
             else:
                 state_2D = None
-            if self.if_use_rnn:
-                state_rnn = [b[indices] for b in buf_state_rnn]
-            else:
-                state_rnn = None
 
             action = buf_action[indices]
             r_sum = buf_r_sum[indices]
@@ -102,8 +98,7 @@ class AgentPPO:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-5)
 
             if update_policy_net > 0 or self.if_share_network:
-                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_cnn=state_2D,
-                                                                        state_rnn=state_rnn)  # it is obj_actor
+                new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_cnn=state_2D)  # it is obj_actor
                 ratio = (new_logprob - logprob.detach()).exp()
                 surrogate1 = advantage * ratio
                 surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
@@ -117,8 +112,7 @@ class AgentPPO:
             else:
                 state_critic = state
             value = self.cri(state_critic,
-                             state_cnn=state_2D if self.if_use_cnn else None,
-                             rnn_state=state_rnn if self.if_use_rnn else None).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
+                             state_cnn=state_2D if self.if_use_cnn else None).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
             obj_critic = self.criterion(value, r_sum) / (r_sum.std() + 1e-6)
             if self.if_share_network:
                 self.optim_update(self.act_optimizer, obj_actor + obj_critic)
@@ -536,6 +530,7 @@ class MultiEnvDiscretePPO(AgentPPO):
         logging_list = list()
         episode_rewards = list()
         win_rate = list()
+        priority_init_rate = list()
         episode_reward = [{trainer_id: 0 for trainer_id in trainers} for trainers in self.total_trainers_envs]
         env.display_characters("正在采样...")
         # states.size: [env_num, trainer_num, state_size]
@@ -718,6 +713,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         extra_states = []
                     if n in self.info_dict[env_id]['robots_being_killed_'] or done[env_id]:
                         if done[env_id]:
+                            priority_init_rate.append(self.info_dict[env_id]['priority_init_rate_'])
                             win_rate.append(self.info_dict[env_id]['win'])
                         mask = 0.0
                         # 有一种特殊情况：
@@ -865,11 +861,12 @@ class MultiEnvDiscretePPO(AgentPPO):
         # 由代码逻辑可知episode_rewards中不会包含不完整轨迹的回报
         logging_list.append(np.mean(episode_rewards))
         logging_list.append(np.mean(win_rate))
+        logging_list.append(np.mean(priority_init_rate))
         return logging_list, real_step
 
     def evaluate(self, env_eval, if_save=True, steps=0, log_tuple=None, logger=None):
         if log_tuple is None:
-            log_tuple = [0, 0, 0, 0, 0]
+            log_tuple = [0, 0, 0, 0, 0, 0]
         if time.time() - self.eval_time > self.eval_gap or not if_save:
             self.eval_time = time.time()
             infos_dict = {}
@@ -1080,6 +1077,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                                'objA': log_tuple[1],
                                'log-prob': log_tuple[2],
                                'win_rate_training': log_tuple[4],
+                               'priority_init_rate': log_tuple[5],
                                'actor-learning-rate': self.act_optimizer.param_groups[0]['lr']}
                 if not self.if_share_network:
                     train_infos['critic-learning-rate'] = self.cri_optimizer.param_groups[0]['lr']
@@ -1103,6 +1101,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                   f"\n| new red_win_rate:{infos_dict['red_win']:.2f}".ljust(30, " ") + "|",
                   f"\n| new red_fail_rate:{infos_dict['red_fail']:.2f}".ljust(30, " ") + "|",
                   f"\n| win_rate_training: {log_tuple[4]:8.4f}".ljust(30, " ") + "|",
+                  f"\n| priority_init_rate: {log_tuple[5]:8.4f}".ljust(30, " ") + "|",
                   "\n---------------------------------".ljust(30, "-"))
         else:
             if logger:
@@ -1269,8 +1268,8 @@ class MultiEnvDiscretePPO(AgentPPO):
             r_sums = torch.cat(r_sums)
             logprobs = torch.cat(logprobs)
             advantages = torch.cat(advantages)
-            done_masks = torch.cat(done_masks)
             if self.if_use_rnn:
+                done_masks = torch.cat(done_masks)
                 # 重构成[new_batch_size, sequence_length, size]
                 batch_size = len(states) - len(states) % self.sequence_length
                 states = states[:batch_size].view(-1, self.sequence_length, states.shape[1])
