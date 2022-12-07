@@ -919,7 +919,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                 if self.stochastic_policy_or_deterministic:
                     trainer_actions, _, rnn_state = self.select_stochastic_action(states_trainers)
                 else:
-                    trainer_actions, rnn_state = self.select_deterministic_action(states_trainers)
+                    trainer_actions, rnn_state = self.select_deterministic_action(states_trainers, enemy=False)
                 # 更新rnn state
                 if self.if_use_rnn:
                     trainer_i = 0
@@ -1165,7 +1165,7 @@ class MultiEnvDiscretePPO(AgentPPO):
             rnn_state = [s.detach().cpu().numpy() for s in rnn_state]
         return actions, noises, rnn_state
 
-    def select_deterministic_action(self, state):
+    def select_deterministic_action(self, state, enemy=True):
         states_1D = state['vector']
         states_2D = None
         states_rnn = None
@@ -1178,8 +1178,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                 states_2D = torch.as_tensor(states_2D, dtype=torch.float32, device=self.device)
         if self.if_use_rnn:
             states_rnn = state['rnn']
-            states_rnn = (torch.as_tensor(state_rnn, dtype=torch.float32, device=self.device)
-                          for state_rnn in states_rnn)
+            states_rnn = [torch.as_tensor(state_rnn, dtype=torch.float32, device=self.device)
+                          for state_rnn in states_rnn]
         if states_1D.dim() == 2:
             action_dim = [-1]
         elif states_1D.dim() == 3:
@@ -1187,7 +1187,10 @@ class MultiEnvDiscretePPO(AgentPPO):
             action_dim = [states_1D.shape[0], -1]
         else:
             raise NotImplementedError
-        actions, rnn_state = self.enemy_act.get_deterministic_action(states_1D, states_2D, states_rnn)
+        if enemy:
+            actions, rnn_state = self.enemy_act.get_deterministic_action(states_1D, states_2D, states_rnn)
+        else:
+            actions, rnn_state = self.act.get_deterministic_action(states_1D, states_2D, states_rnn)
         actions = torch.cat([action.unsqueeze(0) for action in actions]).T.view(*action_dim).detach().cpu().numpy()
         if self.if_use_rnn:
             rnn_state = [s.detach().cpu().numpy() for s in rnn_state]
