@@ -701,6 +701,9 @@ class MultiEnvDiscretePPO(AgentPPO):
                             step += 1
                 if pseudo_step_cur_env:
                     continue
+                if done[env_id]:
+                    priority_init_rate.append(self.info_dict[env_id]['priority_init_rate_'])
+                    win_rate.append(self.info_dict[env_id]['win'])
                 for i, n in enumerate(last_trainers_envs[env_id]):
                     episode_reward[env_id][n] += np.mean(rewards[env_id][i])
                     action_prob = [probs[trainer_i] for probs in actions_prob]
@@ -712,9 +715,6 @@ class MultiEnvDiscretePPO(AgentPPO):
                     else:
                         extra_states = []
                     if n in self.info_dict[env_id]['robots_being_killed_'] or done[env_id]:
-                        if done[env_id]:
-                            priority_init_rate.append(self.info_dict[env_id]['priority_init_rate_'])
-                            win_rate.append(self.info_dict[env_id]['win'])
                         mask = 0.0
                         # 有一种特殊情况：
                         # 一个机器人死亡，另一个机器人坚持到了伪终止

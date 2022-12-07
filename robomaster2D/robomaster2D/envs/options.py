@@ -64,7 +64,7 @@ class Parameters:
     show_figure = True
 
     # priority init
-    random_start_prob = 0.5
+    random_start_prob = 1
     priority_init_capacity = 1000
 
     # 有关测试：
