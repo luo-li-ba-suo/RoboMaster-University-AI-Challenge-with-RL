@@ -88,6 +88,7 @@ class Configs:
         '''Arguments for RNN'''
         self.if_use_rnn = True
         self.LSTM_or_GRU = False
+        self.use_gate_residual_rnn = True
         self.rnn_hidden_size = 256
         self.sequence_length = 2 ** 3
 
