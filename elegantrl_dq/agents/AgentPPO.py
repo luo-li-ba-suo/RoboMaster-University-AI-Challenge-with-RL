@@ -1337,7 +1337,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         surrogate1 = advantage * ratio
                         surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                         obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
-                        obj_actor = obj_surrogate + obj_entropy * self.lambda_entropy
+                        obj_actor = obj_surrogate - obj_entropy * self.lambda_entropy
                         if if_train_actor and not self.if_share_network:
                             self.optim_update(self.act_optimizer, obj_actor)
                         update_policy_net -= 1
