@@ -84,7 +84,7 @@ class Parameters:
     # 有关Astar：
     Astar_map_x_size = 81
     Astar_map_y_size = 45
-    Astar_obstacle_expand = 2
+    Astar_obstacle_expand = 3
 
     # 有关雷达
     use_lidar = True

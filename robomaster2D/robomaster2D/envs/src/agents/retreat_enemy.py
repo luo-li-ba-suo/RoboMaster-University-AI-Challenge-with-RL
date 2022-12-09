@@ -46,8 +46,7 @@ class My_Agent(Base_Agent):
         for i, robot_id in enumerate(self.robot_ids):
             if game_state.robots[robot_id].hp <= 0:
                 continue
-            if (tuple(game_state.robots[robot_id].center) == self.last_positions[i]
-                and game_state.robots[robot_id].angle == self.last_angles[i]):
+            if tuple(game_state.robots[robot_id].center) == self.last_positions[i]:
                 if not self.if_arrive(game_state.robots[robot_id].center, goals[i]):
                     self.orders.set[i].x = np.random.randint(low=-1, high=2)
                     self.orders.set[i].y = np.random.randint(low=-1, high=2)
