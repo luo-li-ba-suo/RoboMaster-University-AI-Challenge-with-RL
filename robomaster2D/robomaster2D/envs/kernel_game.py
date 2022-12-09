@@ -59,6 +59,9 @@ class PriorityPosInit:
         del self.init_pos_queue[0]
         return pos
 
+    def empty(self):
+        return len(self.init_pos_queue) == 0
+
 
 class WinRateManager(object):
     def __init__(self):
@@ -352,18 +355,18 @@ class Simulator(object):
         self.step_num = 0
         if_priority_init = 0
         if self.parameters.random_start_pos:
-            if np.random.random() < self.parameters.random_start_prob or evaluation:
+            if not self.parameters.random_start_prob < 1 or evaluation:
                 self.parameters.random_set_start_pos(self.map.goal_positions)
             else:
-                pos, angle, previous_agents = self.state.priority_init.pull()
-                if pos:
+                if np.random.random() < self.parameters.random_start_prob or self.state.priority_init.empty():
+                    self.parameters.random_set_start_pos(self.map.goal_positions)
+                else:
+                    pos, angle, previous_agents = self.state.priority_init.pull()
                     if_priority_init = 1
                     self.parameters.set_start_pos(pos, angle)
                     self.agents = self.agents_allocator.get_previous_agents(previous_agents)
                     for agent in self.agents:
                         agent.reset()
-                else:
-                    self.parameters.random_set_start_pos(self.map.goal_positions)
 
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
                          self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp,
