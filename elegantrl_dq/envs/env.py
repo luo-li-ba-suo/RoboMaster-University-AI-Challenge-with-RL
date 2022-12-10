@@ -156,7 +156,7 @@ class VecEnvironments:
                         states[env_id], new_info = self.agent_conns[env_id].recv()
                         infos[env_id].update(new_info)
                     else:
-                        if self.reset_count[env_id] != self.pseudo_step or not pseudo_step_flag:
+                        if self.reset_count[env_id] != self.pseudo_step or not pseudo_step_flag or self.pseudo_step == 0:
                             # 当没有使用动作预测时触发伪终止以及使用动作预测时没有进入伪步时记录
                             # 伪终止状态
                             infos[env_id]['pseudo_terminal_state_'] = np.array(states[env_id], dtype=object)
@@ -180,7 +180,7 @@ class VecEnvironments:
                     states[0], new_info = self.envs[0].reset(evaluation=evaluation)
                     infos[0].update(new_info)
                 elif infos[0]['pseudo_done']:
-                    if self.reset_count[0] != self.pseudo_step or not pseudo_step_flag:
+                    if self.reset_count[0] != self.pseudo_step or not pseudo_step_flag or self.pseudo_step == 0:
                         # 当没有使用动作预测时触发伪终止以及使用动作预测时没有进入伪步时记录
                         # 伪终止状态
                         infos[0]['pseudo_terminal_state_'] = np.array(states[0], dtype=object)
