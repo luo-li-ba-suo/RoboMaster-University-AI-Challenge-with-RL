@@ -133,6 +133,8 @@ class AgentPPO:
         if self.adaptive_entropy:
             self.last_lambda_entropy = self.lambda_entropy * max(min(logprob.detach() + 3, 1), 0)
             return self.last_lambda_entropy
+        else:
+            return self.lambda_entropy
 
     def prepare_buffer(self, buffer):
         buf_len = buffer.now_len
