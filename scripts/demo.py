@@ -21,6 +21,9 @@ def demo_discrete_action():
     args.config.repeat_times_policy = 4
     args.config.target_step = 2 ** 16
     args.config.learning_rate = 2e-4
+    args.config.adaptive_entropy = False
+    args.config.lambda_entropy = 0.0
+
     args.config.if_per_or_gae = True
     args.config.if_allow_break = False
     args.config.break_step = 100000000

@@ -12,6 +12,8 @@ class AgentPPO:
         super().__init__()
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
         self.lambda_entropy = 0.02  # could be 0.02
+        self.adaptive_entropy = False
+        self.last_lambda_entropy = 0
         self.lambda_gae_adv = 0.98  # could be 0.95~0.99, GAE (Generalized Advantage Estimation. ICLR.2016.)
         self.gamma = 0.998
         self.get_reward_sum = None
@@ -103,7 +105,7 @@ class AgentPPO:
                 surrogate1 = advantage * ratio
                 surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                 obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
-                obj_actor = obj_surrogate + obj_entropy * self.lambda_entropy
+                obj_actor = obj_surrogate - obj_entropy * self.adaptive_lambda_entropy(logprob.mean())
                 if if_train_actor and not self.if_share_network:
                     self.optim_update(self.act_optimizer, obj_actor)
                 update_policy_net -= 1
@@ -126,6 +128,11 @@ class AgentPPO:
         # if not self.if_share_network:
         #     self.adjust_learning_rate(self.cri_optimizer)
         return obj_critic.item(), obj_actor.item(), logprob.mean().item()  # logging_tuple
+
+    def adaptive_lambda_entropy(self, logprob):
+        if self.adaptive_entropy:
+            self.last_lambda_entropy = self.lambda_entropy * max(min(logprob.detach() + 3, 1), 0)
+            return self.last_lambda_entropy
 
     def prepare_buffer(self, buffer):
         buf_len = buffer.now_len
@@ -1078,7 +1085,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                                'log-prob': log_tuple[2],
                                'win_rate_training': log_tuple[4],
                                'priority_init_rate': log_tuple[5],
-                               'actor-learning-rate': self.act_optimizer.param_groups[0]['lr']}
+                               'actor-learning-rate': self.act_optimizer.param_groups[0]['lr'],
+                               'adaptive_lambda_entropy': self.last_lambda_entropy}
                 if not self.if_share_network:
                     train_infos['critic-learning-rate'] = self.cri_optimizer.param_groups[0]['lr']
                 train_infos.update(infos_dict)
@@ -1338,7 +1346,7 @@ class MultiEnvDiscretePPO(AgentPPO):
                         surrogate1 = advantage * ratio
                         surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                         obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
-                        obj_actor = obj_surrogate - obj_entropy * self.lambda_entropy
+                        obj_actor = obj_surrogate - obj_entropy * self.adaptive_lambda_entropy(logprob.mean())
                         if if_train_actor and not self.if_share_network:
                             self.optim_update(self.act_optimizer, obj_actor)
                         update_policy_net -= 1

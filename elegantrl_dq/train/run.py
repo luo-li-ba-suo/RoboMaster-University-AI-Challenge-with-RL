@@ -48,7 +48,7 @@ class Configs:
             self.if_per_or_gae = False  # PER for off-policy sparse reward: Prioritized Experience Replay.
 
         '''Arguments for evaluate'''
-        self.stochastic_policy_or_deterministic = True
+        self.stochastic_policy_or_deterministic = False
         self.eval_gap = 60 * 10  # evaluate the agent per eval_gap seconds
         self.eval_times = 2 ** 2  # evaluation times
         self.random_seed = 0  # initialize random seed in self.init_before_training()
@@ -61,7 +61,8 @@ class Configs:
 
         '''Arguments for algorithm'''
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0.02  # could be 0.02
+        self.lambda_entropy = 0.0  # could be 0.02
+        self.adaptive_entropy = True
         self.lambda_gae_adv = 0.98
 
         '''Arguments for self play '''
@@ -239,6 +240,7 @@ def train_and_evaluate(args):
     if_per_or_gae = args.config.if_per_or_gae
     enemy_act_update_interval = args.config.enemy_act_update_interval
     enemy_stochastic_policy = args.config.enemy_stochastic_policy
+    adaptive_entropy = args.config.adaptive_entropy
 
     # 有关上帝视角critic：
     action_prediction_dim = args.env.action_dim.copy()
@@ -289,6 +291,8 @@ def train_and_evaluate(args):
     action_dim = env.action_dim
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
+    '''train args'''
+    train_args = {'adaptive_entropy': adaptive_entropy}
     '''selfPlay args'''
     self_play_args = {'self_play': self_play,
                       'if_build_enemy_act': if_build_enemy_act,
@@ -316,7 +320,7 @@ def train_and_evaluate(args):
                                      if_use_conv1D=if_use_conv1D,
                                      env=env, if_use_cnn=if_use_cnn,
                                      if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
-                                     observation_matrix_shape=observation_matrix_shape,
+                                     observation_matrix_shape=observation_matrix_shape, **train_args,
                                      **self_play_args, **extra_state_kwargs, **rnn_kwargs, **evaluation_kwargs)
 
     buffer_len = target_step + max_step
