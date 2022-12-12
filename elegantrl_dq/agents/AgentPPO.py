@@ -1282,7 +1282,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                 advantages = advantages[:batch_size].view(-1, self.sequence_length)
                 states_2D = states_2D[:batch_size].view(-1, self.sequence_length, *states_2D.shape[1:])
                 states_rnn = [state_rnn[:batch_size].view(-1, self.sequence_length, state_rnn[:batch_size].shape[1]) for state_rnn in states_rnn]
-                extra_states = extra_states[:batch_size].view(-1, self.sequence_length, extra_states.shape[1])
+                if self.use_extra_state_for_critic:
+                    extra_states = extra_states[:batch_size].view(-1, self.sequence_length, extra_states.shape[1])
                 done_masks = done_masks[:batch_size].view(-1, self.sequence_length)
         return states, actions, r_sums, logprobs, advantages, states_2D, states_rnn, extra_states, done_masks
 
