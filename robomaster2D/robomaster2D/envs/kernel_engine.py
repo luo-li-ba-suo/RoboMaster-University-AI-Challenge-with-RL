@@ -294,14 +294,17 @@ class Engine(object):
                 if self.acts[n].rotate_speed:
                     p = self.state.robots[n].angle
                     self.state.robots[n].angle += self.acts[n].rotate_speed
+                    self.state.robots[n].rotate_speed = self.acts[n].rotate_speed
                     if self.state.robots[n].angle > 180: self.state.robots[n].angle -= 360
                     if self.state.robots[n].angle < -180: self.state.robots[n].angle += 360
                     if self.impact_effect:
                         if self.check_interface(n):
                             if self.collision_bounce:
                                 self.acts[n].rotate_speed *= -self.state.robots[n].move_discount
+                                self.state.robots[n].rotate_speed = self.acts[n].rotate_speed
                             else:
                                 self.acts[n].rotate_speed = 0
+                                self.state.robots[n].rotate_speed = 0
                             self.state.robots[n].angle = p
 
                 # move x and y
@@ -309,9 +312,8 @@ class Engine(object):
                     angle = np.deg2rad(self.state.robots[n].angle)
                     # x
                     p = self.state.robots[n].x
+                    self.state.robots[n].vx = self.acts[n].x_speed * np.cos(angle) - self.acts[n].y_speed * np.sin(angle)
                     if not self.acts[n].dir_relate_to_map:
-                        self.state.robots[n].vx = self.acts[n].x_speed * np.cos(angle) - self.acts[n].y_speed * np.sin(
-                            angle)
                         self.state.robots[n].x += self.state.robots[n].vx
                     else:
                         self.state.robots[n].x += self.acts[n].x_speed
@@ -321,13 +323,13 @@ class Engine(object):
                             if self.collision_bounce:
                                 self.acts[n].x_speed *= -self.state.robots[n].move_discount
                             else:
+                                self.state.robots[n].vx = 0
                                 self.acts[n].x_speed = 0
                             self.state.robots[n].x = p
                     # y
                     p = self.state.robots[n].y
+                    self.state.robots[n].vy = self.acts[n].x_speed * np.sin(angle) + self.acts[n].y_speed * np.cos(angle)
                     if not self.acts[n].dir_relate_to_map:
-                        self.state.robots[n].vy = self.acts[n].x_speed * np.sin(angle) + self.acts[n].y_speed * np.cos(
-                            angle)
                         self.state.robots[n].y += self.state.robots[n].vy
                     else:
                         self.state.robots[n].y += self.acts[n].y_speed
@@ -337,6 +339,7 @@ class Engine(object):
                             if self.collision_bounce:
                                 self.acts[n].y_speed *= -self.state.robots[n].move_discount
                             else:
+                                self.state.robots[n].vy = 0
                                 self.acts[n].y_speed = 0
                             self.state.robots[n].y = p
                     self.state.robots[n].center = np.array([self.state.robots[n].x, self.state.robots[n].y])
@@ -345,6 +348,10 @@ class Engine(object):
                     self.state.robots[n].vy = 0
                 if not self.impact_effect:
                     self.check_in_map(n)  # 用于取消了所有撞击效果时防止超出地图10单位
+                if self.collision_bounce:
+                    angle = np.deg2rad(self.state.robots[n].angle)
+                    self.state.robots[n].vx = self.acts[n].x_speed * np.cos(angle) - self.acts[n].y_speed * np.sin(angle)
+                    self.state.robots[n].vy = self.acts[n].x_speed * np.sin(angle) + self.acts[n].y_speed * np.cos(angle)
 
     def can_target_enemy_be_seen(self, n, m):
         if m in np.where((self.state.camera_vision[n] == 1))[0]:

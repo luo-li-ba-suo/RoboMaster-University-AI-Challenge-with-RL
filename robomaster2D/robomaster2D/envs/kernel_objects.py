@@ -170,6 +170,7 @@ class Robot(object):
         self.vy = vy
         self.center = np.array([x, y])
         self.angle = angle  # 底盘绝对角度 -180~180  原点与上相同，极轴落在x轴正方向，向y轴正方向旋转的方向为正
+        self.rotate_speed = 0
         self.yaw = yaw  # 云台相对底盘角度 -90~90
         self.aimed_enemy = None  # 存放瞄准的敌人index
         self.heat = 0  # 枪口热度
