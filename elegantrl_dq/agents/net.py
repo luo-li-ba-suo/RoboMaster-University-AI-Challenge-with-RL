@@ -170,6 +170,7 @@ class MultiAgentActorDiscretePPO(nn.Module):
         if if_use_conv1D:
             self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
                                           nn.ReLU(), nn.Flatten())
+            nn.init.orthogonal_(self.conv_net[0].weight, np.sqrt(2))
             self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
         elif if_use_cnn:
             self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
@@ -183,11 +184,13 @@ class MultiAgentActorDiscretePPO(nn.Module):
         else:
             self.cnn_out_dim = 0
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        nn.init.orthogonal_(self.hidden_net[0].weight, np.sqrt(2))
         '''策略层'''
         input_dim = rnn_state_size if self.if_use_rnn else mid_dim
         self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
+            layer_norm(net[0], std=np.sqrt(2))
             layer_norm(net[-1], std=0.01)
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
@@ -320,6 +323,7 @@ class CriticAdv(nn.Module):
             self.cnn_out_dim = 0
         self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU(),
                                         nn.Linear(mid_dim, 1))
+        layer_norm(self.hidden_net[0], std=np.sqrt(2))
         layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
     def forward(self, state, state_cnn=None, rnn_state=None):

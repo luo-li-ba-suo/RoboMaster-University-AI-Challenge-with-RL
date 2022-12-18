@@ -89,7 +89,7 @@ class Configs:
         '''Arguments for RNN'''
         self.if_use_rnn = True
         self.LSTM_or_GRU = False
-        self.use_gate_residual_rnn = True
+        self.use_gate_residual_rnn = False
         self.rnn_hidden_size = 256
         self.sequence_length = 2 ** 3
 
@@ -97,7 +97,7 @@ class Configs:
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'PriorityInit' + str(self.random_seed)
+        self.wandb_name = 'LSTM-SERPPO_0Ent' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 

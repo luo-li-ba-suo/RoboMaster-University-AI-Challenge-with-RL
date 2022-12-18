@@ -16,7 +16,7 @@ def demo_discrete_action():
     args.config.reward_scale = 2 ** -1
     args.config.net_dim = 256
     args.config.gamma = 0.998
-    args.config.batch_size = 2 ** 12
+    args.config.batch_size = 2 ** 13
     args.config.repeat_times = 4
     args.config.repeat_times_policy = 4
     args.config.target_step = 2 ** 16
@@ -34,7 +34,8 @@ def demo_discrete_action():
 
     args.config.if_use_cnn = True
     args.config.if_use_rnn = True
-    args.config.sequence_length = 2 ** 3
+    args.config.LSTM_or_GRU = True
+    args.config.sequence_length = 8
     args.config.if_share_network = False
 
     args.config.if_print_time = True
@@ -46,13 +47,13 @@ def demo_discrete_action():
     args.config.delta_historySP = 1.0
     args.config.enemy_stochastic_policy = True
 
-    args.config.use_extra_state_for_critic = True
-    args.config.use_action_prediction = True
+    args.config.use_extra_state_for_critic = False
+    args.config.use_action_prediction = False
 
-    args.config.frame_stack_num = 4
-    args.config.history_action_stack_num = 3
-    # args.config.cwd = '2022-07-24_16-44-21'
-    # args.config.enemy_cwd = 'init_model'
+    args.config.frame_stack_num = 1
+    args.config.history_action_stack_num = 0
+    # args.config.cwd = '2022-12-12_16-11-15'
+    # args.config.enemy_cwd = 'vsAStar'
     args.agent = MultiEnvDiscretePPO()
     args.env = VecEnvironments(env_name, args.config.num_envs,
                                pseudo_step=1 if args.config.use_action_prediction else 0)
