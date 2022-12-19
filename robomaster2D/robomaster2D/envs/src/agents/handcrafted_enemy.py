@@ -96,7 +96,7 @@ class My_Agent(Base_Agent):
                     else:
                         if self.path[i]:
                             del self.path[i][-1]
-                self.orders.set[i].dir_relate_to_map = True
+                self.orders.set[i].move_along_the_axis = True
                 self.orders.set[i].auto_rotate = True
                 self.orders.set[i].shoot = 1 if game_state.robots[robot_id].aimed_enemy is not None else 0
                 self.last_positions[i] = tuple(game_state.robots[robot_id].center)

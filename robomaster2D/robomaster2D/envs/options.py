@@ -46,6 +46,9 @@ class Parameters:
     no_dying = [False, False]
     collision_reduce_hp = False
 
+    # about Action Space
+    move_along_the_axis = True
+
     # 有关物理效果
     impact_effect = True
     collision_bounce = False
@@ -68,7 +71,7 @@ class Parameters:
     priority_init_capacity = 1000
 
     # 有关测试：
-    render = False
+    render = True
     training_mode = False
     single_input = False
     time_delay_frame = 0

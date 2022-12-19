@@ -323,7 +323,8 @@ class Simulator(object):
         self.state.map = self.map
         self.module_referee = Referee(self.state, self.map, options)  # the referee
         self.module_engine = Engine(self.state, self.module_referee, options, self.map)  # the controller
-        self.orders = Orders_set((options.robot_r_num + options.robot_b_num))
+        self.orders = Orders_set(options.robot_r_num + options.robot_b_num,
+                                 move_along_the_axis=options.move_along_the_axis)
         self.combination_robot_id = list(combinations(range(self.state.robot_num), 2))
         self.agents_allocator = AgentsAllocator(options)
         self.agents, _ = self.agents_allocator.get_agents()

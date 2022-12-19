@@ -12,7 +12,7 @@ class Acts(object):  # 底层动作
         self.shoot = shoot  # 是否发射
         self.shoot_mutiple = False  # 是否连发
         self.dodge_dir = True
-        self.dir_relate_to_map = True
+        self.move_along_the_axis = True
         self.auto_rotate = True
 
 
@@ -217,7 +217,7 @@ class Engine(object):
                     self.acts[n].rotate_speed = self.state.robots[n].rotate_speed_max
                 if self.acts[n].rotate_speed < -self.state.robots[n].rotate_speed_max:
                     self.acts[n].rotate_speed = -self.state.robots[n].rotate_speed_max
-                self.acts[n].dir_relate_to_map = orders.set[n].dir_relate_to_map
+                self.acts[n].move_along_the_axis = orders.set[n].move_along_the_axis
                 self.acts[n].auto_rotate = orders.set[n].auto_rotate
             elif self.route_plan is not None:  # 如果使用路径规划
                 if not orders.set[n].stop:
@@ -243,7 +243,7 @@ class Engine(object):
                         self.acts[n].rotate_speed = self.state.robots[n].rotate_speed_max
                     if self.acts[n].rotate_speed < -self.state.robots[n].rotate_speed_max:
                         self.acts[n].rotate_speed = -self.state.robots[n].rotate_speed_max
-                    self.acts[n].dir_relate_to_map = orders.set[n].dir_relate_to_map
+                    self.acts[n].move_along_the_axis = orders.set[n].move_along_the_axis
                 else:
                     self.acts[n].x_speed = self.acts[n].y_speed = self.acts[n].rotate_speed = 0
             else:
@@ -313,7 +313,7 @@ class Engine(object):
                     # x
                     p = self.state.robots[n].x
                     self.state.robots[n].vx = self.acts[n].x_speed * np.cos(angle) - self.acts[n].y_speed * np.sin(angle)
-                    if not self.acts[n].dir_relate_to_map:
+                    if not self.acts[n].move_along_the_axis:
                         self.state.robots[n].x += self.state.robots[n].vx
                     else:
                         self.state.robots[n].x += self.acts[n].x_speed
@@ -329,7 +329,7 @@ class Engine(object):
                     # y
                     p = self.state.robots[n].y
                     self.state.robots[n].vy = self.acts[n].x_speed * np.sin(angle) + self.acts[n].y_speed * np.cos(angle)
-                    if not self.acts[n].dir_relate_to_map:
+                    if not self.acts[n].move_along_the_axis:
                         self.state.robots[n].y += self.state.robots[n].vy
                     else:
                         self.state.robots[n].y += self.acts[n].y_speed

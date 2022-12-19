@@ -97,7 +97,7 @@ class Configs:
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'LSTM-SERPPO_0Ent' + str(self.random_seed)
+        self.wandb_name = 'SERPPO_MoveRM_0Ent' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
