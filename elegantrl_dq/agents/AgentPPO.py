@@ -10,13 +10,18 @@ from elegantrl_dq.agents.model_pool import *
 class AgentPPO:
     def __init__(self):
         super().__init__()
-        self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0.02  # could be 0.02
-        self.adaptive_entropy = False
-        self.last_lambda_entropy = 0
+        self.get_reward_sum = None
+
+        '''PPO'''
         self.lambda_gae_adv = 0.98  # could be 0.95~0.99, GAE (Generalized Advantage Estimation. ICLR.2016.)
         self.gamma = 0.998
-        self.get_reward_sum = None
+        self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
+        self.dual_clip = False
+
+        '''entropy'''
+        self.lambda_entropy = 0.02  # could be 0.02
+        self.last_lambda_entropy = 0
+        self.adaptive_entropy = False
 
         self.state = None
         self.info_dict = None
@@ -103,6 +108,8 @@ class AgentPPO:
                 new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action, state_cnn=state_2D)  # it is obj_actor
                 ratio = (new_logprob - logprob.detach()).exp()
                 surrogate1 = advantage * ratio
+                if self.dual_clip:
+                    surrogate1 *= torch.sign(advantage)
                 surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                 obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
                 obj_actor = obj_surrogate - obj_entropy * self.adaptive_lambda_entropy(logprob.mean())
@@ -1346,6 +1353,8 @@ class MultiEnvDiscretePPO(AgentPPO):
                                                                                 done_mask=done_mask)  # it is obj_actor
                         ratio = (new_logprob - logprob.detach()).exp()
                         surrogate1 = advantage * ratio
+                        if self.dual_clip:
+                            surrogate1 *= torch.sign(advantage)
                         surrogate2 = advantage * ratio.clamp(1 - self.ratio_clip, 1 + self.ratio_clip)
                         obj_surrogate = -torch.min(surrogate1, surrogate2).mean()
                         obj_actor = obj_surrogate - obj_entropy * self.adaptive_lambda_entropy(logprob.mean())

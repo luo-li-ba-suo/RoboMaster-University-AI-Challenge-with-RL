@@ -63,6 +63,7 @@ class Configs:
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
         self.lambda_entropy = 0.0  # could be 0.02
         self.adaptive_entropy = True
+        self.dual_clip = False
         self.lambda_gae_adv = 0.98
 
         '''Arguments for self play '''
@@ -97,7 +98,7 @@ class Configs:
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
         self.wandb_notes = 'lidar'
-        self.wandb_name = 'SERPPO_MoveRM_0Ent' + str(self.random_seed)
+        self.wandb_name = 'HFO-SERPPO' + '_seed_' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -241,6 +242,7 @@ def train_and_evaluate(args):
     enemy_act_update_interval = args.config.enemy_act_update_interval
     enemy_stochastic_policy = args.config.enemy_stochastic_policy
     adaptive_entropy = args.config.adaptive_entropy
+    dual_clip = args.config.dual_clip
 
     # 有关上帝视角critic：
     action_prediction_dim = args.env.action_dim.copy()
@@ -292,7 +294,8 @@ def train_and_evaluate(args):
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
     '''train args'''
-    train_args = {'adaptive_entropy': adaptive_entropy}
+    train_args = {'adaptive_entropy': adaptive_entropy,
+                  'dual_clip': dual_clip}
     '''selfPlay args'''
     self_play_args = {'self_play': self_play,
                       'if_build_enemy_act': if_build_enemy_act,
