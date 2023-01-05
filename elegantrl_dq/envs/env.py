@@ -202,6 +202,17 @@ class VecEnvironments:
                             # 表示该robot处于死亡状态，无需处理
                             self.states_stack[env_id][agent] = None
                         elif dones[env_id]:
+                            if self.states_stack[env_id][agent] != None and infos[env_id]['pseudo_done']:
+                                # 针对伪终止状态做帧堆叠
+                                # 要求self.states_stack[env_id][agent] != None是因为伪终止时可能有机器人阵亡
+                                state_stack = self.states_stack[env_id][agent]
+                                if self.frame_stack_num > 1:
+                                    state_stack[0][0: (self.frame_stack_num - 1) * self.state_origin_dim] = state_stack[0][self.state_origin_dim: self.frame_stack_num * self.state_origin_dim]
+                                    if self.if_use_cnn:
+                                        state_stack[1][0:(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]] = state_stack[1][self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]]
+                                state_stack[0][(self.frame_stack_num - 1) * self.state_origin_dim:self.frame_stack_num * self.state_origin_dim] = infos[env_id]['pseudo_terminal_state_'][agent][0]
+                                state_stack[1][(self.frame_stack_num - 1) * self.obs_matrix_origin_shape[0]:self.frame_stack_num * self.obs_matrix_origin_shape[0]] = infos[env_id]['pseudo_terminal_state_'][agent][1]
+                                infos[env_id]['pseudo_terminal_state_'][agent] = state_stack
                             if self.states_stack[env_id][agent] is None:
                                 self.states_stack[env_id][agent] = [np.zeros(self.state_dim), None]
                                 if self.if_use_cnn:
@@ -228,6 +239,7 @@ class VecEnvironments:
                     for agent in self.total_agents:
                         if states[env_id][agent] != None and infos[env_id]['pseudo_done']:
                             # 针对伪终止状态做帧堆叠
+                            # 这里不用判断self.states_stack[env_id][agent] != None是因为这里处于伪步，只需要判断states[env_id][agent] != None即可
                             state_stack = self.states_stack[env_id][agent]
                             if self.frame_stack_num > 1:
                                 state_stack[0][0: (self.frame_stack_num - 1) * self.state_origin_dim] = state_stack[0][self.state_origin_dim: self.frame_stack_num * self.state_origin_dim]
