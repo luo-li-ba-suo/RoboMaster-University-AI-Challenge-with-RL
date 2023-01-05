@@ -37,7 +37,7 @@ class Referee(object):
         self.map = map
         self.state = state
         self.buff_mode = options.buff_mode
-        self.HP_reduction = {'behind': 20, 'front': 20, 'left': 20, 'right': 20, 'not_bullet': 10}
+        self.HP_reduction = options.armor_hp_reduce
         self.collision_reduce_hp = options.collision_reduce_hp
         self.frame_num_one_second = options.frame_num_one_second
         self.cooling_freq = options.cooling_freq

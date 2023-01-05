@@ -42,9 +42,10 @@ class Parameters:
     obstacle_map_size = 100
 
     # 有关hp
-    start_hp = [100, 100, 100, 100]
+    start_hp = [200, 200, 200, 200]
     no_dying = [False, False]
     collision_reduce_hp = False
+    armor_hp_reduce = {'behind': 60, 'front': 20, 'left': 40, 'right': 40, 'not_bullet': 10}
 
     # about Action Space
     move_along_the_axis = True
@@ -71,7 +72,7 @@ class Parameters:
     priority_init_capacity = 1000
 
     # 有关测试：
-    render = True
+    render = False
     training_mode = False
     single_input = False
     time_delay_frame = 0

@@ -242,15 +242,15 @@ class RMUA_Multi_agent_Env(gym.Env):
             # self.rewards[n]['bullet_out'] = -0.005 * robot.bullet_out_record.one_step
             '''hit_enemy'''
             self.rewards[n]['hit'] = 0
-            self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.left.one_step
-            self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.right.one_step
-            self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.behind.one_step
+            self.rewards[n]['hit'] += 4 * robot.enemy_hit_record.left.one_step
+            self.rewards[n]['hit'] += 4 * robot.enemy_hit_record.right.one_step
+            self.rewards[n]['hit'] += 6 * robot.enemy_hit_record.behind.one_step
             self.rewards[n]['hit'] += 2 * robot.enemy_hit_record.front.one_step
             # '''被敌军击中'''
             self.rewards[n]['hit_by_enemy'] = 0
-            self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.left.one_step
-            self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.right.one_step
-            self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.behind.one_step
+            self.rewards[n]['hit_by_enemy'] -= 4 * robot.armor_hit_enemy_record.left.one_step
+            self.rewards[n]['hit_by_enemy'] -= 4 * robot.armor_hit_enemy_record.right.one_step
+            self.rewards[n]['hit_by_enemy'] -= 6 * robot.armor_hit_enemy_record.behind.one_step
             self.rewards[n]['hit_by_enemy'] -= 2 * robot.armor_hit_enemy_record.front.one_step
             # '''击中友军'''
             # reward -= 0.005 * robot.teammate_hit_record.left.one_step
@@ -286,10 +286,13 @@ class RMUA_Multi_agent_Env(gym.Env):
             '''死亡惩罚'''
             self.rewards[n]['death'] = 0
             if n in self.simulator.state.robots_killed_this_step:
-                self.rewards[n]['death'] -= 50
+                self.rewards[n]['death'] -= 100
+                if robot.friend is not None:
+                    if not self.simulator.state.robots_survival_status[robot.friend]:
+                        self.rewards[n]['death'] -= 100
             if robot.friend is not None:
                 if robot.friend in self.simulator.state.robots_killed_this_step:
-                    self.rewards[n]['death'] -= 50
+                    self.rewards[n]['death'] -= 100
             '''击杀对方奖励'''
             self.rewards[n]['K.O.'] = 0
             enemy_all_defeated = True
@@ -428,14 +431,14 @@ class RMUA_Multi_agent_Env(gym.Env):
 if __name__ == '__main__':
     np.random.seed(0)
     args = Parameters()
-    args.red_agents_path = ['src.agents.human_agent']
+    args.red_agents_path = ['src.agents.retreat_enemy']
     args.blue_agents_path = ['src.agents.handcrafted_enemy']
     args.robot_b_num = 2
     args.render_per_frame = 20
     args.episode_step = 0
     args.render = True
     args.training_mode = False
-    args.time_delay_frame = 0.5
+    args.time_delay_frame = 0.1
     args.enable_blocks = True
     env = RMUA_Multi_agent_Env(args)
     env.simulator.state.pause = True
