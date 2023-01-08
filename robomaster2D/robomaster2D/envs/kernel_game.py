@@ -105,6 +105,8 @@ class WinRateManager(object):
                 self.draw_num -= 1
             del self.record[0]
 
+    def get_num(self):
+        return len(self.record)
 
 class State(object):  # 总状态
     def __init__(self, options):
