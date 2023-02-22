@@ -1,5 +1,7 @@
 # Robomaster AI Challenge仿真环境
 
+视频演示：
+https://m.bilibili.com/video/BV1Xe411N7rC
 
 ## 下一步计划关键部分：
 计划参考捉迷藏工程
