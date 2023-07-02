@@ -10,7 +10,7 @@ class Parameters:
 
     superQuiet = True
     show_poses = False
-    do_route_plan = True
+    do_route_plan = False
     buff_mode = False
     rotate_by_route_plan = False
     episode_time = 180
@@ -38,23 +38,24 @@ class Parameters:
     episodes = 100000
     render_per_frame = 600
     action_type = 'MultiDiscrete'
-    local_map_unit = 10
-    local_map_size = 25
+    obstacle_map_unit = 8
+    obstacle_map_size = 100
 
     # 有关hp
-    start_hp = [100, 100, 100, 100]
+    start_hp = [200, 200, 200, 200]
     no_dying = [False, False]
     collision_reduce_hp = False
+    armor_hp_reduce = {'behind': 60, 'front': 20, 'left': 40, 'right': 40, 'not_bullet': 10}
+
+    # about Action Space
+    move_along_the_axis = True
 
     # 有关物理效果
     impact_effect = True
     collision_bounce = False
 
-    # 有關信息處理
-    lidar_num = 8
-
     # 有关交互界面
-    do_plot = [True, False, False, False]
+    do_plot = [True, True, False, False]
     energySaving_mode = False
 
     highFrameRate_mode = True
@@ -66,6 +67,10 @@ class Parameters:
     show_robot_data = True
     show_figure = True
 
+    # priority init
+    random_start_prob = 1
+    priority_init_capacity = 1000
+
     # 有关测试：
     render = False
     training_mode = False
@@ -74,10 +79,24 @@ class Parameters:
 
     # 有關訓練
     red_agents_path = ['src.agents.rl_trainer']
-    blue_agents_path = ['src.agents.static_enemy', 'src.agents.handcrafted_enemy']
+    blue_agents_path = ['src.agents.handcrafted_enemy', 'src.agents.retreat_enemy']
+    eval_blue_agents_path = ['src.agents.handcrafted_enemy', 'src.agents.retreat_enemy']
 
     # 有关地图信息：
     enable_blocks = True
+
+    # 有关Astar：
+    Astar_map_x_size = 81
+    Astar_map_y_size = 45
+    Astar_obstacle_expand = 3
+
+    # 有关雷达
+    use_lidar = True
+    # 雷达数要求为偶数
+    lidar_num = 30
+
+    # 有关局部障碍物地图
+    use_obstacle_map = False
 
     def get_dict(self):
         dict_ = {}

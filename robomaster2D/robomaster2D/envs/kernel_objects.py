@@ -170,6 +170,7 @@ class Robot(object):
         self.vy = vy
         self.center = np.array([x, y])
         self.angle = angle  # 底盘绝对角度 -180~180  原点与上相同，极轴落在x轴正方向，向y轴正方向旋转的方向为正
+        self.rotate_speed = 0
         self.yaw = yaw  # 云台相对底盘角度 -90~90
         self.aimed_enemy = None  # 存放瞄准的敌人index
         self.heat = 0  # 枪口热度
@@ -204,9 +205,10 @@ class Robot(object):
         # self.yaw_motion = 3  # 云台旋转的惯性感大小
 
         # self.camera_angle = 75 / 2  # 摄像头的视野范围
-        self.camera_angle = 180 / 2  # 摄像头的视野范围
+        self.camera_angle = 360 / 2  # 摄像头的视野范围
         self.move_discount = 2.6  # 撞墙之后反弹的强度大小
         self.lidar_angle = 120 / 2  # 激光雷达的视野视野范围
+        self.lidar_array = None
 
         # buff状态
         self.buff_hp = Record('buff补血')

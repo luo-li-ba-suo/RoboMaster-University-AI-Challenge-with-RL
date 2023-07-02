@@ -1,4 +1,4 @@
-from robomaster2D.envs.src.agents_common import *
+from robomaster2D.envs.src.agents_base import *
 
 
 class My_Agent(Base_Agent):

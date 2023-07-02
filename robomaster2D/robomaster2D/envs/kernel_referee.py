@@ -37,7 +37,7 @@ class Referee(object):
         self.map = map
         self.state = state
         self.buff_mode = options.buff_mode
-        self.HP_reduction = {'behind': 60, 'front': 20, 'left': 40, 'right': 40, 'not_bullet': 10}
+        self.HP_reduction = options.armor_hp_reduce
         self.collision_reduce_hp = options.collision_reduce_hp
         self.frame_num_one_second = options.frame_num_one_second
         self.cooling_freq = options.cooling_freq
@@ -185,7 +185,7 @@ class Referee(object):
             return False
 
     def line_prismatic_check(self, l1, l2, sq):
-        # this part code came from: https://www.jianshu.com/p/a5e73dbc742a
+        # this part code modified by kideng
         # check if line cross rect, sq = [x_leftdown, y_leftdown, x_rightup, y_rightup]
         # if self.cross()
         p1 = [sq[0], (sq[1] + sq[3]) / 2]

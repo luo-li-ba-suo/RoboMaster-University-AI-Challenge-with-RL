@@ -140,46 +140,84 @@ class ActorDiscretePPO(nn.Module):
 
 
 class MultiAgentActorDiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, state_cnn_channel=6,
+                 if_use_conv1D=True, state_seq_len=30, if_use_rnn=False, rnn_state_size=128, LSTM_or_GRU=True):
         super().__init__()
         self.action_dim = action_dim
         self.Multi_Discrete = True
         self.if_use_cnn = if_use_cnn
+        self.if_use_conv1D = if_use_conv1D
         self.cnn_out_dim = 64
-        if if_use_cnn:
-            self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-            self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
+        self.conv1D_kernel_size = 3
+
+        '''Recurrent Network'''
+        self.if_use_rnn = if_use_rnn
+        rnn_state_size = rnn_state_size
+        self.LSTM_or_GRU = LSTM_or_GRU
+        '''共享记忆层'''
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                self.rnn = nn.LSTM(mid_dim, rnn_state_size)
+            else:
+                self.rnn = nn.GRU(mid_dim, rnn_state_size)
+            for name, param in self.rnn.named_parameters():
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param, 1.0)
+
+        self.vector_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        if if_use_conv1D:
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            nn.init.orthogonal_(self.conv_net[0].weight, np.sqrt(2))
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+        elif if_use_cnn:
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
                                               nn.ReLU(),
                                               nn.Conv2d(16, 32, 3, stride=2),
                                               nn.ReLU(),
-                                              nn.Conv2d(32, 64, 3, stride=2),
+                                              nn.Conv2d(32, self.cnn_out_dim, 3, stride=2),
                                               nn.ReLU(),
                                               nn.AdaptiveMaxPool2d(1),
                                               nn.Flatten())
-            self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
         else:
-            self.main_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU(),
-                                          nn.Linear(mid_dim, mid_dim), nn.ReLU())
-        self.rnn = None
-        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+            self.cnn_out_dim = 0
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
+        nn.init.orthogonal_(self.hidden_net[0].weight, np.sqrt(2))
+        '''策略层'''
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
+            layer_norm(net[0], std=np.sqrt(2))
             layer_norm(net[-1], std=0.01)
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
-    def forward(self, state, state_2D=None, rnn_state=None):
-
-        if self.if_use_cnn:
-            hidden = self.state_1D_net(state)
-            CNN_out = self.state_2D_net(state_2D)
+    def forward(self, state, state_cnn=None, rnn_state=None):
+        hidden = self.vector_net(state)
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
+            CNN_out = self.conv_net(state_cnn)
             hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
         else:
-            hidden = self.main_net(state)
-        return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
+            hidden = self.hidden_net(hidden)
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0).contiguous(),
+                                                                   rnn_state[1].unsqueeze(0).contiguous()))
+                rnn_state = [s.squeeze(0) for s in rnn_state]
+            else:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0).contiguous())
+            hidden = hidden.squeeze(0)
+        return torch.cat([net(hidden) for net in self.action_nets], dim=1), rnn_state  # action_prob without softmax
 
-    def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.forward(state, state_2D, rnn_state)
+    def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
+        result, rnn_state = self.forward(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -190,30 +228,55 @@ class MultiAgentActorDiscretePPO(nn.Module):
             samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
             action_ = samples_2d.reshape(result.size(0))
             action.append(action_)
-        return action, a_prob
+        return action, a_prob, rnn_state
 
-    def get_deterministic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.forward(state, state_2D, rnn_state)
+    def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
+        result, rnn_state = self.forward(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
             action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
             n += action_dim_
-        return action
+        return action, rnn_state
 
-    def get_logprob_entropy(self, state, action, state_2D=None, state_rnn=None):
-        result = self.forward(state, state_2D, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, rnn_state=None, done_mask=None):
+        if self.if_use_rnn:
+            batch_size = state.shape[0]
+            sequence_length = state.shape[1]
+            rnn_size = rnn_state[0].shape[-1]
+            rnn_state_ = [s[:, 0, :] for s in rnn_state]
+            results = []
+            for i in range(sequence_length):
+                result, rnn_state_ = self.forward(state[:, i, :],
+                                                  state_cnn[:, i, ...] if self.if_use_cnn else None,
+                                                  rnn_state_)
+                mask = done_mask[:, i].view(batch_size, 1).repeat(1, rnn_size)
+                rnn_state_ = [s_ * mask for s_ in rnn_state_]
+                rnn_state_ = [s_ + (-mask+1)*s[:, i, :] for s_, s in zip(rnn_state_, rnn_state)]
+                results.append(result)
+            result = torch.cat(results, dim=1).view(batch_size, sequence_length, -1)
+        else:
+            result, _ = self.forward(state, state_cnn, None)
         a_prob = []
         dist_prob = []
         dist_entropy = []
         n = 0
-        for i, action_dim_ in enumerate(self.action_dim):
-            a_prob_ = self.soft_max(result[:, n:n + action_dim_])
-            a_prob.append(a_prob_)
-            dist = self.Categorical(a_prob_)
-            dist_prob.append(dist.log_prob(action[:, i].long()))
-            dist_entropy.append(dist.entropy().mean())
-            n += action_dim_
+        if self.if_use_rnn:
+            for i, action_dim_ in enumerate(self.action_dim):
+                a_prob_ = self.soft_max(result[:, :, n:n + action_dim_])
+                a_prob.append(a_prob_)
+                dist = self.Categorical(a_prob_)
+                dist_prob.append(dist.log_prob(action[:, :, i].long()))
+                dist_entropy.append(dist.entropy().mean())
+                n += action_dim_
+        else:
+            for i, action_dim_ in enumerate(self.action_dim):
+                a_prob_ = self.soft_max(result[:, n:n + action_dim_])
+                a_prob.append(a_prob_)
+                dist = self.Categorical(a_prob_)
+                dist_prob.append(dist.log_prob(action[:, i].long()))
+                dist_entropy.append(dist.entropy().mean())
+                n += action_dim_
         return sum(dist_prob), sum(dist_entropy) / len(dist_entropy)
 
     def get_old_logprob(self, action, a_prob):
@@ -234,71 +297,161 @@ class MultiAgentActorDiscretePPO(nn.Module):
 
 
 class CriticAdv(nn.Module):
-    def __init__(self, mid_dim, state_dim):
+    def __init__(self, mid_dim, state_dim, if_use_cnn=False, state_cnn_channel=6,
+                 if_use_conv1D=True, state_seq_len=30):
         super().__init__()
-        self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU(),
-                                 nn.Linear(mid_dim, mid_dim), nn.Hardswish(),
-                                 nn.Linear(mid_dim, 1))
-        layer_norm(self.net[-1], std=0.5)  # output layer for V value
+        self.if_use_cnn = if_use_cnn
+        self.net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
+        self.cnn_out_dim = 64
+        self.if_use_conv1D = if_use_conv1D
+        self.conv1D_kernel_size = 3
+        if if_use_conv1D:
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            self.cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+        elif if_use_cnn:
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
+                                                  nn.ReLU(),
+                                                  nn.Conv2d(16, 32, 3, stride=2),
+                                                  nn.ReLU(),
+                                                  nn.Conv2d(32, 64, 3, stride=2),
+                                                  nn.ReLU(),
+                                                  nn.AdaptiveMaxPool2d(1),
+                                                  nn.Flatten())
+        else:
+            self.conv_net = None
+            self.cnn_out_dim = 0
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU(),
+                                        nn.Linear(mid_dim, 1))
+        layer_norm(self.hidden_net[0], std=np.sqrt(2))
+        layer_norm(self.hidden_net[-1], std=0.5)  # output layer for V value
 
-    def forward(self, state):
-        return self.net(state)  # V value
+    def forward(self, state, state_cnn=None, rnn_state=None):
+        batch_shape = state.shape[:-1]
+        state = state.view(-1, state.shape[-1])
+        hidden = self.net(state)
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
+            CNN_out = self.conv_net(state_cnn)
+            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
+        else:
+            hidden = self.hidden_net(hidden)
+        return hidden.view(*batch_shape, -1)
 
 
 # actor与critic网络共享特征提取的主干
-class DiscretePPO(nn.Module):
-    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_rnn=False):
+class DiscretePPOShareNet(nn.Module):
+    def __init__(self, mid_dim, state_dim, action_dim, if_use_cnn=False, if_use_conv1D=True,
+                 if_use_rnn=False, rnn_state_size=128, LSTM_or_GRU=True,
+                 state_cnn_channel=6, state_seq_len=30, actor_obs_dim=None):
         super().__init__()
-        self.action_dim = action_dim  # 默认为多维动作空间
+        '''参数处理'''
+        self.action_dim = action_dim  # 默认为多维离散动作空间
+        self.actor_obs_dim = actor_obs_dim
+        if self.actor_obs_dim is None:
+            self.actor_obs_dim = state_dim
+        if self.actor_obs_dim < state_dim:
+            self.use_extra_obs_critic = True
+        else:
+            self.use_extra_obs_critic = False
+        '''Recurrent Network'''
+        self.if_use_rnn = if_use_rnn
+        rnn_state_size = rnn_state_size
+        self.LSTM_or_GRU = LSTM_or_GRU
 
-        self.state_1D_net = nn.Sequential(nn.Linear(state_dim, mid_dim), nn.ReLU())
-
+        '''1.共享特征提取层：'''
+        '''观测向量的处理'''
+        self.vector_net = nn.Sequential(nn.Linear(self.actor_obs_dim, mid_dim), nn.ReLU())
+        self.extra_obs_net = None
+        if self.use_extra_obs_critic:
+            self.extra_obs_net = nn.Sequential(nn.Linear(state_dim - self.actor_obs_dim, mid_dim), nn.ReLU())
+        '''观测矩阵的处理'''
         self.if_use_cnn = if_use_cnn
-        self.cnn_out_dim = 64
-        self.state_2D_net = nn.Sequential(nn.Conv2d(1, 16, 3),
-                                          nn.ReLU(),
-                                          nn.Conv2d(16, 32, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.Conv2d(32, 64, 3, stride=2),
-                                          nn.ReLU(),
-                                          nn.AdaptiveMaxPool2d(1),
-                                          nn.Flatten()) if if_use_cnn else None
-
-        self.rnn = None
-
-        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + self.cnn_out_dim, mid_dim), nn.ReLU())
-        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(mid_dim, mid_dim), nn.ReLU(),
+        self.if_use_conv1D = if_use_conv1D
+        if if_use_conv1D:
+            self.conv1D_kernel_size = 3
+            self.conv_net = nn.Sequential(nn.Conv1d(state_cnn_channel, 32, self.conv1D_kernel_size),
+                                          nn.ReLU(), nn.Flatten())
+            cnn_out_dim = (state_seq_len + (self.conv1D_kernel_size//2)*2 - self.conv1D_kernel_size + 1) * 32
+        elif if_use_cnn:
+            cnn_out_dim = 64
+            self.conv_net = nn.Sequential(nn.Conv2d(state_cnn_channel, 16, 3),
+                                              nn.ReLU(),
+                                              nn.Conv2d(16, 32, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.Conv2d(32, cnn_out_dim, 3, stride=2),
+                                              nn.ReLU(),
+                                              nn.AdaptiveMaxPool2d(1),
+                                              nn.Flatten())
+        else:
+            self.conv_net = None
+            cnn_out_dim = 0
+        '''2.共享中间层'''
+        self.hidden_net = nn.Sequential(nn.Linear(mid_dim + cnn_out_dim, mid_dim), nn.ReLU())
+        '''3.共享记忆层'''
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                self.rnn = nn.LSTM(mid_dim, rnn_state_size)
+            else:
+                self.rnn = nn.GRU(mid_dim, rnn_state_size)
+            for name, param in self.rnn.named_parameters():
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param, 1.0)
+        '''4.策略层'''
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        self.action_nets = nn.Sequential(*[nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
                                                          nn.Linear(mid_dim, action_d)) for action_d in action_dim])
         for net in self.action_nets:
             layer_norm(net[-1], std=0.01)
         self.forward = self.actor
-        # critic
-        self.value_net = nn.Linear(mid_dim, 1)
-        layer_norm(self.value_net, std=0.5)
+        '''5.价值层'''
+        input_dim = rnn_state_size if self.if_use_rnn else mid_dim
+        input_dim += mid_dim if self.use_extra_obs_critic else 0
+        self.value_net = nn.Sequential(nn.Linear(input_dim, mid_dim), nn.ReLU(),
+                                       nn.Linear(mid_dim, 1))
+        layer_norm(self.value_net[-1], std=0.5)
 
         self.soft_max = nn.Softmax(dim=-1)
         self.Categorical = torch.distributions.Categorical
 
-    def actor(self, state, state_2D=None, rnn_state=None):
-        hidden = self.state_1D_net(state)
-        if self.if_use_cnn:
-            CNN_out = self.state_2D_net(state_2D)
-            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
-        else:
-            hidden = self.hidden_net(hidden)
-        return torch.cat([net(hidden) for net in self.action_nets], dim=1)  # action_prob without softmax
+    def share_net(self, state, state_cnn=None, rnn_state=None):
+        hidden = self.vector_net(state)
+        if self.if_use_conv1D:
+            state_cnn = state_cnn.view(-1, *state_cnn.shape[-2:])
+            state_cnn = torch.cat([state_cnn[:, :, :(self.conv1D_kernel_size // 2)], state_cnn,
+                                   state_cnn[:, :, -(self.conv1D_kernel_size // 2):]], dim=-1)
+        if self.if_use_cnn or self.if_use_conv1D:
+            CNN_out = self.conv_net(state_cnn)
+            hidden = torch.cat((hidden, CNN_out), dim=1)
+        hidden = self.hidden_net(hidden)
+        if self.if_use_rnn:
+            if self.LSTM_or_GRU:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), (rnn_state[0].unsqueeze(0), rnn_state[1].unsqueeze(0)))
+                rnn_state = [s.squeeze(0) for s in rnn_state]
+            else:
+                hidden, rnn_state = self.rnn(hidden.unsqueeze(0), rnn_state[0].unsqueeze(0))
+            hidden = hidden.squeeze(0)
+        return hidden, rnn_state
 
-    def critic(self, state, state_2D=None, rnn_state=None):
-        hidden = self.state_1D_net(state)
-        if self.if_use_cnn:
-            CNN_out = self.state_2D_net(state_2D)
-            hidden = self.hidden_net(torch.cat((hidden, CNN_out), dim=1))
-        else:
-            hidden = self.hidden_net(hidden)
+    def actor(self, state, state_cnn=None, rnn_state=None):
+        hidden, rnn_state = self.share_net(state, state_cnn, rnn_state)
+        return torch.cat([net(hidden) for net in self.action_nets], dim=1), rnn_state  # action_prob without softmax
+
+    def critic(self, state, state_cnn=None, rnn_state=None):
+        # 注意这里的state相对self.actor中的state可能多出一部分：extra_obs
+        hidden, _ = self.share_net(state[..., :self.actor_obs_dim], state_cnn, rnn_state)
+        if self.use_extra_obs_critic:
+            extra_hidden = self.extra_obs_net(state[..., self.actor_obs_dim:])
+            hidden = torch.cat((hidden, extra_hidden), dim=1)
         return self.value_net(hidden)
 
-    def get_stochastic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.actor(state, state_2D, rnn_state)
+    def get_stochastic_action(self, state, state_cnn=None, rnn_state=None):
+        result, rnn_state = self.actor(state, state_cnn, rnn_state)
         a_prob = []
         action = []
         n = 0
@@ -309,19 +462,19 @@ class DiscretePPO(nn.Module):
             samples_2d = torch.multinomial(a_prob_, num_samples=1, replacement=True)
             action_ = samples_2d.reshape(result.size(0))
             action.append(action_)
-        return action, a_prob
+        return action, a_prob, rnn_state
 
-    def get_deterministic_action(self, state, state_2D=None, rnn_state=None):
-        result = self.actor(state, state_2D, rnn_state)
+    def get_deterministic_action(self, state, state_cnn=None, rnn_state=None):
+        result, rnn_state = self.actor(state, state_cnn, rnn_state)
         n = 0
         action = []
         for action_dim_ in self.action_dim:
             action.append(result[:, n:n + action_dim_].argmax(dim=1).detach())
             n += action_dim_
-        return action
+        return action, rnn_state
 
-    def get_logprob_entropy(self, state, action, state_2D=None, state_rnn=None):
-        result = self.actor(state, state_2D, state_rnn)
+    def get_logprob_entropy(self, state, action, state_cnn=None, rnn_state=None, done_mask=None):
+        result, _ = self.actor(state, state_cnn, rnn_state)
         a_prob = []
         dist_prob = []
         dist_entropy = []

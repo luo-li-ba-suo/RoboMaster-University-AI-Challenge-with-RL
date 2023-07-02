@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pygame
 from robomaster2D.envs.src.buttons import Buttons
 import os
-
+import cv2
 try:
     os.chdir('./robomaster2D/robomaster2D/envs')
 except BaseException:
@@ -64,6 +64,7 @@ class User_Interface(object):
         self.show_center_barrier_vertices = False
         self.show_goals_position = False
         self.show_goal_line = False
+        self.show_lidar = False
         self.show_state_data = True
         self.show_robot_data = True
         self.show_figure = True
@@ -74,6 +75,7 @@ class User_Interface(object):
         self.show_poses = options.show_poses
         self.red_agent = options.red_agents_path
         self.blue_agent = options.blue_agents_path
+        self.eval_blue_agent = options.eval_blue_agents_path
         self.orders = orders
         self.map = map
         pygame.init()
@@ -202,7 +204,7 @@ class User_Interface(object):
         self.single_input = options.single_input
 
         # 图表
-        self.update_figure_interval = 100
+        self.update_figure_interval = 5
         self.figures_to_show = []
         self.do_plot = options.do_plot
 
@@ -228,15 +230,14 @@ class User_Interface(object):
             self.update_buff()
             self.update_objects()
             self.update_state_data()
-            info = self.font.render('机器人信息', False, self.font_colors[0])
-            self.screen.blit(info, (self.map.map_length + 30, 4 + 5 * 17))
-
             if self.show_robot_data:
                 self.update_robot_data()
             if self.show_figure:
                 self.update_figure()
             if self.show_goal_line:
                 self.update_goal_line()
+            if self.show_lidar:
+                self.update_lidar()
             self.buttons.render(self.screen)
             self.buttons.show_button_name(self.font, self.screen)
         pygame.display.flip()
@@ -356,12 +357,13 @@ class User_Interface(object):
             tags_state = {'时间': self.state.time,
                           '渲染间隔': self.state.render_per_frame,
                           '红方': self.red_agent,
-                          '蓝方': self.blue_agent}
+                          '蓝方': self.blue_agent,
+                          '评估蓝方': self.eval_blue_agent}
             for i, tag in enumerate(tags_state):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 30, 22 + i * 17))
 
-            tags_state = {'frame': self.state.frame}
+            tags_state = {'frame': self.state.frame, 'episode':self.state.r_win_record.get_num()}
             for i, tag in enumerate(tags_state):
                 info = self.font.render('{}: {}'.format(tag, tags_state[tag]), False, self.font_colors[0])
                 self.screen.blit(info, (self.map.map_length + 130, 22 + i * 17))
@@ -423,33 +425,70 @@ class User_Interface(object):
     def update_figure(self):
         if not self.state.frame % self.update_figure_interval:
             self.figures_to_show = []
-            # 画柱状图
-            hps = []
-            label_hp = {'x': [], 'y': [], 'color': []}
-            for n in range(self.state.robot_num):
-                hps.append(self.state.robots[n].hp)
-                label_hp['x'].append('blue' + str(n) if self.state.robots[n].owner else 'red' + str(n))
-                label_hp['color'].append('b' if self.state.robots[n].owner else 'r')
-                label_hp['y'] = 'hp'
-            figure = self.bar([hps], [label_hp])
-            plt.yticks([0, 400, 800, 1200, 1600, 2000])
-            figure.canvas.draw()
-            figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
-            plt.close()
-            self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+            # # 画柱状图
+            # hps = []
+            # label_hp = {'x': [], 'y': [], 'color': []}
+            # for n in range(self.state.robot_num):
+            #     hps.append(self.state.robots[n].hp)
+            #     label_hp['x'].append('blue' + str(n) if self.state.robots[n].owner else 'red' + str(n))
+            #     label_hp['color'].append('b' if self.state.robots[n].owner else 'r')
+            #     label_hp['y'] = 'hp'
+            # figure = self.bar([hps], [label_hp])
+            # plt.yticks([0, 400, 800, 1200, 1600, 2000])
+            # figure.canvas.draw()
+            # figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
+            # plt.close()
+            # self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
             # 画折线图
             for i in range(self.state.robot_num):
                 if not self.do_plot[i]: continue
-                for plot_name in self.state.robots[i].robot_info_plot:
-                    figure = plt.figure(figsize=(self.plot_size * 1.2, self.plot_size))
-                    plt.plot(self.state.robots[i].robot_info_plot[plot_name])
-                    plt.title(plot_name)
-                    figure.canvas.draw()
-                    figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
-                    plt.close()
-                    self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+                # for plot_name in self.state.robots[i].robot_info_plot:
+                #     figure = plt.figure(figsize=(self.plot_size * 1.2, self.plot_size))
+                #     plt.plot(self.state.robots[i].robot_info_plot[plot_name])
+                #     plt.title(plot_name)
+                #     figure.canvas.draw()
+                #     figure = np.array(figure.canvas.renderer._renderer)[:, :, 0:3]
+                #     plt.close()
+                #     self.figures_to_show.append(pygame.pixelcopy.make_surface(figure.transpose(1, 0, 2)))
+                # 画局部地图
+                # local_map = self.state.robots[i].local_map
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[0] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[1] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[2] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[3] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[4] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+                # local_map_ = np.zeros_like(local_map[0, :, :], dtype=np.uint8)
+                # local_map_[np.where(local_map[5] == 0)] = 255
+                # local_map_ = local_map_.T
+                # local_map_ = cv2.resize(local_map_, (220,210))
+                # self.figures_to_show.append(pygame.pixelcopy.make_surface(local_map_))
+
+
         for i, figure in enumerate(self.figures_to_show):
-            self.screen.blit(figure, (20 + 268*i, self.map.map_width + 20))
+            if i < 3:
+                self.screen.blit(figure, (20 + 268*i, self.map.map_width + 20))
+            else:
+                self.screen.blit(figure, (20 + 268 * (i-3), self.map.map_width + 230))
 
     def bar(self, ys, labels):  # 传入n组数据，xs，ys分别为横纵数据集，labels为x,y标签集
         n = len(ys)
@@ -468,6 +507,22 @@ class User_Interface(object):
                 pygame.draw.aaline(self.screen, self.blue if self.state.robots[n].owner else self.red,
                                    self.state.robots[0].center,
                                    self.controller.route_plan.goals[n], 1)
+
+    def update_lidar(self):
+        for robot in self.state.robots:
+            unit_angle = 2*np.pi/self.map.lidar_num
+            for i in range(self.map.lidar_num//2):
+                angle = unit_angle * i
+                distance = robot.lidar_array[0, i]
+                pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
+                                   robot.center, robot.center + [808 * distance * np.cos(angle),
+                                                                 808 * distance * np.sin(angle)], 1)
+                angle = unit_angle * i + np.pi
+                distance = robot.lidar_array[0, self.map.lidar_num//2 + i]
+                pygame.draw.aaline(self.screen, self.blue if robot.owner else self.red,
+                                   robot.center, robot.center + [808 * distance * np.cos(angle),
+                                                                 808 * distance * np.sin(angle)], 1)
+
 
     def update_other_image(self, coor, image_path='./imgs/area_destination.png'):
         if coor is not None and image_path is not None:  # 如果赋值了目标点

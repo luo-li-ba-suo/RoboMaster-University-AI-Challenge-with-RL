@@ -25,7 +25,6 @@ class Configs:
 
         '''Arguments for training (off-policy)'''
         self.if_use_cnn = True
-        self.if_use_rnn = False
         self.if_share_network = True
         self.learning_rate = 1e-4
         self.soft_update_tau = 2 ** -8  # 2 ** -8 ~= 5e-3
@@ -49,9 +48,9 @@ class Configs:
             self.if_per_or_gae = False  # PER for off-policy sparse reward: Prioritized Experience Replay.
 
         '''Arguments for evaluate'''
+        self.stochastic_policy_or_deterministic = False
         self.eval_gap = 60 * 10  # evaluate the agent per eval_gap seconds
-        self.eval_times1 = 2 ** 2  # evaluation times
-        self.eval_times2 = 2 ** 4  # evaluation times if 'eval_reward > max_reward'
+        self.eval_times = 2 ** 2  # evaluation times
         self.random_seed = 0  # initialize random seed in self.init_before_training()
 
         self.break_step = 2 ** 2  # break training after 'total_step > break_step'
@@ -62,18 +61,44 @@ class Configs:
 
         '''Arguments for algorithm'''
         self.ratio_clip = 0.2  # ratio.clamp(1 - clip, 1 + clip)
-        self.lambda_entropy = 0.02  # could be 0.02
+        self.lambda_entropy = 0.0  # could be 0.02
+        self.adaptive_entropy = True
+        self.dual_clip = False
         self.lambda_gae_adv = 0.98
 
         '''Arguments for self play '''
         self.self_play = True
+        # self play mode:
+        # naive self play: 0
+        # history self play : 1
+        # PSRO: 2
+        self.self_play_mode = 1
+        self.model_pool_capacity_historySP = 100
+        self.delta_historySP = 1.0
         self.fix_evaluation_enemy_policy = True
+        self.enemy_act_update_interval = 0
+        self.enemy_stochastic_policy = True
+
+        '''Arguments for extra state for critic '''
+        self.use_extra_state_for_critic = True
+        self.use_action_prediction = True
+
+        '''Arguments for frame stack'''
+        self.frame_stack_num = 4
+        self.history_action_stack_num = 3
+
+        '''Arguments for RNN'''
+        self.if_use_rnn = True
+        self.LSTM_or_GRU = False
+        self.use_gate_residual_rnn = False
+        self.rnn_hidden_size = 256
+        self.sequence_length = 2 ** 3
 
         '''Arguments for wandb'''
         self.if_wandb = True
         self.wandb_user = 'dujinqi'
-        self.wandb_notes = 'nn_enemy_update after 55%win'
-        self.wandb_name = 'ppo_nn_enemy_update55%_seed=' + str(self.random_seed)
+        self.wandb_notes = 'lidar'
+        self.wandb_name = 'HFO-SERPPO' + '_seed_' + str(self.random_seed)
         self.wandb_group = None  # 是否障碍物地图
         self.wandb_job_type = None  # 是否神经网络控制的敌人
 
@@ -93,12 +118,8 @@ class Arguments:
             self.config.wandb_group = 'ObstacleMap'
         else:
             self.config.wandb_group = 'NoObstacleMap'
-        robot_r_num = self.config.env_config['robot_r_num']
-        robot_b_num = self.config.env_config['robot_b_num']
-        red_agent = [name.split('.')[-1] for name in self.config.env_config['red_agents_path']]
-        blue_agent = [name.split('.')[-1] for name in self.config.env_config['blue_agents_path']]
-        self.config.wandb_job_type = str(robot_r_num) + ''.join(red_agent) + '_vs_' + str(robot_b_num) + ''.join(blue_agent)
-        self.config.wandb_name += '_selfPlay' if self.config.self_play else ''
+        self.config.wandb_job_type = 'conv_' if self.config.if_use_cnn else ''
+        self.config.wandb_job_type += 'sharedAC' if self.config.if_share_network else 'separatedAC'
 
         # ppo
         if hasattr(self.agent, 'ratio_clip'):
@@ -135,7 +156,13 @@ class Arguments:
                 shutil.rmtree(self.config.cwd, ignore_errors=True)
                 print("| Remove history")
             # os.makedirs(self.cwd, exist_ok=True)
-
+        least_target_step = self.config.num_envs * self.config.env_config['episode_step']
+        agent_num = 0
+        if 'src.agents.rl_trainer' in self.config.env_config['red_agents_path']:
+            agent_num += self.config.env_config['robot_r_num']
+        if 'src.agents.rl_trainer' in self.config.env_config['blue_agents_path']:
+            agent_num += self.config.env_config['robot_b_num']
+        assert self.config.target_step > agent_num*least_target_step, "too small target_step, some bug will happen"
         np.random.seed(self.config.random_seed)
         torch.manual_seed(self.config.random_seed)
         torch.set_num_threads(self.config.num_threads)
@@ -144,6 +171,15 @@ class Arguments:
         gpu_id = self.config.gpu_id[process_id] if isinstance(self.config.gpu_id, list) else self.config.gpu_id
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
 
+        '''self play'''
+        if self.config.self_play and self.config.self_play_mode == 1:
+            assert 'src.agents.rl_trainer' not in self.config.env_config['blue_agents_path'], 'opponent should not be rl trainer'
+
+        '''action prediction'''
+        if not self.config.use_extra_state_for_critic:
+            assert not self.config.use_action_prediction
+        else:
+            assert self.config.use_action_prediction
 
 def train_and_evaluate(args):
     args.init_before_training()
@@ -193,7 +229,7 @@ def train_and_evaluate(args):
     '''training arguments'''
     net_dim = args.config.net_dim
     if_use_cnn = args.config.if_use_cnn
-    if_use_rnn = args.config.if_use_rnn
+    if_use_conv1D = args.env.args.use_lidar
     if_share_network = args.config.if_share_network
     # max_memo = args.config.max_memo
     break_step = args.config.break_step
@@ -203,9 +239,32 @@ def train_and_evaluate(args):
     repeat_times_policy = args.config.repeat_times_policy
     learning_rate = args.config.learning_rate
     if_per_or_gae = args.config.if_per_or_gae
+    enemy_act_update_interval = args.config.enemy_act_update_interval
+    enemy_stochastic_policy = args.config.enemy_stochastic_policy
+    adaptive_entropy = args.config.adaptive_entropy
+    dual_clip = args.config.dual_clip
 
+    # 有关上帝视角critic：
+    action_prediction_dim = args.env.action_dim.copy()
+    action_prediction_dim += 1
+    extra_state_kwargs = {'use_extra_state_for_critic': args.config.use_extra_state_for_critic,
+                          'use_action_prediction': args.config.use_action_prediction,
+                          'agent_num': args.env.args.robot_r_num + args.env.args.robot_b_num,
+                          'action_prediction_dim': action_prediction_dim}
+    '''frame stack'''
+    frame_stack_num = args.config.frame_stack_num
+    history_action_stack_num = args.config.history_action_stack_num
+    '''self play'''
     self_play = args.config.self_play
+    self_play_mode = args.config.self_play_mode
+    delta_historySP = args.config.delta_historySP
+    model_pool_capacity_historySP = args.config.model_pool_capacity_historySP
     fix_evaluation_enemy_policy = args.config.fix_evaluation_enemy_policy
+    '''RNN'''
+    if_use_rnn = args.config.if_use_rnn
+    LSTM_or_GRU = args.config.LSTM_or_GRU
+    rnn_hidden_size = args.config.rnn_hidden_size
+    sequence_length = args.config.sequence_length
 
     gamma = args.config.gamma
     reward_scale = args.config.reward_scale
@@ -214,49 +273,69 @@ def train_and_evaluate(args):
     train_actor_step = args.config.train_actor_step
     '''evaluating arguments'''
     show_gap = args.config.eval_gap
-    eval_times1 = args.config.eval_times1
-    eval_times2 = args.config.eval_times2
+    eval_times = args.config.eval_times
     save_interval = args.config.save_interval
+    stochastic_policy_or_deterministic = args.config.stochastic_policy_or_deterministic
 
     del args  # In order to show these hyper-parameters clearly, I put them above.
 
     '''init: environment'''
-    env.render()
+    # env.render()
+    # env_eval.render()
     if not if_multi_processing or not if_train:
         env_eval.render()
     max_step = env.max_step
+    env.init(frame_stack_num, history_action_stack_num, if_use_cnn)
+    env_eval.init(frame_stack_num, history_action_stack_num, if_use_cnn)
+
     state_dim = env.state_dim
+    observation_matrix_shape = env.observation_matrix_shape
     action_dim = env.action_dim
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
+    '''train args'''
+    train_args = {'adaptive_entropy': adaptive_entropy,
+                  'dual_clip': dual_clip}
+    '''selfPlay args'''
+    self_play_args = {'self_play': self_play,
+                      'if_build_enemy_act': if_build_enemy_act,
+                      'enemy_policy_share_memory': not fix_evaluation_enemy_policy and new_processing_for_evaluation,
+                      'enemy_act_update_interval': enemy_act_update_interval,
+                      'self_play_mode': self_play_mode,
+                      'delta_historySP': delta_historySP,
+                      'model_pool_capacity_historySP': model_pool_capacity_historySP,
+                      'enemy_stochastic_policy': enemy_stochastic_policy}
 
+    '''RNN kwargs'''
+    rnn_kwargs = {'if_use_rnn': if_use_rnn,
+                  'LSTM_or_GRU': LSTM_or_GRU,
+                  'rnn_hidden_size': rnn_hidden_size,
+                  'sequence_length': sequence_length}
+    '''Evaluation kwargs'''
+    evaluation_kwargs = {'cwd': cwd,
+                         'eval_times': eval_times,
+                         'eval_gap': show_gap,
+                         'save_interval': save_interval,
+                         'stochastic_policy_or_deterministic': stochastic_policy_or_deterministic}
     '''init: Agent, ReplayBuffer, Evaluator'''
-    agent.init(net_dim, state_dim, action_dim, learning_rate, if_per_or_gae, if_build_enemy_act=if_build_enemy_act,
-               env=env, self_play=self_play, if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn,
-               enemy_policy_share_memory=not fix_evaluation_enemy_policy and new_processing_for_evaluation,
-               if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation)
+    total_trainers_envs = agent.init(net_dim, state_dim, action_dim, learning_rate, gamma=gamma,
+                                     if_use_gae=if_per_or_gae, max_step=max_step,
+                                     if_use_conv1D=if_use_conv1D,
+                                     env=env, if_use_cnn=if_use_cnn,
+                                     if_share_network=if_share_network, if_new_proc_eval=new_processing_for_evaluation,
+                                     observation_matrix_shape=observation_matrix_shape, **train_args,
+                                     **self_play_args, **extra_state_kwargs, **rnn_kwargs, **evaluation_kwargs)
 
     buffer_len = target_step + max_step
     async_evaluator = evaluator = None
 
-    if if_train and new_processing_for_evaluation:
-        async_evaluator = AsyncEvaluator(models=agent.models, cwd=cwd, agent_id=gpu_id, device=agent.device,
-                                         env_name=env.env_name,
-                                         eval_times1=eval_times1, eval_times2=eval_times2,
-                                         save_interval=save_interval, configs=configs,
-                                         fix_enemy_policy=fix_evaluation_enemy_policy,
-                                         if_use_cnn=if_use_cnn, if_share_network=True)
-    else:
-        evaluator = Evaluator(cwd=cwd, agent_id=gpu_id, device=agent.device, env=env_eval,
-                              eval_times1=eval_times1, eval_times2=eval_times2, eval_gap=show_gap,
-                              save_interval=save_interval, if_train=if_train, gamma=gamma,
-                              fix_enemy_policy=fix_evaluation_enemy_policy,
-                              if_use_cnn=if_use_cnn, if_share_network=True)  # build Evaluator
     if if_multi_processing and if_train:
-        buffer = MultiAgentMultiEnvsReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
-                                                 action_dim=action_dim,
-                                                 if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
-                                                 if_use_cnn=if_use_cnn, if_use_rnn=if_use_rnn)
+        buffer = PlugInReplayBuffer(env=env, max_len=buffer_len, state_dim=state_dim,
+                                    total_trainers_envs=total_trainers_envs,
+                                    action_dim=action_dim, observation_matrix_shape=observation_matrix_shape,
+                                    if_discrete=if_discrete, if_multi_discrete=if_multi_discrete,
+                                    if_use_cnn=if_use_cnn,
+                                    **extra_state_kwargs, **rnn_kwargs)
     else:
         buffer = ReplayBuffer(max_len=buffer_len, state_dim=state_dim, action_dim=action_dim,
                               if_discrete=if_discrete, if_multi_discrete=if_multi_discrete)
@@ -268,7 +347,7 @@ def train_and_evaluate(args):
     '''testing'''
     if not if_train:
         while True:
-            evaluator.evaluate_save(agent.act, agent.cri, enemy_act=agent.enemy_act)
+            agent.evaluate(env_eval, if_save=False)
     '''start training'''
     if_train_actor = False if train_actor_step > 0 else True
     start_training = time.time()
@@ -276,14 +355,14 @@ def train_and_evaluate(args):
         if if_print_time:
             start_explore = time.time()
         with torch.no_grad():
-            trajectory_list, logging_list = agent.explore_env(env, target_step, reward_scale, gamma)
+            logging_list, step = agent.explore_env(env, target_step, reward_scale, buffer)
         if if_print_time:
             print(f'| ExploreUsedTime: {time.time() - start_explore:.0f}s')
             # if time.time() - start_explore > 50:
             #     break
             start_update_net = time.time()
-        steps = buffer.extend_buffer_from_list(trajectory_list)
-        total_step += steps
+        # steps = buffer.extend_buffer_from_list(trajectory_list)
+        total_step += step
         if total_step > train_actor_step and not if_train_actor:
             if_train_actor = True
         logging_tuple = agent.update_net(buffer, batch_size, repeat_times, repeat_times_policy, soft_update_tau,
@@ -295,9 +374,7 @@ def train_and_evaluate(args):
         logging_tuple += logging_list
         with torch.no_grad():
             if not new_processing_for_evaluation:
-                evaluator.evaluate_save(agent.act, agent.cri, agent.act_optimizer, agent.cri_optimizer, total_step,
-                                        logging_tuple, wandb_run,
-                                        enemy_act=agent.enemy_act)
+                agent.evaluate(env_eval, gamma, steps=total_step, log_tuple=logging_tuple, logger=wandb_run)
             else:
                 async_evaluator.update(total_step, logging_tuple)
             if_train = not (total_step >= break_step or os.path.exists(f'{cwd}/stop'))
@@ -308,4 +385,4 @@ def train_and_evaluate(args):
     env.stop()
     if wandb_run:
         wandb_run.finish()
-    # os.kill(int(process_info()['pid']), signal.SIGKILL)
+    exit()

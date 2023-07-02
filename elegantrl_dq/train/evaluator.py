@@ -7,7 +7,7 @@ from elegantrl_dq.agents.net import *
 
 class Evaluator:
     def __init__(self, cwd, agent_id, eval_times1, eval_times2, eval_gap, env, device, save_interval, if_train, gamma,
-                 fix_enemy_policy=False, if_use_cnn=False, if_share_network=False):
+                 fix_enemy_policy=False, if_use_cnn=False, if_share_network=False, **kwargs):
         self.recorder = list()  # total_step, r_avg, r_std, obj_c, ...
         self.r_max = -np.inf
         self.if_use_cnn = if_use_cnn
@@ -34,6 +34,14 @@ class Evaluator:
         self.enemy_act = None
         self.fix_enemy_policy = fix_enemy_policy
 
+        '''RNN'''
+        self.if_use_rnn = False
+        self.rnn_hidden_size = 0
+        self.LSTM_or_GRU = True
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
     def evaluate_save(self, act, cri, act_optimizer=None, critic_optimizer=None, steps=0, log_tuple=None, logger=None,
                       enemy_act=None):
         if self.enemy_act is None and enemy_act:
@@ -42,7 +50,10 @@ class Evaluator:
             self.enemy_act = enemy_act
         if log_tuple is None:
             log_tuple = [0, 0, 0, 0]
-
+        '''RNN kwargs'''
+        rnn_kwargs = {'if_use_rnn': self.if_use_rnn,
+                      'LSTM_or_GRU': self.LSTM_or_GRU,
+                      'rnn_hidden_size': self.rnn_hidden_size}
         if time.time() - self.eval_time > self.eval_gap:
             discounted_returns = []
             self.eval_time = time.time()
@@ -55,8 +66,8 @@ class Evaluator:
                                                                                                       self.device,
                                                                                                       self.gamma,
                                                                                                       self.enemy_act,
-
-                                                                                                      if_use_cnn=self.if_use_cnn)
+                                                                                                      if_use_cnn=self.if_use_cnn,
+                                                                                                      **rnn_kwargs)
                 discounted_returns.append(discounted_return)
                 rewards_steps_list.append((reward, step))
                 for key in reward_dict:
@@ -79,8 +90,8 @@ class Evaluator:
                                                                                                           self.device,
                                                                                                           self.gamma,
                                                                                                           self.enemy_act,
-
-                                                                                                          if_use_cnn=self.if_use_cnn)
+                                                                                                          if_use_cnn=self.if_use_cnn,
+                                                                                                          **rnn_kwargs)
                     rewards_steps_list.append((reward, step))
                     discounted_returns.append(discounted_return)
                     for key in reward_dict:
@@ -136,7 +147,10 @@ class Evaluator:
                                'objC': log_tuple[0],
                                'objA': log_tuple[1],
                                'log-prob': log_tuple[2],
-                               'win_rate_training': log_tuple[4]}
+                               'win_rate_training': log_tuple[4],
+                               'actor-learning-rate': act_optimizer.param_groups[0]['lr']}
+                if not self.if_share_network:
+                    train_infos['critic-learning-rate'] = critic_optimizer.param_groups[0]['lr']
                 train_infos.update(infos_dict)
                 logger.log(train_infos, step=steps)
             self.epoch += 1
@@ -253,7 +267,7 @@ class AsyncEvaluator:
         action_dim = models['action_dim']
         if_build_enemy_act = models['if_build_enemy_act']
         if self.if_share_network:
-            local_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+            local_act = DiscretePPOShareNet(net_dim, state_dim, action_dim).to(self.device)
             local_cri = False
         else:
             local_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -264,7 +278,7 @@ class AsyncEvaluator:
 
         if if_build_enemy_act:
             if self.if_share_network:
-                local_enemy_act = DiscretePPO(net_dim, state_dim, action_dim).to(self.device)
+                local_enemy_act = DiscretePPOShareNet(net_dim, state_dim, action_dim).to(self.device)
                 local_enemy_act.eval()
             else:
                 local_enemy_act = MultiAgentActorDiscretePPO(net_dim, state_dim, action_dim).to(self.device)
@@ -295,36 +309,56 @@ class AsyncEvaluator:
         self.evaluator_conn.send((steps, logging_tuple))
 
 
-def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False):
+def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_cnn=False, **kwargs):
+    if_use_rnn = kwargs['if_use_rnn']
+    LSTM_or_GRU = kwargs['LSTM_or_GRU']
+    rnn_hidden_size = kwargs['rnn_hidden_size']
     episode_return = 0.0  # sum of rewards in an episode
     episode_discounted_return = 0.0  # sum of rewards in an episode
-    info_dict = None
     episode_step = 0
     max_step = env.max_step
     if_discrete = env.if_discrete
     if_multi_discrete = env.if_multi_discrete
-    state = env.reset()
-    trainer_ids_in_the_start = env.env.trainer_ids.copy()
+    state, info_dict = env.reset(evaluation=True)
+    trainer_ids_in_the_start = deepcopy(info_dict[0]['trainers_'])
+    tester_ids_in_the_start = deepcopy(info_dict[0]['testers_'])
 
-    s_tensor_2D = None
-
+    s_tensor_matrix = None
+    rnn_states_trainers = None
+    rnn_states_testers = None
+    if if_use_rnn:
+        if LSTM_or_GRU:
+            rnn_states_trainers = {trainer: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32),
+                                             torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                   for trainer in trainer_ids_in_the_start}
+            rnn_states_testers = {tester: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32),
+                                           torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                  for tester in tester_ids_in_the_start}
+        else:
+            rnn_states_trainers = {trainer: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                   for trainer in trainer_ids_in_the_start}
+            rnn_states_testers = {tester: [torch.zeros((1, rnn_hidden_size), device=device, dtype=torch.float32)]
+                                  for tester in tester_ids_in_the_start}
     for episode_step in range(max_step):
-        a_tensor = [None for _ in range(env.env.simulator.state.robot_num)]
-        for i in range(env.env.simulator.state.robot_num):
-            if i in env.env.trainer_ids:
-                s_tensor = torch.as_tensor((state[i][0],), device=device)
+        a_tensor = [None for _ in range(len(env.total_agents))]
+        for i in range(len(env.total_agents)):
+            if i in info_dict[0]['trainers_']:
+                s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
-                a_tensor[i] = act(s_tensor, s_tensor_2D)
-            elif i in env.env.nn_enemy_ids:
-                s_tensor = torch.as_tensor((state[i][0],), device=device)
+                    s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
+                if if_use_rnn:
+                    a_tensor[i], rnn_states_trainers[i] = act(s_tensor, s_tensor_matrix, rnn_states_trainers[i])
+                else:
+                    a_tensor[i], rnn_states = act(s_tensor, s_tensor_matrix)
+            elif i in info_dict[0]['testers_']:
+                s_tensor = torch.as_tensor(state[0][i][0][np.newaxis, :], device=device, dtype=torch.float32)
                 if if_use_cnn:
-                    s_tensor_2D = torch.as_tensor((state[i][1],), device=device)
-                a_tensor[i] = enemy_act(s_tensor, s_tensor_2D)
-        # if if_discrete:
-        #     a_tensor = a_tensor.argmax(dim=1)
-        #     action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
-        actions = [None for _ in range(env.env.simulator.state.robot_num)]
+                    s_tensor_matrix = torch.as_tensor(state[0][i][1][np.newaxis, :], device=device, dtype=torch.float32)
+                if if_use_rnn:
+                    a_tensor[i], rnn_states_testers[i] = enemy_act(s_tensor, s_tensor_matrix, rnn_states_testers[i])
+                else:
+                    a_tensor[i], rnn_states = enemy_act(s_tensor, s_tensor_matrix)
+        actions = [None for _ in range(len(env.total_agents))]
         if if_multi_discrete:
             for i, a_tensor_ in enumerate(a_tensor):
                 if a_tensor_ is not None:
@@ -334,14 +368,14 @@ def get_episode_return_and_step(env, act, device, gamma, enemy_act=None, if_use_
                         action.append(a_tensor_[:, n:n + action_dim_].argmax(dim=1).detach().cpu().numpy()[0])
                         n += action_dim_
                     actions[i] = action
-        state, rewards, done, info_dict = env.step(actions)
+        state, rewards, done, info_dict = env.step([actions])
         episode_return += np.mean(rewards)
         episode_discounted_return += gamma ** episode_step * np.mean(rewards)
-        if done:
+        if done[0]:
             break
     episode_return = getattr(env, 'episode_return', episode_return)
-    rewards_dict = [env.env.rewards_episode[i] for i in trainer_ids_in_the_start]
+    rewards_dict = [info_dict[0]['reward_record_'][i] for i in trainer_ids_in_the_start]
     mean_reward_dict = {}
     for key in rewards_dict[0]:
         mean_reward_dict[key] = np.mean([r[key] for r in rewards_dict])
-    return episode_return, episode_discounted_return, episode_step, mean_reward_dict, info_dict
+    return episode_return, episode_discounted_return, episode_step, mean_reward_dict, info_dict[0]

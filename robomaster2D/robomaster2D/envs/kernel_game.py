@@ -10,10 +10,11 @@ from robomaster2D.envs.kernel_map import Map
 from robomaster2D.envs.kernel_engine import Engine
 from robomaster2D.envs.kernel_objects import Robot
 from robomaster2D.envs.kernel_referee import Referee
-from robomaster2D.envs.src.agents_common import Orders_set
+from robomaster2D.envs.src.agents_base import Orders_set
 from robomaster2D.envs.src.kernel_agents import AgentsAllocator
 from itertools import combinations
 import time
+import copy
 
 
 class Alarm20hz(object):
@@ -27,7 +28,7 @@ class Alarm20hz(object):
         self.go_off_flag = False
 
     def go_off(self, frame):
-        assert frame >= self.last_frame, "alarm 20hz not reset"
+        # assert frame >= self.last_frame, "alarm 20hz not reset"  # 会影响调试/单元测试中的pause功能
         if frame == self.last_frame:  # 使得在同一帧中可以重复使用
             return self.go_off_flag
         self.delta_frame += frame - self.last_frame
@@ -39,6 +40,27 @@ class Alarm20hz(object):
         else:
             self.go_off_flag = False
             return False
+
+
+class PriorityPosInit:
+    def __init__(self, capacity):
+        self.init_pos_queue = []
+        self.capacity = capacity
+
+    def push(self, pos):
+        self.init_pos_queue.append(pos)
+        if len(self.init_pos_queue) > self.capacity:
+            del self.init_pos_queue[0]
+
+    def pull(self):
+        if not self.init_pos_queue:
+            return None, None, None
+        pos = self.init_pos_queue[0]
+        del self.init_pos_queue[0]
+        return pos
+
+    def empty(self):
+        return len(self.init_pos_queue) == 0
 
 
 class WinRateManager(object):
@@ -83,10 +105,13 @@ class WinRateManager(object):
                 self.draw_num -= 1
             del self.record[0]
 
+    def get_num(self):
+        return len(self.record)
 
 class State(object):  # 总状态
     def __init__(self, options):
         self.frame_num_one_second = options.frame_num_one_second
+        self.map = None
         self.time = 0  # 比赛剩余时间
         self.frame = 0
         self.step = 0
@@ -101,12 +126,13 @@ class State(object):  # 总状态
         self.lidar_num = options.lidar_num
         self.camera_vision = None  # 摄像头能看到的车
         self.relative_angle = None  # 相對角度
-        self.dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                            range(self.robot_num)]  # 距離矩陣
-        self.x_dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                              range(self.robot_num)]  # 距離矩陣
-        self.y_dist_matrix = [[0 for _ in range(self.robot_num)] for _ in
-                              range(self.robot_num)]  # 距離矩陣
+        self.dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.delta_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.last_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.x_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.y_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.robots_killed_this_step = []
+        self.robots_survival_status = [True for _ in range(self.robot_num)]
         self.goals = None
         self.buff_mode = options.buff_mode
 
@@ -125,7 +151,12 @@ class State(object):  # 总状态
 
         self.r_win_record = WinRateManager()
 
-    def reset(self, time, start_pos, start_angle, start_bullet, start_hp):
+        self.priority_init = PriorityPosInit(options.priority_init_capacity)
+        self.if_priority_init = 0
+
+    def reset(self, time, start_pos, start_angle, start_bullet, start_hp, if_priority_init):
+        self.if_priority_init = if_priority_init
+
         self.time = time  # 比赛剩余时间
         self.frame = 0
         self.step = 0
@@ -134,8 +165,13 @@ class State(object):  # 总状态
         self.buff = None
         self.done = False  # 比赛是否结束
         self.camera_vision = np.zeros((self.robot_num, self.robot_num), dtype='int8')
-        self.lidar_detect = np.zeros((self.robot_num, self.lidar_num), dtype='float64')
-        self.relative_angle = np.zeros((self.robot_num, self.robot_num), dtype='float64')
+        self.relative_angle = np.zeros((self.robot_num, self.robot_num))
+        self.dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.delta_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.last_dist_matrix = np.zeros((self.robot_num, self.robot_num))
+        self.x_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.y_dist_matrix = np.zeros((self.robot_num, self.robot_num))  # 距離矩陣
+        self.robots_survival_status = [True for _ in range(self.robot_num)]
         # 20hz的闹钟
         self.alarm20hz = Alarm20hz(self.frame_num_one_second)
 
@@ -145,7 +181,7 @@ class State(object):  # 总状态
                                      angle=start_angle[n],
                                      bullet=start_bullet[n], no_dying=self.no_dying, hp=start_hp[n]))
         for n in range(self.robot_b_num):
-            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n, x=start_pos[n + self.robot_r_num][0],
+            self.robots.append(Robot(self.robot_r_num, self.robot_num, 1, n + self.robot_r_num, x=start_pos[n + self.robot_r_num][0],
                                      y=start_pos[n + self.robot_r_num][1],
                                      angle=start_angle[n + self.robot_r_num],
                                      bullet=start_bullet[n + self.robot_r_num], no_dying=self.no_dying,
@@ -165,6 +201,11 @@ class State(object):  # 总状态
             if not self.time % 60:
                 if self.buff_mode:
                     self.random_buff_info()
+
+    def step(self):
+        # 更新state信息
+        self.delta_dist_matrix = self.dist_matrix - self.last_dist_matrix
+        self.last_dist_matrix = copy.deepcopy(self.dist_matrix)
 
     def finish_tick(self):
         # 更新hp
@@ -213,6 +254,7 @@ class Parameters(object):  # 参数集合
         # self.start_pos = [[758, 398], [758, 50], [50, 50], [50, 398]]
         self.start_pos = options.start_pos
         self.random_start_pos = options.random_start_pos
+        self.random_start_prob = options.random_start_prob
         self.start_angle = options.start_angle
         self.start_bullet = options.start_bullet
         self.start_hp = options.start_hp
@@ -225,6 +267,10 @@ class Parameters(object):  # 参数集合
         self.collision_bounce = options.collision_bounce
 
         self.enable_blocks = options.enable_blocks
+
+    def set_start_pos(self, pos, angle):
+        self.start_pos = pos
+        self.start_angle = angle
 
     def random_set_start_pos(self, positions):
         self.start_pos = []
@@ -259,10 +305,10 @@ class Parameters(object):  # 参数集合
 
     def if_start_positions_valid(self, positions_r, positions_b):
         if len(positions_r) > 1:
-            if np.linalg.norm(np.array(positions_r[0]) - np.array(positions_r[1])) < 60:
+            if np.linalg.norm(np.array(positions_r[0]) - np.array(positions_r[1])) < 75:
                 return False
         if len(positions_b) > 1:
-            if np.linalg.norm(np.array(positions_b[0]) - np.array(positions_b[1])) < 60:
+            if np.linalg.norm(np.array(positions_b[0]) - np.array(positions_b[1])) < 75:
                 return False
         for pos_r in positions_r:
             for pos_b in positions_b:
@@ -276,15 +322,18 @@ class Simulator(object):
         self.parameters = Parameters(options)  # parameters
         self.map = Map(options)  # the map
         self.state = State(options)  # initial state
+        self.state.map = self.map
         self.module_referee = Referee(self.state, self.map, options)  # the referee
         self.module_engine = Engine(self.state, self.module_referee, options, self.map)  # the controller
-        self.orders = Orders_set((options.robot_r_num + options.robot_b_num))
+        self.orders = Orders_set(options.robot_r_num + options.robot_b_num,
+                                 move_along_the_axis=options.move_along_the_axis)
         self.combination_robot_id = list(combinations(range(self.state.robot_num), 2))
         self.agents_allocator = AgentsAllocator(options)
-        self.agents = self.agents_allocator.get_agents()
+        self.agents, _ = self.agents_allocator.get_agents()
+        self.last_agents = None
         self.render_inited = False
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
-                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
+                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp, 0)
         self.render_frame = 0  # 渲染时清零
 
         # 手动调试内容：
@@ -299,14 +348,32 @@ class Simulator(object):
         self.module_engine.init_render()
         self.render_inited = True
 
-    def reset(self):
-        self.agents = self.agents_allocator.get_agents()
-
+    def reset(self, evaluation=False):
+        if evaluation:
+            self.agents = self.agents_allocator.get_eval_agents()
+        else:
+            self.agents, self.last_agents = self.agents_allocator.get_agents()
+        for agent in self.agents:
+            agent.reset()
         self.step_num = 0
+        if_priority_init = 0
         if self.parameters.random_start_pos:
-            self.parameters.random_set_start_pos(self.map.goal_positions)
+            if not self.parameters.random_start_prob < 1 or evaluation:
+                self.parameters.random_set_start_pos(self.map.goal_positions)
+            else:
+                if np.random.random() < self.parameters.random_start_prob or self.state.priority_init.empty():
+                    self.parameters.random_set_start_pos(self.map.goal_positions)
+                else:
+                    pos, angle, previous_agents = self.state.priority_init.pull()
+                    if_priority_init = 1
+                    self.parameters.set_start_pos(pos, angle)
+                    self.agents = self.agents_allocator.get_previous_agents(previous_agents)
+                    for agent in self.agents:
+                        agent.reset()
+
         self.state.reset(self.parameters.episode_time, self.parameters.start_pos,
-                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp)
+                         self.parameters.start_angle, self.parameters.start_bullet, self.parameters.start_hp,
+                         if_priority_init)
         self.orders.reset()
         # 清空上一次eposode记录
         for robot in self.state.robots:
@@ -318,6 +385,7 @@ class Simulator(object):
 
     def step(self, actions):  # 执行多智能体动作
         done = False
+        pseudo_done = False
         if self.render_inited:
             self.step_feedback_UI()
         # 判断游戏是否暂停或等待用户输入指令
@@ -335,18 +403,28 @@ class Simulator(object):
                 self.state.wait_for_user_input = True
         if self.render_inited:
             self.render()
+
+        self.state.robots_killed_this_step = []
+        for i, robot in enumerate(self.state.robots):
+            if robot.hp <= 0 < self.state.robots_survival_status[i]:
+                self.state.robots_survival_status[i] = False
+                self.state.robots_killed_this_step.append(i)
         # episode_step如果不为零，当step数量达到这个值，将提前结束episode
         if self.parameters.episode_step:
-            if self.state.step == self.parameters.episode_step:
+            if self.state.step >= self.parameters.episode_step:
+                pseudo_done = True
                 done = True
         # 结算比赛结果
         info = {}
+        info['robots_being_killed_'] = self.state.robots_killed_this_step
+        # info['robots_survival_status'] = self.state.robots_survival_status
         blue_all_dead = np.array([self.state.robots[n + self.parameters.robot_r_num].hp <= 0
                                   for n in range(self.parameters.robot_b_num)]).all()
         red_all_dead = np.array([self.state.robots[n].hp <= 0
                                  for n in range(self.parameters.robot_r_num)]).all()
         if blue_all_dead or red_all_dead:
             done = True
+            pseudo_done = pseudo_done or False  # 在伪步中pseudo_done始终为True
         if done:
             # 首先判断是否有一方全部阵亡
             if blue_all_dead and not red_all_dead:
@@ -369,14 +447,20 @@ class Simulator(object):
                 self.state.r_win_record.win()
                 info['win'] = 1
                 info['fail'] = 0
-            elif red_win == -1:
-                info['win'] = 0
-                info['fail'] = 1
-                self.state.r_win_record.fail()
-            elif red_win == 0:
-                info['win'] = 0
-                info['fail'] = 0
-                self.state.r_win_record.draw()
+            else:
+                self.state.priority_init.push([self.parameters.start_pos, self.parameters.start_angle, self.last_agents])
+                if red_win == -1:
+                    info['win'] = 0
+                    info['fail'] = 1
+                    self.state.r_win_record.fail()
+                elif red_win == 0:
+                    info['win'] = 0
+                    info['fail'] = 0
+                    self.state.r_win_record.draw()
+            info['win_rate'] = self.state.r_win_record.get_win_rate()
+            info['draw_rate'] = self.state.r_win_record.get_draw_rate()
+            info['priority_init_rate_'] = self.state.if_priority_init
+        info['pseudo_done'] = pseudo_done
         return done, info
 
     #
@@ -443,7 +527,7 @@ class Simulator(object):
             self.render_frame = 0
         self.render_frame += 1
 
-    def run_camera_lidar(self):
+    def run_camera_lidar(self, reset=True):
         for n in range(self.state.robot_num):
             for i in range(self.state.robot_num - 1):
                 x, y = np.array(self.state.robots[n - i - 1].center) - np.array(self.state.robots[n].center)
@@ -475,3 +559,5 @@ class Simulator(object):
             for angle_idx in range(self.state.lidar_num):
                 angle = 2 * np.pi / self.state.lidar_num * angle_idx
                 # TODO: 計算雷達距離
+        if reset:
+            self.state.last_dist_matrix = copy.deepcopy(self.state.dist_matrix)

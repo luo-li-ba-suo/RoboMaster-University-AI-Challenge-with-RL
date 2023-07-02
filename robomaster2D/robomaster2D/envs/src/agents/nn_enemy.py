@@ -8,7 +8,7 @@ Date: March 4th, 2022
 nn_agent代表用神经网络控制的智能体，不训练
 """
 
-from robomaster2D.envs.src.agents_common import *
+from robomaster2D.envs.src.agents_base import *
 
 
 class My_Agent(Base_Agent):
@@ -18,6 +18,7 @@ class My_Agent(Base_Agent):
         self.nn_controlled = True
 
     def decode_actions(self, game_state, actions):  # 根据动作编码，解码产生动作
+        super().decode_actions(game_state, actions)
         self.orders.reset()
         action_offset = [1, 1, 1, 0] if self.enemy_num == 1 else [1, 1, 1, 0, 0]
         for i in range(self.num_robots):
